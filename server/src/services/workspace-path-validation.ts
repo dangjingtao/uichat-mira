@@ -1,7 +1,5 @@
-import os from "node:os";
-
 const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/](?:.*)?$/;
-const unixAbsolutePathPattern = /^\//;
+const windowsUncPathPattern = /^\\\\[^\\\/]+[\\\/][^\\\/]+/;
 
 export const isValidWorkspaceRootPath = (input: string) => {
   const rootPath = input.trim();
@@ -9,7 +7,8 @@ export const isValidWorkspaceRootPath = (input: string) => {
     return false;
   }
 
-  return os.platform() === "win32"
-    ? windowsAbsolutePathPattern.test(rootPath)
-    : unixAbsolutePathPattern.test(rootPath);
+  return (
+    windowsAbsolutePathPattern.test(rootPath) ||
+    windowsUncPathPattern.test(rootPath)
+  );
 };

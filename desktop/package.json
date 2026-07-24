@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ant-design/colors": "^8.0.1",
+    "@impelsys/react-mentions": "3.0.0",
     "@mermaid-js/parser": "^1.1.1",
     "@milkdown/crepe": "^7.21.2",
     "@milkdown/kit": "^7.21.2",
@@ -53,6 +54,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/react-mentions": "4.4.1",
     "@vitejs/plugin-react": "^4.3.1",
     "@vitest/coverage-v8": "^3.2.4",
     "autoprefixer": "^10.5.0",

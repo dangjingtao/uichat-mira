@@ -11,7 +11,9 @@ metadata:
 
 This Skill uses the MiniMax XLSX workflow as its implementation baseline.
 
-SkillContext provides execution instructions and package resources only. It does not expand canonical ToolExposure. Use the currently exposed generic file/terminal capabilities to materialize and run this package. Do not route XLSX work back through the legacy openpyxl `office_spreadsheet` create/modify path when this Skill is active.
+SkillContext provides execution instructions and package resources only. It does not expand canonical ToolExposure. The Skill runtime owns all Python-backed XLSX execution through the internal WenShu Python invocation contract. The Agent may materialize OOXML with the exposed file capability, but it must not run package scripts through `terminal_session` or route XLSX work back through the legacy openpyxl `office_spreadsheet` capability.
+
+The invocation contains only `runtime: "wenshu-office"`, a registered script identifier, operation arguments, and workspace input/output paths. The launcher owns Python selection, managed Runtime Pack `PYTHONPATH`, script resolution, and result status. Never emit a Python executable, `PYTHONPATH`, shell command, `python -m`, `pip install`, or `conda install` instruction.
 
 ## Task routing
 
@@ -35,9 +37,8 @@ Core flow:
 plan workbook structure
 → copy minimal_xlsx template
 → edit workbook/sharedStrings/styles/worksheet XML
-→ scripts/xlsx_pack.py
-→ scripts/formula_check.py
-→ optional scripts/libreoffice_recalc.py when real recalculation is available/required
+→ internal WenShu Runtime invocation for pack / formula validation
+→ optional internal WenShu Runtime invocation for LibreOffice recalculation when real recalculation is required
 → deliver .xlsx
 ```
 
@@ -50,10 +51,9 @@ Never recreate an existing workbook from scratch merely to make an edit. Never u
 Use:
 
 ```text
-scripts/xlsx_unpack.py input.xlsx workdir/
+internal WenShu Runtime invocation for the XLSX unpack operation
 → edit only the requested OOXML nodes
-→ scripts/xlsx_pack.py workdir/ output.xlsx
-→ scripts/formula_check.py output.xlsx
+→ internal WenShu Runtime invocation for packaging and formula validation
 ```
 
 Preserve sheet names, unrelated cells, VBA/pivot/chart/sparkline/package parts, relationships, and formatting unless the request explicitly changes them.
@@ -62,7 +62,7 @@ For `.xlsm`, preserve `vbaProject.bin` and all existing package relationships/co
 
 ## READ / ANALYZE
 
-Reading and analysis must not modify the source file. Use `scripts/xlsx_reader.py` for structure/data discovery. pandas/openpyxl may be used for read-only analysis when available; they are not the write path for CREATE/EDIT.
+Reading and analysis must not modify the source file. Use the internal WenShu Runtime operation for structure/data discovery. pandas/openpyxl may be used by that deterministic runtime when available; they are not an Agent-selected execution path.
 
 ## Formula rules
 
@@ -100,6 +100,7 @@ Read `skill://xlsx/references/format.md` before building a styled financial work
 5. Never fabricate source citations or business data.
 6. Never treat model visual/readback judgment as an execution-success gate.
 7. Always write the requested final workbook artifact, not only intermediate XML/spec files.
+8. Never invoke `server/src/skills/xlsx/scripts/*.py` or any WenShu Python script through `terminal_session`.
 
 ## Completion
 

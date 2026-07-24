@@ -38,11 +38,11 @@
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "e9ab28d61a93f28310cb7b1d4c58744dfeae5101",
-            "shortHash": "e9ab28d",
-            "message": "merge: sync remote dev skill catalog",
+            "hash": "1d77bc0bcc046501d4a1691fe51aed33f7247266",
+            "shortHash": "1d77bc0",
+            "message": "Merge remote-tracking branch 'origin/dev' into dev",
             "author": "Tomz",
-            "date": "2026-07-23T10:56:59+08:00"
+            "date": "2026-07-24T15:34:59+08:00"
           }
         },
         {

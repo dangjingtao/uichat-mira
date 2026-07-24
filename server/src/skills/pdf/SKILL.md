@@ -59,6 +59,8 @@ Primary capability:
 office_pdf
 ```
 
+Python-backed PDF operations are internal WenShu Runtime invocations. The Agent provides only the operation-level input (operation, workspace input/output paths, and structured spec/data); it must not provide a Python executable, `PYTHONPATH`, shell command, `python -m`, or package-install command. The internal launcher selects `wenshu-office`, resolves `pdf/pdf_create_runtime.py` or `pdf/pdf_runtime.py`, injects the managed Runtime Pack, and owns the deterministic result.
+
 Page selections are 1-based, e.g. `1,3-5`.
 Crop boxes use PDF point coordinates `[x0,y0,x1,y1]`.
 Merge uses `inputPaths[]`.
@@ -82,6 +84,7 @@ Split/image extraction use an `outputDir` and may produce multiple artifacts.
 5. Generated factual reports must use real, verifiable information and citations when citations are required.
 6. Match the user's requested language, outline and document structure.
 7. Do not silently use lossy conversion when a native PDF operation exists.
+8. Do not use `terminal_session` to invoke any PDF Python script.
 
 # Completion
 

@@ -3,21 +3,27 @@ import { useTranslation } from "react-i18next";
 // useUChatComposerState centralizes app-specific composer gating rules layered
 // on top of the protocol-agnostic uchat runtime.
 export function useUChatComposerState({
-  isRunning,
+  hasRunningTask,
+  isCurrentThreadRunning,
   hasKnowledgeBase,
   hasDefaultLlm,
   hasDefaultEmbedding,
 }: {
-  isRunning: boolean;
+  hasRunningTask: boolean;
+  isCurrentThreadRunning: boolean;
   hasKnowledgeBase: boolean;
   hasDefaultLlm: boolean;
   hasDefaultEmbedding: boolean;
 }) {
   const { t } = useTranslation();
+  const isComposerDisabled =
+    isCurrentThreadRunning ||
+    !hasDefaultLlm ||
+    (hasKnowledgeBase && !hasDefaultEmbedding);
   const isSendDisabled =
-    isRunning || !hasDefaultLlm || (hasKnowledgeBase && !hasDefaultEmbedding);
+    hasRunningTask || !hasDefaultLlm || (hasKnowledgeBase && !hasDefaultEmbedding);
 
-  const placeholder = isRunning
+  const placeholder = isCurrentThreadRunning
     ? t("chat.thread.composer.thinking")
     : !hasDefaultLlm
       ? t("chat.thread.composer.configureLlm")
@@ -26,6 +32,7 @@ export function useUChatComposerState({
         : t("chat.thread.composer.inputPlaceholder");
 
   return {
+    isComposerDisabled,
     isSendDisabled,
     placeholder,
   };

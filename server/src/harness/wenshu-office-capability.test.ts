@@ -40,7 +40,7 @@ describe("WenShu Office Harness capability reconciliation", () => {
     expect(listCapabilityDefinitions().map((definition) => definition.id)).toEqual([]);
   });
 
-  it("registers and removes optional Office capabilities from environment truth only", () => {
+  it("keeps optional Office capabilities absent even when the Runtime Pack is ready", () => {
     const packRoot = resolveWenshuOfficePackRoot();
     fs.mkdirSync(resolveWenshuOfficeSitePackages(), { recursive: true });
     fs.writeFileSync(
@@ -51,14 +51,12 @@ describe("WenShu Office Harness capability reconciliation", () => {
 
     const available = reconcileWenshuOfficeHarnessCapabilities();
     expect(available.runtimePackAvailable).toBe(true);
-    expect(available.registeredCapabilityIds.sort()).toEqual(
-      [...WENSHU_OPTIONAL_CAPABILITY_IDS].sort(),
-    );
+    expect(available.registeredCapabilityIds).toEqual([]);
     expect(
       listCapabilityDefinitions()
         .map((definition) => definition.id)
         .filter((id) => WENSHU_OPTIONAL_CAPABILITY_IDS.includes(id)),
-    ).toHaveLength(3);
+    ).toEqual([]);
 
     fs.rmSync(packRoot, { recursive: true, force: true });
     const unavailable = reconcileWenshuOfficeHarnessCapabilities();

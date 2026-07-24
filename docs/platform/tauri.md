@@ -31,6 +31,10 @@ Related:
 
 Tauri 和 Electron 预期共享根目录 `.artifacts/` 下同一批 staged build inputs，主要包括前端生产包、后端 bundle、图标、runtime config、Node/npm/npx runtime 和 Terminal Dev Runtime（MinGit、uv、ripgrep）。
 
+Tauri 的 Rust 平台值 `windows` 在 runtime 注入边界映射为 `win32`，与
+Electron 的 `process.platform` 合同一致。当前产品不支持 Unix 桌面平台或
+Unix 格式的工作空间根目录。
+
 Terminal Dev Runtime 的下载、checksum、manifest 与复制校验由共享脚本负责。Tauri 不维护另一套 downloader 或 PATH 逻辑；生产态只把 resources 根目录传给 Backend。详见 `../build/terminal-dev-runtime.md`。
 
 ## 当前定位

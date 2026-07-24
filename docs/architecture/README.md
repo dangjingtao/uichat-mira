@@ -94,6 +94,10 @@ Electron 和 Tauri 还共享同一批 `node-runtime/` 与 `terminal-runtime/` st
 - 桌面壳层之间共享尽可能多的构建输入
 - 模型调用前的上下文预算与审计应由 backend runtime 统一处理
 
+当前桌面产品只支持 Windows。Electron 与 Tauri 对 renderer 统一暴露
+`platform: "win32"`；工作空间根目录只接受 Windows 盘符绝对路径或 UNC
+路径，不接受 Unix 路径。
+
 ## 适合什么时候读
 
 这些场景建议先读这页：

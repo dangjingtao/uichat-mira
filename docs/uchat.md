@@ -64,6 +64,8 @@ Related:
 - 应用集成层注入 runtime 工厂和清理行为，UChat 不依赖认证、路由、知识库、角色或桌面 API；
 - 首页、聊天和设置位于共同的已登录聊天状态边界下；
 - 聊天视图可以在设置页卸载，但 runtime、线程状态、composer 和运行中任务继续存在；
+- runtime 同一时间只运行一个任务，`activeRunThreadId` 记录该任务所属线程；切换线程不会重置后台任务状态；
+- 后台有其他线程运行时，当前线程 composer 允许编辑并按线程保留草稿，但发送继续禁用，且当前线程不显示停止按钮；
 - 登出或用户身份变化时创建新会话状态，并停止旧 runtime 的当前发送；
 - 应用壳层和设置页面不得订阅完整线程或消息数组。
 
@@ -104,7 +106,11 @@ Related:
 
 - Agent 是 UChat 内建业务，由 UChat 提供稳定的模式、提交和消息状态表达
 - `UChatAgentModeControl` 通过 composer 工具插槽渲染模式开关，工作空间可用性和切换意图由宿主通过 UChat 合同传入
-- 宿主可通过 `UChatThreadView` 的 `composerSuggestion` 在输入框内插入应用自有的候选项；该节点不携带业务语义。本项目仅在 Agent 启用时用它展示 `$` Skill 候选列表
+- 宿主可通过 `UChatThreadView` 的 `composerSuggestion` 在输入框上方插入应用自有的候选面板；该节点不携带业务语义。本项目仅在 Agent 启用时用它展示 `$` Skill 候选列表
+- 宿主可通过 `renderComposerEditor` 仅替换文本编辑区域；本项目在 Agent 启用时使用 mention 编辑器展示已选 Skill，附件与 composer 操作区仍由 UChat 管理
+- Agent 输入框使用 `@` 选择现有 MCP workbench 工具包；候选项来自工具定义的 `workbench` 元数据，发送时通过 `requestedToolGroupIds` 传入 Agent
+- `@` 工具包是 Planner 的显式工具偏好：后端把工具包名称、说明、成员工具和本轮实际暴露工具写入结构化上下文，同时用于增强工具意图 query；它不筛选或扩大 `exposedTools`，不强制调用，不绕过权限与审批
+- Agent execution trace 使用独立的工具包上下文节点显示偏好是否可用；未知或当前未暴露的工具包必须显示不可用，不得伪装成已经调用
 - `UChatAgentUIController` 是 UChat 界面层统一的 Agent 状态与操作合同，包含模式、运行态、两类可用性以及切换、提交、审批和拒绝意图
 - `UChatThreadView` 只接收一个可选的 `agent` 控制对象，不再分别接收多个 Agent 状态和回调属性
 - 输入组件只渲染通用 `composerTools` 节点，不包含 Agent 状态判断或切换实现

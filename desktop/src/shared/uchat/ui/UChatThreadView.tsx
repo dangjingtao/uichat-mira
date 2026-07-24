@@ -324,6 +324,7 @@ export function UChatThreadView({
   hasKnowledgeBase,
   placeholder,
   isSendDisabled,
+  isComposerDisabled = isSendDisabled,
   onComposerTextChange,
   onComposerAttachmentsChange,
   onComposerAttachmentsAppend,
@@ -340,6 +341,7 @@ export function UChatThreadView({
   assistantDisplayName,
   assistantTypingLabel,
   agent,
+  renderComposerEditor,
   composerSuggestion,
   slots,
 }: {
@@ -357,6 +359,7 @@ export function UChatThreadView({
   capabilities: ChatRuntimeCapabilities;
   hasKnowledgeBase: boolean;
   placeholder: string;
+  isComposerDisabled?: boolean;
   isSendDisabled: boolean;
   onComposerTextChange: (value: string) => void;
   onComposerAttachmentsChange: (files: File[]) => void;
@@ -380,7 +383,16 @@ export function UChatThreadView({
   assistantDisplayName?: string;
   assistantTypingLabel?: string;
   agent?: UChatAgentUIController;
-  /** Optional app-owned composer content rendered beneath the text input. */
+  /** Optional app-owned editor replacing the default textarea. */
+  renderComposerEditor?: (props: {
+    value: string;
+    placeholder: string;
+    disabled: boolean;
+    onChange: (value: string) => void;
+    onSubmit: () => void;
+    onPasteFiles: (files: File[]) => void | Promise<void>;
+  }) => React.ReactNode;
+  /** Optional app-owned content rendered in a panel above the composer. */
   composerSuggestion?: React.ReactNode;
   slots?: UChatThreadSlots;
 }) {
@@ -616,6 +628,10 @@ export function UChatThreadView({
                           <span>{t("chat.thread.welcome.emptyComposerTitle")}</span>
                         </div>
                       ) : null}
+                      {composerSuggestion ? (
+                        <div className="mb-2">{composerSuggestion}</div>
+                      ) : null}
+
                       <div className="overflow-hidden rounded-[20px] border border-cloudy-4/70 bg-pampas-2/90 shadow-[0_8px_22px_rgba(15,23,42,0.035)] backdrop-blur-xl">
                         {composer.attachments.length > 0 ? (
                           <div className="flex flex-wrap gap-2 border-b border-cloudy-4/55 px-4 pb-3 pt-3">
@@ -647,41 +663,57 @@ export function UChatThreadView({
                           </div>
                         ) : null}
 
-                        <textarea
-                          value={composer.text}
-                          onChange={(event) =>
-                            onComposerTextChange(event.target.value)
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" && event.ctrlKey) {
-                              event.preventDefault();
+                        {renderComposerEditor ? (
+                          renderComposerEditor({
+                            value: composer.text,
+                            placeholder,
+                            disabled: isComposerDisabled,
+                            onChange: onComposerTextChange,
+                            onSubmit: () => {
+                              if (isSendDisabled) return;
                               requestScrollToBottom();
                               void onSend();
+                            },
+                            onPasteFiles: (files) =>
+                              onComposerAttachmentsAppend?.(files),
+                          })
+                        ) : (
+                          <textarea
+                            value={composer.text}
+                            onChange={(event) =>
+                              onComposerTextChange(event.target.value)
                             }
-                          }}
-                          onPaste={(event) => {
-                            const files = Array.from(
-                              event.clipboardData?.files ?? [],
-                            ).filter(isImageFile);
+                            onKeyDown={(event) => {
+                              if (
+                                event.key === "Enter" &&
+                                event.ctrlKey &&
+                                !isSendDisabled
+                              ) {
+                                event.preventDefault();
+                                requestScrollToBottom();
+                                void onSend();
+                              }
+                            }}
+                            onPaste={(event) => {
+                              const files = Array.from(
+                                event.clipboardData?.files ?? [],
+                              ).filter(isImageFile);
 
-                            if (files.length > 0) {
-                              event.preventDefault();
-                              void onComposerAttachmentsAppend?.(files);
-                            }
-                          }}
-                          placeholder={placeholder}
-                          className={`h-16 min-h-[40px] w-full resize-none bg-transparent px-4 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-cloudy-6 focus:outline-none ${
-                            isSendDisabled
-                              ? "cursor-not-allowed opacity-60"
-                              : ""
-                          }`}
-                          rows={3}
-                          disabled={isSendDisabled}
-                        />
-
-                        {composerSuggestion ? (
-                          <div className="px-3 pb-1">{composerSuggestion}</div>
-                        ) : null}
+                              if (files.length > 0) {
+                                event.preventDefault();
+                                void onComposerAttachmentsAppend?.(files);
+                              }
+                            }}
+                            placeholder={placeholder}
+                            className={`h-16 min-h-[40px] w-full resize-none bg-transparent px-4 py-2.5 text-[15px] leading-6 text-text-primary placeholder:text-cloudy-6 focus:outline-none ${
+                              isComposerDisabled
+                                ? "cursor-not-allowed opacity-60"
+                                : ""
+                            }`}
+                            rows={3}
+                            disabled={isComposerDisabled}
+                          />
+                        )}
 
                         <UChatComposerActions
                           composerActions={capabilities.composerActions ?? []}

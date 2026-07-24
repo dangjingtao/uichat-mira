@@ -55,6 +55,7 @@ export const executePdfSkillRuntime = async (input: {
       args.push("--data", dataPath);
     }
     const result = await runWenshuPython({
+      runtime: "wenshu-office",
       script:
         input.operation === "create"
           ? "pdf/pdf_create_runtime.py"
@@ -75,6 +76,7 @@ export const executeSpreadsheetSkillRuntime = async (input: {
     if (input.operation === "recalc") {
       if (!input.inputPath) throw new Error("recalc requires inputPath");
       const result = await runWenshuPython({
+        runtime: "wenshu-office",
         script: "xlsx/xlsx_tools.py",
         args: ["recalc", input.inputPath],
         timeoutMs: 180_000,
@@ -96,6 +98,7 @@ export const executeSpreadsheetSkillRuntime = async (input: {
       args.push("--spec", specPath);
     }
     const result = await runWenshuPython({
+      runtime: "wenshu-office",
       script: "xlsx/xlsx_runtime.py",
       args,
       timeoutMs: 180_000,
@@ -107,6 +110,7 @@ export const executeSpreadsheetSkillRuntime = async (input: {
       specPath
     ) {
       const finalized = await runWenshuPython({
+        runtime: "wenshu-office",
         script: "xlsx/xlsx_finalize.py",
         args: [
           "--input",
@@ -143,6 +147,7 @@ export const executePresentationSkillRuntime = async (input: {
       args.push("--spec", specPath);
     }
     const result = await runWenshuPython({
+      runtime: "wenshu-office",
       script: "pptx/pptx_runtime.py",
       args,
       timeoutMs: 180_000,

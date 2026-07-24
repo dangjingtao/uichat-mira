@@ -17,7 +17,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { Button, Card, IconButton, MarkdownText, Result, Skeleton, TextInput } from "@/shared/ui";
+import { Button, Card, IconButton, MarkdownText, Modal, Result, Skeleton, TextInput } from "@/shared/ui";
 import { ModalShell } from "@/shared/ui/Modal";
 import {
   deleteSkill,
@@ -35,7 +35,7 @@ import {
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import { getSkillPresentation, type SkillIconKind } from "./catalog";
 
-const BASE_CATEGORIES = ["全部技能", "精选技能"];
+const BASE_CATEGORIES = ["精选技能"];
 const PREFERRED_CATEGORIES = ["办公效率", "商业金融", "内容创作", "学术研究", "营销增长", "工程研发"];
 
 const iconConfig: Record<SkillIconKind, { Icon: typeof FileText; className: string }> = {
@@ -62,7 +62,7 @@ const runtimeClassName = (status: SkillRuntimeStatus) => {
 
 const originLabel = (origin: SkillCatalogItem["origin"]) => {
   if (origin === "built-in") return "内置";
-  if (origin === "user") return "用户导入";
+  if (origin === "user") return "用户添加";
   return "外部来源";
 };
 
@@ -115,7 +115,7 @@ const toSkillView = (skill: SkillCatalogItem): SkillView => {
 export default function SkillsSettings() {
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [activeCategory, setActiveCategory] = useState("全部技能");
+  const [activeCategory, setActiveCategory] = useState("精选技能");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -162,17 +162,15 @@ export default function SkillsSettings() {
   }, [skillViews]);
 
   useEffect(() => {
-    if (!categories.includes(activeCategory)) setActiveCategory("全部技能");
+    if (!categories.includes(activeCategory)) setActiveCategory("精选技能");
   }, [activeCategory, categories]);
 
   const visibleSkills = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return skillViews.filter((skill) => {
-      const matchesCategory = activeCategory === "全部技能"
-        ? true
-        : activeCategory === "精选技能"
-          ? skill.featured
-          : skill.category === activeCategory;
+      const matchesCategory = activeCategory === "精选技能"
+        ? skill.featured
+        : skill.category === activeCategory;
       const matchesQuery = !normalizedQuery || `${skill.name} ${skill.description} ${skill.source} ${skill.category}`.toLowerCase().includes(normalizedQuery);
       return matchesCategory && matchesQuery;
     });
@@ -194,7 +192,6 @@ export default function SkillsSettings() {
     try {
       const imported = await importSkillMarkdown(file);
       await loadCatalog();
-      setActiveCategory("全部技能");
       setQuery("");
       setSelectedSkill(imported);
       showNotice(`「${imported.name}」已导入`);
@@ -242,19 +239,27 @@ export default function SkillsSettings() {
     await loadCatalog();
   };
 
-  const handleDelete = async (skill: SkillDetail) => {
-    if (!window.confirm(`永久删除「${skill.name}」？本地 Skill Package 及其全部文件都会被移除。`)) return;
-    setDeletingSkillId(skill.id);
-    try {
-      await deleteSkill(skill.id);
-      setSelectedSkill(null);
-      await loadCatalog();
-      showNotice(`「${skill.name}」已删除`);
-    } catch (error) {
-      showNotice(error instanceof Error ? error.message : "Skill 删除失败");
-    } finally {
-      setDeletingSkillId(null);
-    }
+  const handleDelete = (skill: SkillDetail) => {
+    Modal.confirm({
+      title: `删除「${skill.name}」？`,
+      description: "此操作会移除本地 Skill Package，且无法恢复。",
+      confirmText: "删除",
+      cancelText: "取消",
+      tone: "danger",
+      onConfirm: async () => {
+        setDeletingSkillId(skill.id);
+        try {
+          await deleteSkill(skill.id);
+          setSelectedSkill(null);
+          await loadCatalog();
+          showNotice(`「${skill.name}」已删除`);
+        } catch (error) {
+          showNotice(error instanceof Error ? error.message : "Skill 删除失败");
+        } finally {
+          setDeletingSkillId(null);
+        }
+      },
+    });
   };
 
   return (
@@ -264,9 +269,10 @@ export default function SkillsSettings() {
         title="技能"
         description="将经验、方法和文档转化为技能，相似任务轻松复用"
         contentClassName="pt-5"
+        scrollBody={false}
       >
-        <div className="space-y-5">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-5">
+          <div className="flex min-w-0 shrink-0 items-center gap-3">
             <div className="stable-scrollbar min-w-0 flex-1 overflow-x-auto pb-1">
               <div className="flex gap-1">
                 {categories.map((category) => (
@@ -302,24 +308,26 @@ export default function SkillsSettings() {
             </div>
           </div>
 
-          {catalogLoading ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><Skeleton.Card showAvatar /><Skeleton.Card showAvatar /><Skeleton.Card showAvatar /></div>
-          ) : catalogError ? (
-            <Result variant="danger" size="sm" title="技能目录加载失败" description={catalogError} action={<Button size="sm" variant="secondary" onClick={() => void loadCatalog()}>重新加载</Button>} />
-          ) : visibleSkills.length ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {visibleSkills.map((skill) => (
-                <SkillCard
-                  key={skill.id}
-                  skill={skill}
-                  loading={detailLoadingId === skill.id}
-                  onOpen={() => void openSkill(skill.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <Result size="sm" icon={<Search className="h-4 w-4" />} title="没有匹配的技能" description="试试其他分类或搜索关键词" />
-          )}
+          <div className="stable-scrollbar min-h-0 flex-1 overflow-y-auto">
+            {catalogLoading ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2"><Skeleton.Card showAvatar /><Skeleton.Card showAvatar /><Skeleton.Card showAvatar /></div>
+            ) : catalogError ? (
+              <Result variant="danger" size="sm" title="技能目录加载失败" description={catalogError} action={<Button size="sm" variant="secondary" onClick={() => void loadCatalog()}>重新加载</Button>} />
+            ) : visibleSkills.length ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {visibleSkills.map((skill) => (
+                  <SkillCard
+                    key={skill.id}
+                    skill={skill}
+                    loading={detailLoadingId === skill.id}
+                    onOpen={() => void openSkill(skill.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Result size="sm" icon={<Search className="h-4 w-4" />} title="没有匹配的技能" description="试试其他分类或搜索关键词" />
+            )}
+          </div>
         </div>
       </SettingsPageLayout>
 
@@ -351,7 +359,7 @@ function SkillCard({ skill, loading, onOpen }: { skill: SkillView; loading: bool
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h4 className="truncate text-sm font-semibold text-text-primary">{skill.name}</h4>
-              {runtime ? <span className={`text-xs ${runtimeClassName(skill.runtime.status)}`}>{runtime}</span> : null}
+              {runtime ? <span className={`text-xs ${runtimeClassName(skill.runtime.status)}`}>· {runtime}</span> : null}
             </div>
             <p className="mt-1 text-xs text-text-tertiary">来自 {skill.source}</p>
           </div>
@@ -476,7 +484,7 @@ function SkillDetailModal({
       open
       onClose={onClose}
       width={1080}
-      height="calc(100vh - 32px)"
+      height="min(760px, calc(100vh - 64px))"
       showCloseButton={false}
       footer={null}
       bodyClassName="flex overflow-hidden p-0"

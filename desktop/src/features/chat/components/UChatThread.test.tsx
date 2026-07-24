@@ -10,6 +10,7 @@ import UChatThread from "./UChatThread";
 const sendMock = vi.fn();
 const updateThreadRuntimeMock = vi.fn();
 const refreshThreadMock = vi.fn();
+const setComposerTextMock = vi.fn();
 const setDraftWorkspaceIdMock = vi.fn();
 const setDraftAgentEnabledMock = vi.fn();
 const messageErrorMock = vi.hoisted(() => vi.fn());
@@ -23,6 +24,7 @@ const runtimeSelectorState = vi.hoisted(() => ({
   activeThreadId: null as string | null,
   threads: [] as any[],
   runStatus: { type: "idle" } as { type: "idle" | "running" },
+  activeRunThreadId: null as string | null,
 }));
 
 vi.mock("@/app/providers/ThemeProvider", () => ({
@@ -60,7 +62,7 @@ vi.mock("@/features/chat/core/runtime", () => ({
     cancelSend: vi.fn(),
     regenerate: vi.fn(),
     editUserMessage: vi.fn(),
-    setComposerText: vi.fn(),
+    setComposerText: setComposerTextMock,
     setComposerAttachments: vi.fn(),
     appendComposerAttachments: vi.fn(),
     removeComposerAttachment: vi.fn(),
@@ -71,8 +73,9 @@ vi.mock("@/features/chat/core/runtime", () => ({
     selector({
       activeThreadId: runtimeSelectorState.activeThreadId,
       threads: runtimeSelectorState.threads,
-      composer: { text: "hello", attachments: [] },
+      composer: { text: composerTextState.value, attachments: [] },
       runStatus: runtimeSelectorState.runStatus,
+      activeRunThreadId: runtimeSelectorState.activeRunThreadId,
       threadStatus: "ready",
       capabilities: { composerActions: [], messagePresentation: {} },
     }),
@@ -89,9 +92,18 @@ vi.mock("@/features/chat/core/runtime", () => ({
 }));
 
 vi.mock("@/features/chat/core/composerPolicy", () => ({
-  useUChatComposerState: () => ({
-    isSendDisabled: false,
-    placeholder: "Type a question and press Enter...",
+  useUChatComposerState: ({
+    hasRunningTask,
+    isCurrentThreadRunning,
+  }: {
+    hasRunningTask: boolean;
+    isCurrentThreadRunning: boolean;
+  }) => ({
+    isComposerDisabled: isCurrentThreadRunning,
+    isSendDisabled: hasRunningTask,
+    placeholder: isCurrentThreadRunning
+      ? "Thinking..."
+      : "Type a question and press Enter...",
   }),
 }));
 
@@ -101,6 +113,15 @@ vi.mock("@/features/chat/core/protocol", () => ({
 
 vi.mock("@/shared/api/roles", () => ({
   listRoles: vi.fn().mockResolvedValue([]),
+}));
+const composerTextState = vi.hoisted(() => ({ value: "hello" }));
+
+vi.mock("@/shared/api/officeSuiteSkills", () => ({
+  getWenshuSkillCatalog: vi.fn().mockResolvedValue({ skills: [] }),
+}));
+
+vi.mock("@/shared/api/tools", () => ({
+  getMcpTools: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/shared/api/thread", () => ({
@@ -146,6 +167,7 @@ describe("UChatThread", () => {
     sendMock.mockReset();
     updateThreadRuntimeMock.mockReset();
     refreshThreadMock.mockReset();
+    setComposerTextMock.mockReset();
     setDraftWorkspaceIdMock.mockReset();
     setDraftAgentEnabledMock.mockReset();
     messageErrorMock.mockReset();
@@ -154,6 +176,8 @@ describe("UChatThread", () => {
     runtimeSelectorState.activeThreadId = null;
     runtimeSelectorState.threads = [];
     runtimeSelectorState.runStatus = { type: "idle" };
+    runtimeSelectorState.activeRunThreadId = null;
+    composerTextState.value = "hello";
   });
 
   test("welcome state can run agent after workspace is bound", async () => {
@@ -166,6 +190,19 @@ describe("UChatThread", () => {
     await waitFor(() => {
       assert.equal(sendMock.mock.calls.length, 1);
     });
+    assert.deepEqual(sendMock.mock.calls[0]?.[0], { agentEnabled: true });
+  });
+
+  test("restores applied Skill mentions before Agent submission", async () => {
+    composerTextState.value = "请使用 @(xlsx) 分析";
+
+    await act(async () => {
+      render(<UChatThread />);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run in Agent mode" }));
+
+    await waitFor(() => assert.equal(sendMock.mock.calls.length, 1));
+    assert.deepEqual(setComposerTextMock.mock.calls[0], ["请使用 $xlsx 分析"]);
     assert.deepEqual(sendMock.mock.calls[0]?.[0], { agentEnabled: true });
   });
 
@@ -223,6 +260,7 @@ describe("UChatThread", () => {
   test("thread agent enabled plus running status passes agent running state to view", async () => {
     runtimeSelectorState.activeThreadId = "thread-1";
     runtimeSelectorState.runStatus = { type: "running" };
+    runtimeSelectorState.activeRunThreadId = "thread-1";
     runtimeSelectorState.threads = [
       {
         id: "thread-1",
@@ -253,6 +291,42 @@ describe("UChatThread", () => {
     });
 
     assert.ok(screen.getByText(i18n.t("chat.thread.agent.running")));
+  });
+
+  test("keeps another thread editable while a different thread is running", async () => {
+    runtimeSelectorState.activeThreadId = "thread-2";
+    runtimeSelectorState.runStatus = { type: "running" };
+    runtimeSelectorState.activeRunThreadId = "thread-1";
+    runtimeSelectorState.threads = [
+      {
+        id: "thread-2",
+        title: "Thread Two",
+        workspaceId: "workspace-1",
+        createdAt: "2025-01-01T00:00:00.000Z",
+        updatedAt: "2025-01-01T00:00:00.000Z",
+        metadata: { agentEnabled: false },
+        messages: [],
+      },
+    ];
+
+    await act(async () => {
+      render(<UChatThread />);
+    });
+
+    const editor = screen.getByRole("textbox");
+    assert.equal(editor.hasAttribute("disabled"), false);
+    fireEvent.change(editor, { target: { value: "thread two draft" } });
+    assert.deepEqual(setComposerTextMock.mock.calls.at(-1), ["thread two draft"]);
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true });
+    assert.equal(sendMock.mock.calls.length, 0);
+    const sendButton = screen.getByRole("button", {
+      name: "chat.thread.actions.send",
+    });
+    assert.equal(sendButton.hasAttribute("disabled"), true);
+    assert.equal(
+      screen.queryByRole("button", { name: "chat.thread.composer.cancelGeneration" }),
+      null,
+    );
   });
 
 });

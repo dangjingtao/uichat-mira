@@ -30,7 +30,7 @@ export default function ToolsSettings() {
           onSelectGroup={workbench.selectGroup}
         />
 
-        <div className="grid min-h-0 h-full grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">
+        <div className="flex min-h-0 h-full flex-col gap-4 overflow-hidden">
           {workbench.workspaceSelection && workbench.requiresWorkspace ? (
             <ToolsWorkbenchPanel
               isSelectingWorkspace={workbench.isSelectingWorkspace}

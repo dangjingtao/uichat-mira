@@ -40,7 +40,7 @@ function createRepositoryStub(input?: {
   onGetThread?: () => void;
   onListThreads?: () => void;
   listThreadsImpl?: () => Promise<ChatThreadSummary[]> | ChatThreadSummary[];
-  getThreadImpl?: () => Promise<ChatThread> | ChatThread;
+  getThreadImpl?: (threadId: string) => Promise<ChatThread> | ChatThread;
   createMessageImpl?: (
     threadId: string,
     input: {
@@ -78,10 +78,10 @@ function createRepositoryStub(input?: {
       }
       return summaries;
     },
-    async getThread() {
+    async getThread(threadId) {
       input?.onGetThread?.();
       if (input?.getThreadImpl) {
-        return await input.getThreadImpl();
+        return await input.getThreadImpl(threadId);
       }
       return thread;
     },
@@ -330,7 +330,7 @@ test("uchat runtime can disable auto-select on thread load through policy", asyn
   assert.equal(runtime.getState().activeThreadId, null);
 });
 
-test("uchat runtime can enter welcome state without creating a thread", async () => {
+test("uchat runtime can enter welcome state without creating a thread or resetting another run", async () => {
   let createThreadCalls = 0;
 
   const runtime = new ChatRuntime({
@@ -345,7 +345,7 @@ test("uchat runtime can enter welcome state without creating a thread", async ()
   await runtime.loadThreads();
   runtime.setComposerText("draft before welcome");
   runtime.store.getState().setThreadStatus("ready");
-  runtime.store.getState().setRunStatus({ type: "running" });
+  runtime.store.getState().setRunStatus({ type: "running" }, "thread-1");
 
   runtime.enterWelcomeState();
 
@@ -353,7 +353,55 @@ test("uchat runtime can enter welcome state without creating a thread", async ()
   assert.equal(runtime.getState().activeThreadId, null);
   assert.equal(runtime.getState().composer.text, "");
   assert.equal(runtime.getState().threadStatus, "idle");
+  assert.deepEqual(runtime.getState().runStatus, { type: "running" });
+  assert.equal(runtime.getState().activeRunThreadId, "thread-1");
+});
+
+test("uchat runtime keeps the running thread owner while another thread is active", async () => {
+  let notifyRunStarted!: () => void;
+  const runStarted = new Promise<void>((resolve) => {
+    notifyRunStarted = resolve;
+  });
+  let finishRun!: () => void;
+  const runPending = new Promise<void>((resolve) => {
+    finishRun = resolve;
+  });
+  const runtime = new ChatRuntime({
+    repository: createRepositoryStub({
+      summaries: [
+        createThreadSummary({ id: "thread-1" }),
+        createThreadSummary({ id: "thread-2" }),
+      ],
+      getThreadImpl: (threadId) => createThread({ id: threadId }),
+    }),
+    runDriver: {
+      async run() {
+        notifyRunStarted();
+        await runPending;
+      },
+    },
+  });
+
+  await runtime.loadThreads();
+  runtime.setComposerText("run on thread one");
+  const sendPromise = runtime.send();
+  await runStarted;
+
+  assert.deepEqual(runtime.getState().runStatus, { type: "running" });
+  assert.equal(runtime.getState().activeRunThreadId, "thread-1");
+
+  await runtime.selectThread("thread-2");
+  runtime.setComposerText("draft while thread one runs");
+  assert.equal(runtime.getState().activeThreadId, "thread-2");
+  assert.equal(runtime.getState().composer.text, "draft while thread one runs");
+  assert.deepEqual(runtime.getState().runStatus, { type: "running" });
+  assert.equal(runtime.getState().activeRunThreadId, "thread-1");
+
+  finishRun();
+  await sendPromise;
   assert.deepEqual(runtime.getState().runStatus, { type: "idle" });
+  assert.equal(runtime.getState().activeRunThreadId, null);
+  assert.equal(runtime.getState().composer.text, "draft while thread one runs");
 });
 
 test("uchat runtime keeps welcome draft separate from persisted thread drafts", async () => {
@@ -380,6 +428,90 @@ test("uchat runtime keeps welcome draft separate from persisted thread drafts", 
 
   runtime.enterWelcomeState();
   assert.equal(runtime.getState().composer.text, "welcome draft");
+});
+
+test("uchat runtime preserves drafts when active thread is changed directly", async () => {
+  let runtime: ChatRuntime;
+  runtime = new ChatRuntime({
+    repository: createRepositoryStub({
+      summaries: [
+        createThreadSummary({ id: "thread-1" }),
+        createThreadSummary({ id: "thread-2" }),
+      ],
+      getThreadImpl: (threadId) => createThread({ id: threadId }),
+    }),
+    runDriver: createRunDriverStub(),
+  });
+
+  await runtime.loadThreads();
+  runtime.setComposerText("thread one draft");
+
+  runtime.store.getState().setActiveThreadId("thread-2");
+  assert.equal(runtime.getState().composer.text, "");
+  runtime.setComposerText("thread two draft");
+
+  runtime.store.getState().setActiveThreadId("thread-1");
+  assert.equal(runtime.getState().composer.text, "thread one draft");
+
+  runtime.store.getState().setActiveThreadId("thread-2");
+  assert.equal(runtime.getState().composer.text, "thread two draft");
+});
+
+test("uchat runtime keeps attachment upload updates scoped to the sending draft", async () => {
+  let resolveUploadStarted!: () => void;
+  const uploadStarted = new Promise<void>((resolve) => {
+    resolveUploadStarted = resolve;
+  });
+  let resolveUpload:
+    | ((part: Extract<ChatMessagePart, { type: "image" | "file" }>) => void)
+    | null = null;
+  let runtime: ChatRuntime;
+  runtime = new ChatRuntime({
+    repository: createRepositoryStub({
+      summaries: [
+        createThreadSummary({ id: "thread-1" }),
+        createThreadSummary({ id: "thread-2" }),
+      ],
+      getThreadImpl: (threadId) => createThread({ id: threadId }),
+    }),
+    runDriver: createRunDriverStub(),
+    attachmentDriver: {
+      upload: async () => {
+        resolveUploadStarted();
+        return await new Promise<Extract<ChatMessagePart, { type: "image" | "file" }>>(
+          (uploadResolve) => {
+            resolveUpload = uploadResolve;
+          },
+        );
+      },
+    },
+  });
+
+  await runtime.loadThreads();
+  runtime.setComposerText("send with file");
+  runtime.setComposerAttachments([
+    new File(["draft"], "thread-one.txt", { type: "text/plain" }),
+  ]);
+
+  const sendPromise = runtime.send();
+  await uploadStarted;
+  runtime.store.getState().setActiveThreadId("thread-2");
+  runtime.setComposerText("thread two draft");
+  resolveUpload?.({
+    type: "file",
+    source: "/attachments/thread-one.txt",
+    name: "thread-one.txt",
+    mimeType: "text/plain",
+  });
+  await sendPromise;
+
+  assert.equal(runtime.getState().activeThreadId, "thread-2");
+  assert.equal(runtime.getState().composer.text, "thread two draft");
+  assert.equal(runtime.getState().composer.attachments.length, 0);
+
+  runtime.store.getState().setActiveThreadId("thread-1");
+  assert.equal(runtime.getState().composer.text, "");
+  assert.equal(runtime.getState().composer.attachments.length, 0);
 });
 
 test("uchat runtime clears welcome draft when entering a fresh conversation", async () => {

@@ -63,6 +63,7 @@ export const createAndRunAgent = async (
       knowledgeBaseId: input.knowledgeBaseId,
       intentConfig: input.intentConfig,
       workspaceRoot: input.workspaceRoot,
+      requestedToolGroupIds: input.requestedToolGroupIds,
     },
   });
 

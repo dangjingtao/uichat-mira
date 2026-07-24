@@ -3,6 +3,7 @@ import { createChatRuntimeStore } from "./store";
 import type {
   ChatAttachmentDriver,
   ChatComposerAction,
+  ChatComposerState,
   ChatMessage,
   ChatMessagePresentationHints,
   ChatMessagePart,
@@ -218,6 +219,8 @@ const deriveCapabilities = (options: ChatRuntimeOptions): ChatRuntimeCapabilitie
   messagePresentation: options.policies?.messagePresentation ?? {},
 });
 
+const composerDraftKey = (threadId: string | null) => threadId ?? "__welcome__";
+
 // ChatRuntime is the main uchat orchestration entry point. It owns state,
 // thread hydration, composer lifecycle, uploads, and generation flow.
 export class ChatRuntime {
@@ -343,6 +346,25 @@ export class ChatRuntime {
     return created;
   }
 
+  private async resolveThreadForSend(threadId: string | null) {
+    if (!threadId) {
+      return this.ensureThread(null);
+    }
+
+    if (this.getState().hydratedThreadIds.includes(threadId)) {
+      return this.getThread(threadId);
+    }
+
+    if (this.getState().activeThreadId === threadId) {
+      return this.selectThread(threadId);
+    }
+
+    const thread = await this.repository.getThread(threadId);
+    this.store.getState().upsertThread(thread);
+    this.store.getState().markHydrated(threadId);
+    return thread;
+  }
+
   // Hydrates a thread on first entry and reuses cached history afterwards.
   async selectThread(threadId: string) {
     this.store.getState().activateComposerForThread(threadId);
@@ -451,7 +473,6 @@ export class ChatRuntime {
   enterWelcomeState() {
     this.store.getState().activateComposerForThread(null);
     this.store.getState().setThreadStatus("idle");
-    this.store.getState().setRunStatus({ type: "idle" });
   }
 
   // Cancels the in-flight assistant run if the current transport supports AbortSignal.
@@ -508,14 +529,26 @@ export class ChatRuntime {
     this.store.getState().removeComposerAttachment(attachmentId);
   }
 
+  private getComposerDraft(threadId: string | null): ChatComposerState {
+    const state = this.getState();
+    if (state.activeThreadId === threadId) {
+      return state.composer;
+    }
+
+    return state.composerDrafts[composerDraftKey(threadId)] ?? {
+      text: "",
+      attachments: [],
+    };
+  }
+
   // Uploads pending composer attachments through the attachment driver and
   // stores the resulting canonical message parts on the draft entries.
-  private async uploadComposerAttachments() {
+  private async uploadComposerAttachments(threadId: string | null) {
     if (!this.attachmentDriver) {
       return;
     }
 
-    const attachments = this.getState().composer.attachments;
+    const attachments = this.getComposerDraft(threadId).attachments;
     const next = [...attachments];
 
     for (let index = 0; index < next.length; index += 1) {
@@ -528,7 +561,7 @@ export class ChatRuntime {
         ...attachment,
         status: "uploading",
       };
-      this.store.getState().setComposerAttachments(next);
+      this.store.getState().setComposerAttachmentsForThread(threadId, next);
 
       try {
         const uploadedPart = await this.attachmentDriver.upload(attachment.file);
@@ -537,14 +570,14 @@ export class ChatRuntime {
           status: "uploaded",
           uploadedPart,
         };
-        this.store.getState().setComposerAttachments(next);
+        this.store.getState().setComposerAttachmentsForThread(threadId, next);
       } catch (error) {
         next[index] = {
           ...attachment,
           status: "error",
           errorMessage: error instanceof Error ? error.message : String(error),
         };
-        this.store.getState().setComposerAttachments(next);
+        this.store.getState().setComposerAttachmentsForThread(threadId, next);
         throw error;
       }
     }
@@ -555,13 +588,15 @@ export class ChatRuntime {
     overrides: SendOverrides = {},
     onRunStarted?: () => void,
   ) {
-    await this.uploadComposerAttachments();
-    const parts = overrides.userParts ?? buildOutgoingUserParts(this.getState().composer);
+    const sourceThreadId = this.getState().activeThreadId;
+    await this.uploadComposerAttachments(sourceThreadId);
+    const parts =
+      overrides.userParts ?? buildOutgoingUserParts(this.getComposerDraft(sourceThreadId));
     if (parts.length === 0) {
       return;
     }
 
-    const thread = await this.ensureThread(this.getState().activeThreadId);
+    const thread = await this.resolveThreadForSend(sourceThreadId);
     if (!thread) {
       throw new Error("No active thread");
     }
@@ -617,8 +652,11 @@ export class ChatRuntime {
       this.store.getState().appendMessage(thread.id, userMessage);
     }
     this.store.getState().appendMessage(thread.id, assistantMessage);
-    this.store.getState().resetComposer();
-    this.store.getState().setRunStatus({ type: "running" });
+    this.store.getState().resetComposerForThread(sourceThreadId);
+    if (sourceThreadId !== thread.id) {
+      this.store.getState().resetComposerForThread(thread.id);
+    }
+    this.store.getState().setRunStatus({ type: "running" }, thread.id);
 
     this.currentRunController = new AbortController();
     onRunStarted?.();

@@ -2,27 +2,27 @@ import { describe, expect, it } from "vitest";
 import { isValidWorkspaceRootPath } from "./runtimePolicies";
 
 describe("isValidWorkspaceRootPath", () => {
-  it("accepts Windows absolute paths in browser preview mode", () => {
-    expect(isValidWorkspaceRootPath("D:\\testData", "browser")).toBe(true);
+  it("accepts Windows absolute paths", () => {
+    expect(isValidWorkspaceRootPath("D:\\testData")).toBe(true);
   });
 
-  it("accepts Windows drive roots in browser preview mode", () => {
-    expect(isValidWorkspaceRootPath("D:\\", "browser")).toBe(true);
+  it("accepts Windows drive roots", () => {
+    expect(isValidWorkspaceRootPath("D:\\")).toBe(true);
   });
 
-  it("accepts Unix absolute paths in browser preview mode", () => {
-    expect(isValidWorkspaceRootPath("/workspace/rag-demo", "browser")).toBe(true);
+  it("accepts UNC paths", () => {
+    expect(isValidWorkspaceRootPath("\\\\server\\share")).toBe(true);
   });
 
-  it("accepts Unix root in browser preview mode", () => {
-    expect(isValidWorkspaceRootPath("/", "browser")).toBe(true);
+  it("rejects Unix absolute paths", () => {
+    expect(isValidWorkspaceRootPath("/workspace/rag-demo")).toBe(false);
   });
 
-  it("rejects relative paths in browser preview mode", () => {
-    expect(isValidWorkspaceRootPath("testData", "browser")).toBe(false);
+  it("rejects Unix root", () => {
+    expect(isValidWorkspaceRootPath("/")).toBe(false);
   });
 
-  it("accepts UNC paths on Windows", () => {
-    expect(isValidWorkspaceRootPath("\\\\server\\share", "win32")).toBe(true);
+  it("rejects relative paths", () => {
+    expect(isValidWorkspaceRootPath("testData")).toBe(false);
   });
 });

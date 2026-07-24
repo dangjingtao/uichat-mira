@@ -74,6 +74,7 @@ export interface AgentNodeState {
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
   workspaceRoot?: string | null;
+  requestedToolGroupIds?: string[];
   toolIntent?: ToolIntentResult;
   toolExposure?: AgentToolExposureState;
   nextAction?: AgentNextAction;

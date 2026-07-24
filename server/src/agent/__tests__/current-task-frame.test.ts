@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import * as harnessInvocations from "@/harness/invocations";
+import * as harnessRegistry from "@/harness/registry";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
 import { externalExpertService } from "@/microapps/external-expert/index.js";
 import { createInitialAgentGraphState } from "../graph/state";
@@ -41,6 +42,7 @@ const makeToolDefinition = (toolId: string, domain = "read") => ({
   inputSchema: { type: "object", properties: {} },
   domain,
   source: "internal" as const,
+  mode: "sync" as const,
   tags: [domain],
   capabilities: { sideEffect: "none" as const, requiresApproval: false },
 });
@@ -236,6 +238,160 @@ test("prepareContextNode initializes runtime toolExposure independently from too
     );
   } finally {
     matcherSpy.mockRestore();
+  }
+});
+
+test("prepareContextNode injects an explicit tool package as a Planner preference without filtering exposed tools", async () => {
+  const readOpen = makeToolDefinition("read_open");
+  const webSearch = makeToolDefinition("web_search", "web_search");
+  const registrySpy = vi
+    .spyOn(harnessRegistry, "listCapabilityDefinitions")
+    .mockReturnValue([readOpen, webSearch]);
+  const matcherSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockImplementation(async ({ query }) => ({
+      query,
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: ["read_open", "web_search"],
+        exposedDefinitions: [readOpen, webSearch],
+        reason: ["matched tools"],
+      },
+      exposureReasons: ["matched tools"],
+    }));
+  const events: Array<{
+    nodeId: string;
+    phase: string;
+    label: string;
+    details?: Record<string, unknown>;
+  }> = [];
+
+  try {
+    const patch = await prepareContextNode(
+      createBaseState({ requestedToolGroupIds: ["web_search"] }),
+      async (event) => {
+        events.push({
+          nodeId: event.nodeId,
+          phase: event.phase,
+          label: event.label,
+          details: event.details,
+        });
+      },
+    );
+
+    assert.match(
+      matcherSpy.mock.calls[0]?.[0].query ?? "",
+      /用户明确选择了以下工具包作为本轮工具偏好/,
+    );
+    assert.match(matcherSpy.mock.calls[0]?.[0].query ?? "", /网络搜索/);
+    assert.deepEqual(patch.toolExposure?.exposedTools, ["read_open", "web_search"]);
+    assert.deepEqual(patch.toolExposure?.requestedToolGroups, [
+      {
+        groupId: "web_search",
+        groupLabel: "网络搜索",
+        groupDescription: "公网实时搜索与本地新闻源检索。",
+        toolIds: ["web_search"],
+        exposedToolIds: ["web_search"],
+        status: "available",
+      },
+    ]);
+
+    const plannerMessages = buildNextActionPlannerMessages({
+      question: "查一下最新资料",
+      messages: [],
+      observationContext: buildPlannerObservationContext(
+        createBaseState({ ...patch }),
+      ),
+      toolExposure: patch.toolExposure!,
+      iteration: 0,
+      maxIterations: 3,
+    });
+    const plannerPayload = JSON.parse(
+      String(plannerMessages[1]?.content ?? "{}"),
+    ) as {
+      toolSelectionHints: Array<{ groupId: string; status: string }>;
+      toolExposure: { exposedTools: string[] };
+    };
+    assert.deepEqual(plannerPayload.toolExposure.exposedTools, [
+      "read_open",
+      "web_search",
+    ]);
+    assert.deepEqual(plannerPayload.toolSelectionHints, [
+      {
+        groupId: "web_search",
+        groupLabel: "网络搜索",
+        groupDescription: "公网实时搜索与本地新闻源检索。",
+        toolIds: ["web_search"],
+        exposedToolIds: ["web_search"],
+        status: "available",
+      },
+    ]);
+    const toolkitEvent = events.find(
+      (event) => event.nodeId === "agent-toolkit-context" && event.phase === "done",
+    );
+    assert.equal(toolkitEvent?.label, "应用工具包");
+    assert.equal(toolkitEvent?.details?.changesToolExposure, false);
+  } finally {
+    matcherSpy.mockRestore();
+    registrySpy.mockRestore();
+  }
+});
+
+test("prepareContextNode reports unavailable and unknown tool packages without changing tool exposure", async () => {
+  const readOpen = makeToolDefinition("read_open");
+  const webSearch = makeToolDefinition("web_search", "web_search");
+  const registrySpy = vi
+    .spyOn(harnessRegistry, "listCapabilityDefinitions")
+    .mockReturnValue([readOpen, webSearch]);
+  const matcherSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "inspect docs",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: ["read_open"],
+        exposedDefinitions: [readOpen],
+        reason: ["matched read_open"],
+      },
+      exposureReasons: ["matched read_open"],
+    });
+
+  try {
+    const patch = await prepareContextNode(
+      createBaseState({
+        requestedToolGroupIds: ["web_search", "missing-package"],
+      }),
+    );
+    assert.deepEqual(patch.toolExposure?.exposedTools, ["read_open"]);
+    assert.deepEqual(
+      patch.toolExposure?.requestedToolGroups?.map((group) => ({
+        groupId: group.groupId,
+        status: group.status,
+        exposedToolIds: group.exposedToolIds,
+      })),
+      [
+        {
+          groupId: "web_search",
+          status: "unavailable",
+          exposedToolIds: [],
+        },
+        {
+          groupId: "missing-package",
+          status: "unknown",
+          exposedToolIds: [],
+        },
+      ],
+    );
+    assert.match(matcherSpy.mock.calls[0]?.[0].query ?? "", /网络搜索/);
+    assert.doesNotMatch(
+      matcherSpy.mock.calls[0]?.[0].query ?? "",
+      /missing-package/,
+    );
+  } finally {
+    matcherSpy.mockRestore();
+    registrySpy.mockRestore();
   }
 });
 

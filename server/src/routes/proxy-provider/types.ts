@@ -21,6 +21,7 @@ export interface ProviderChatBody extends ChatMessagesBody {
   messageId?: string;
   /** Per-send Agent mode request from the composer Agent button. */
   agentEnabled?: boolean;
+  requestedToolGroupIds?: string[];
 }
 
 /** Embedding route body. Strings are normalized into a one-item input array. */

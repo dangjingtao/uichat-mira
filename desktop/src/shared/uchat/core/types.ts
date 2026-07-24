@@ -29,8 +29,8 @@ export type ChatMessagePart =
       value: unknown;
     };
 
-// Run status represents the assistant generation lifecycle for the active
-// thread. It is intentionally coarse so different transports can map into it.
+// Run status represents the single assistant generation lifecycle in the
+// runtime. activeRunThreadId identifies which thread owns a running task.
 export type ChatRunStatus =
   | { type: "idle" }
   | { type: "running" }
@@ -159,6 +159,7 @@ export interface ChatRuntimeState {
   threadListStatus: "idle" | "loading" | "ready" | "error";
   threadStatus: "idle" | "loading" | "ready" | "error";
   runStatus: ChatRunStatus;
+  activeRunThreadId: string | null;
   hydratedThreadIds: string[];
   capabilities: ChatRuntimeCapabilities;
 }
@@ -270,6 +271,7 @@ export interface ChatRunContext {
   signal?: AbortSignal;
   options?: {
     agentEnabled?: boolean;
+    requestedToolGroupIds?: string[];
   };
 }
 

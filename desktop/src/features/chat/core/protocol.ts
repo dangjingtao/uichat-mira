@@ -679,6 +679,9 @@ export class DesktopChatRunDriver implements ChatRunDriver {
         ...(typeof context.options?.agentEnabled === "boolean"
           ? { agentEnabled: context.options.agentEnabled }
           : {}),
+        ...(context.options?.requestedToolGroupIds?.length
+          ? { requestedToolGroupIds: context.options.requestedToolGroupIds }
+          : {}),
       }),
       signal: context.signal,
     });

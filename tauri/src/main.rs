@@ -89,6 +89,13 @@ struct DesktopRuntimePayload {
 
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
 
+fn canonical_desktop_platform(platform: &'static str) -> &'static str {
+    match platform {
+        "windows" => "win32",
+        other => other,
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct HealthCheckResult {
     success: bool,
@@ -218,7 +225,7 @@ fn get_backend_url() -> String {
 fn desktop_runtime_payload() -> DesktopRuntimePayload {
     DesktopRuntimePayload {
         host_kind: "tauri",
-        platform: std::env::consts::OS,
+        platform: canonical_desktop_platform(std::env::consts::OS),
         is_packaged: !cfg!(debug_assertions),
         backend_url: get_backend_url(),
     }
@@ -780,7 +787,12 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_runtime_config;
+    use super::{canonical_desktop_platform, parse_runtime_config};
+
+    #[test]
+    fn normalizes_windows_platform_to_node_contract() {
+        assert_eq!(canonical_desktop_platform("windows"), "win32");
+    }
 
     #[test]
     fn parses_environment_backed_backend_port() {

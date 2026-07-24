@@ -1,8 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
-import { buildWenshuPythonEnv } from "./runtime-pack-paths.js";
+import { execFileSync, spawn } from "node:child_process";
+import { writeStructuredLog } from "@/logger.js";
+import {
+  buildWenshuPythonEnv,
+  resolveWenshuOfficePackRoot,
+  resolveWenshuOfficeSitePackages,
+} from "./runtime-pack-paths.js";
 
 type PythonJsonResult = {
   status: string;
@@ -10,6 +15,31 @@ type PythonJsonResult = {
   error?: string;
   message?: string;
   [key: string]: unknown;
+};
+
+export type WenshuPythonScript =
+  | "pdf/pdf_create_runtime.py"
+  | "pdf/pdf_runtime.py"
+  | "pptx/pptx_runtime.py"
+  | "xlsx/xlsx_finalize.py"
+  | "xlsx/xlsx_runtime.py"
+  | "xlsx/xlsx_tools.py";
+
+const WENSHU_RUNTIME_SCRIPT_PATHS: Record<WenshuPythonScript, string> = {
+  "pdf/pdf_create_runtime.py": "pdf/pdf_create_runtime.py",
+  "pdf/pdf_runtime.py": "pdf/pdf_runtime.py",
+  "pptx/pptx_runtime.py": "pptx/pptx_runtime.py",
+  "xlsx/xlsx_finalize.py": "xlsx/xlsx_finalize.py",
+  "xlsx/xlsx_runtime.py": "xlsx/xlsx_runtime.py",
+  "xlsx/xlsx_tools.py": "xlsx/xlsx_tools.py",
+};
+
+export type WenshuPythonInvocation = {
+  runtime: "wenshu-office";
+  script: WenshuPythonScript;
+  args: string[];
+  cwd?: string;
+  timeoutMs?: number;
 };
 
 const PYTHON_ENV_KEYS = [
@@ -27,12 +57,32 @@ const resolveConfiguredPython = () => {
   return null;
 };
 
+const resolvePathPython = () => {
+  const command = process.platform === "win32" ? "where.exe" : "which";
+  const candidate = process.platform === "win32" ? "python.exe" : "python3";
+  try {
+    const output = execFileSync(command, [candidate], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const resolved = output
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .find(Boolean);
+    if (resolved) return resolved;
+  } catch {
+    // Keep the platform command as a last-resort dev-only PATH lookup.
+  }
+  return process.platform === "win32" ? "python" : "python3";
+};
+
 /**
  * WenShu never bundles another Python runtime. It resolves the Python supplied
  * by Mira's system development kit first and only falls back to PATH for dev.
  */
 export const resolveSystemDevelopmentPython = () =>
-  resolveConfiguredPython() ?? (process.platform === "win32" ? "python" : "python3");
+  resolveConfiguredPython() ?? resolvePathPython();
 
 const toolRootCandidates = () => {
   const configured = process.env.MIRA_WENSHU_TOOLS_ROOT?.trim();
@@ -54,6 +104,9 @@ export const resolveWenshuToolPath = (relativePath: string) => {
     `WenShu Python tool not found: ${relativePath}. Checked: ${toolRootCandidates().join(", ")}`,
   );
 };
+
+export const resolveWenshuRuntimeScript = (script: WenshuPythonScript) =>
+  resolveWenshuToolPath(WENSHU_RUNTIME_SCRIPT_PATHS[script]);
 
 const tryParseJson = (value: string): PythonJsonResult | null => {
   const trimmed = value.trim();
@@ -100,15 +153,24 @@ const parseJsonResult = (stdout: string, stderr: string): PythonJsonResult => {
   );
 };
 
-export const runWenshuPython = async (input: {
-  script: string;
-  args: string[];
-  cwd?: string;
-  timeoutMs?: number;
-}) => {
+export const runWenshuPython = async (input: WenshuPythonInvocation) => {
   const python = resolveSystemDevelopmentPython();
-  const script = resolveWenshuToolPath(input.script);
+  const script = resolveWenshuRuntimeScript(input.script);
+  const runtimePackRoot = resolveWenshuOfficePackRoot();
+  const sitePackages = resolveWenshuOfficeSitePackages();
   const timeoutMs = input.timeoutMs ?? 120_000;
+
+  writeStructuredLog("info", {
+    msg: "WenShu Python invocation started",
+    event: "wenshu-python-invocation-start",
+    runtime: input.runtime,
+    scriptId: input.script,
+    scriptPath: script,
+    python,
+    runtimePackRoot,
+    sitePackages,
+    cwd: input.cwd ?? null,
+  });
 
   return await new Promise<{
     python: string;
@@ -169,6 +231,19 @@ export const runWenshuPython = async (input: {
         const result = parseJsonResult(stdout, stderr);
         const successStatuses = new Set(["success", "pass"]);
         if (code !== 0 || !successStatuses.has(result.status)) {
+          writeStructuredLog("warn", {
+            msg: "WenShu Python invocation failed",
+            event: "wenshu-python-invocation-failed",
+            runtime: input.runtime,
+            scriptId: input.script,
+            scriptPath: script,
+            python,
+            runtimePackRoot,
+            sitePackages,
+            status: result.status,
+            exitCode: code,
+            error: result.message ?? result.error ?? null,
+          });
           rejectOnce(
             new Error(
               result.message ||
@@ -178,6 +253,17 @@ export const runWenshuPython = async (input: {
           return;
         }
         settled = true;
+        writeStructuredLog("info", {
+          msg: "WenShu Python invocation completed",
+          event: "wenshu-python-invocation-complete",
+          runtime: input.runtime,
+          scriptId: input.script,
+          scriptPath: script,
+          python,
+          runtimePackRoot,
+          sitePackages,
+          status: result.status,
+        });
         resolve({ python, script, stdout, stderr, result });
       } catch (error) {
         rejectOnce(error instanceof Error ? error : new Error(String(error)));

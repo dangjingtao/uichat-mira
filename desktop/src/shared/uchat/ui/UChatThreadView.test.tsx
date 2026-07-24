@@ -512,7 +512,7 @@ test("UChatThreadView renders the ComposerTools slot", () => {
   assert.ok(screen.getByText("Injected composer tools"));
 });
 
-test("UChatThreadView renders app-owned composer suggestions beneath the input", () => {
+test("UChatThreadView renders app-owned composer suggestions above the composer", () => {
   render(
     <UChatThreadView
       activeThreadId="thread-1"
@@ -537,7 +537,12 @@ test("UChatThreadView renders app-owned composer suggestions beneath the input",
   );
 
   const composerSurface = screen.getByRole("textbox").parentElement;
-  assert.ok(composerSurface?.contains(screen.getByText("Agent skill suggestions")));
+  const suggestion = screen.getByText("Agent skill suggestions");
+  assert.equal(composerSurface?.contains(suggestion), false);
+  assert.equal(
+    composerSurface?.parentElement?.contains(suggestion),
+    true,
+  );
 });
 
 test("UChatThreadView exposes workspace submenu actions from composer menu", async () => {

@@ -147,6 +147,36 @@ broken / repair-needed
 - WenShu Python 子进程通过受管 `PYTHONPATH` 使用该目录；
 - 安装使用 staging 目录，校验成功后再替换正式版本目录。
 
+### 统一 WenShu Python invocation contract
+
+所有 Python-backed WenShu Domain Runtime 都必须通过 backend 内部 launcher 执行：
+
+```text
+Skill operation input
+  → runtime = wenshu-office
+  → registered script id
+  → runWenshuPython
+  → selected system development Python
+  → managed Runtime Pack PYTHONPATH
+  → bundled script/runtime
+  → deterministic result
+```
+
+Skill 或 Agent 只可以提交 runtime、受控 script id、操作参数和 workspace 输入输出路径。不得提交 Python executable、shell command、`PYTHONPATH`、`python -m`、`pip install` 或 `conda install`。
+
+当前受控脚本入口包括：
+
+```text
+pdf/pdf_create_runtime.py
+pdf/pdf_runtime.py
+pptx/pptx_runtime.py
+xlsx/xlsx_runtime.py
+xlsx/xlsx_finalize.py
+xlsx/xlsx_tools.py
+```
+
+`terminal_session` 不是 WenShu Python launcher，也不得被 Skill 用来替代 launcher。DOCX 当前使用 Node/OOXML Domain Runtime，不依赖该 Python Pack。
+
 默认目录概念：
 
 ```text

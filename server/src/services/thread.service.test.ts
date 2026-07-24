@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import { afterAll, test } from "vitest";
 import { initializeAuthDatabase } from "@/db/auth.db";
 import { getSqlite } from "@/db/index.js";
@@ -81,9 +80,7 @@ test("createChatWorkspace validates workspace root paths", () => {
     role: "user",
     isActive: true,
   });
-  const validRootPath = os.platform() === "win32"
-    ? "D:\\workspace\\project-alpha"
-    : "/workspace/project-alpha";
+  const validRootPath = "D:\\workspace\\project-alpha";
 
   assert.throws(
     () =>
@@ -110,9 +107,7 @@ test("createChatWorkspace validates workspace root paths", () => {
       threadService.createChatWorkspace({
         userId: user.id,
         name: "Workspace",
-        rootPath: os.platform() === "win32"
-          ? "/workspace/project-alpha"
-          : "workspace/project-alpha",
+        rootPath: "/workspace/project-alpha",
       }),
     /Workspace root path is invalid/,
   );
@@ -251,9 +246,7 @@ test("deleteChatWorkspace removes threads bound to that workspace", () => {
   const workspace = threadService.createChatWorkspace({
     userId: user.id,
     name: "Workspace",
-    rootPath: os.platform() === "win32"
-      ? "D:\\workspace\\project-delete"
-      : "/workspace/project-delete",
+    rootPath: "D:\\workspace\\project-delete",
   });
 
   const boundThread = threadService.createThread({
@@ -279,9 +272,7 @@ test("getThreadWorkspaceRoot resolves a bound thread workspace path", () => {
     role: "user",
     isActive: true,
   });
-  const workspaceRoot = os.platform() === "win32"
-    ? "D:\\testData"
-    : "/tmp/test-data";
+  const workspaceRoot = "D:\\testData";
   const workspace = threadService.createChatWorkspace({
     userId: user.id,
     name: "PW Test",

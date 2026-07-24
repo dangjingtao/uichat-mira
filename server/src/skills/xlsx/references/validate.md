@@ -4,10 +4,10 @@ Validation is performed by code, not by asking a model to inspect the workbook a
 
 ## Tier 1 — static package/formula validation
 
-Run:
+Request the deterministic WenShu Runtime to run the registered XLSX validation operation. Do not run a Python script from `terminal_session`.
 
 ```bash
-python3 scripts/formula_check.py output.xlsx --report
+runtime=wenshu-office script=xlsx/xlsx_runtime.py operation=verify input=output.xlsx
 ```
 
 This route checks package/formula structure that can be determined without executing Excel formulas, including malformed/missing package parts, formula error cells, broken sheet references, and shared-formula integrity.
@@ -19,8 +19,8 @@ A non-zero exit code is a validation failure. Repair the workbook/protocol and r
 When actual formula execution is required and LibreOffice is available:
 
 ```bash
-python3 scripts/libreoffice_recalc.py output.xlsx recalculated.xlsx
-python3 scripts/formula_check.py recalculated.xlsx --report
+runtime=wenshu-office script=xlsx/xlsx_tools.py operation=recalc input=output.xlsx
+runtime=wenshu-office script=xlsx/xlsx_runtime.py operation=verify input=recalculated.xlsx
 ```
 
 LibreOffice absence is not evidence that recalculation succeeded. Report Tier-2 as unavailable rather than silently falling back to "calculation mode auto" and calling it recalculated.

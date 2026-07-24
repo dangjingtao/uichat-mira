@@ -101,7 +101,8 @@ export default function ToolsTracePanel({
           .filter(Boolean)
           .join("  ")
       }
-      className="h-full min-h-0 rounded-ui-control"
+      className="h-full min-h-0"
+      variant="plain"
     >
       {runError ? (
         <div className="whitespace-pre-wrap break-words text-sm text-danger-text">{runError}</div>

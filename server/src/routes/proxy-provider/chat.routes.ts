@@ -225,6 +225,7 @@ const sendPersistedDefaultChatStream = ({
   requestContextMessages,
   params,
   agentEnabled,
+  requestedToolGroupIds,
   knowledgeBaseId,
   preludeChunks,
 }: {
@@ -238,6 +239,7 @@ const sendPersistedDefaultChatStream = ({
   requestContextMessages?: ReturnType<typeof normalizeProxyChatMessages>;
   params?: Record<string, unknown>;
   agentEnabled?: boolean;
+  requestedToolGroupIds?: string[];
   knowledgeBaseId?: string | null;
   preludeChunks?: string[];
 }) => {
@@ -276,6 +278,7 @@ const sendPersistedDefaultChatStream = ({
             params,
             knowledgeBaseId,
             workspaceRoot,
+            requestedToolGroupIds,
             onExecutionNode: emitExecutionNode,
           });
 
@@ -507,6 +510,7 @@ export const registerProxyProviderChatRoutes = async (
             requestContextMessages,
             params: roleLlmParams,
             agentEnabled,
+            requestedToolGroupIds: request.body.requestedToolGroupIds,
             knowledgeBaseId: thread?.knowledgeBaseId ?? null,
             preludeChunks: [],
           });

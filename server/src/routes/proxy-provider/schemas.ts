@@ -112,6 +112,12 @@ export const chatMessagesBodySchema = {
       type: "boolean",
       description: "Per-send Agent mode request from the desktop composer.",
     },
+    requestedToolGroupIds: {
+      type: "array",
+      description: "Explicit tool package groups selected from the composer.",
+      items: { type: "string", minLength: 1 },
+      uniqueItems: true,
+    },
   },
 } as const;
 

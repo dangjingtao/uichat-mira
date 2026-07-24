@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import {
   useChatRuntime,
   useChatRuntimeSelector,
@@ -46,7 +45,6 @@ export function UChatThreadListSidebar() {
   const [workspaceRootPath, setWorkspaceRootPath] = useState("");
   const [workspaceRootPathError, setWorkspaceRootPathError] = useState("");
   const [toolsModalMode, setToolsModalMode] = useState<"search" | "workspace" | null>(null);
-  const platform = getDesktopRuntime().platform;
 
   const refreshWorkspaces = async () => {
     setWorkspaces(await listChatWorkspaces());
@@ -156,7 +154,7 @@ export function UChatThreadListSidebar() {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
       return;
     }
-    if (!isValidWorkspaceRootPath(rootPath, platform)) {
+    if (!isValidWorkspaceRootPath(rootPath)) {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }

@@ -18,10 +18,19 @@ type ChatRuntimeActions = {
   activateComposerForThread: (threadId: string | null) => void;
   setThreadListStatus: (status: ChatRuntimeState["threadListStatus"]) => void;
   setThreadStatus: (status: ChatRuntimeState["threadStatus"]) => void;
-  setRunStatus: (status: ChatRuntimeState["runStatus"]) => void;
+  setRunStatus: (
+    status: ChatRuntimeState["runStatus"],
+    activeRunThreadId?: string | null,
+  ) => void;
   setComposerText: (text: string) => void;
+  setComposerTextForThread: (threadId: string | null, text: string) => void;
   resetComposer: () => void;
+  resetComposerForThread: (threadId: string | null) => void;
   setComposerAttachments: (attachments: ComposerAttachmentDraft[]) => void;
+  setComposerAttachmentsForThread: (
+    threadId: string | null,
+    attachments: ComposerAttachmentDraft[],
+  ) => void;
   appendComposerAttachments: (attachments: ComposerAttachmentDraft[]) => void;
   removeComposerAttachment: (attachmentId: string) => void;
   appendMessage: (threadId: string, message: ChatMessage) => void;
@@ -59,6 +68,7 @@ const initialState: ChatRuntimeState = {
   threadListStatus: "idle",
   threadStatus: "idle",
   runStatus: { type: "idle" },
+  activeRunThreadId: null,
   hydratedThreadIds: [],
   capabilities: {
     attachments: true,
@@ -73,6 +83,35 @@ const cloneComposerState = (composer: ChatComposerState): ChatComposerState => (
   text: composer.text,
   attachments: [...composer.attachments],
 });
+
+const getComposerDraft = (
+  state: ChatRuntimeState,
+  threadId: string | null,
+): ChatComposerState =>
+  state.composerDrafts[composerDraftKey(threadId)] ?? initialComposerState;
+
+const projectActiveComposer = (
+  state: ChatRuntimeState,
+  threadId: string | null,
+) => cloneComposerState(getComposerDraft(state, threadId));
+
+const setScopedComposerDraft = (
+  state: ChatRuntimeState,
+  threadId: string | null,
+  draft: ChatComposerState,
+) => {
+  const key = composerDraftKey(threadId);
+  const nextDraft = cloneComposerState(draft);
+  return {
+    composerDrafts: {
+      ...state.composerDrafts,
+      [key]: nextDraft,
+    },
+    ...(state.activeThreadId === threadId
+      ? { composer: cloneComposerState(nextDraft) }
+      : {}),
+  };
+};
 
 // createChatRuntimeStore exposes a framework-neutral Zustand vanilla store so
 // React is optional at the core layer.
@@ -109,95 +148,88 @@ export const createChatRuntimeStore = () =>
         nextThreads[index] = thread;
         return { threads: nextThreads };
       }),
-    setActiveThreadId: (activeThreadId) => set({ activeThreadId }),
+    setActiveThreadId: (activeThreadId) =>
+      set((state) => ({
+        activeThreadId,
+        composer: projectActiveComposer(state, activeThreadId),
+      })),
     activateComposerForThread: (threadId) =>
       set((state) => {
-        const currentKey = composerDraftKey(state.activeThreadId);
-        const nextKey = composerDraftKey(threadId);
-        const nextDrafts = {
-          ...state.composerDrafts,
-          [currentKey]: cloneComposerState(state.composer),
-        };
-
         return {
           activeThreadId: threadId,
-          composerDrafts: nextDrafts,
-          composer: cloneComposerState(
-            nextDrafts[nextKey] ?? initialComposerState,
-          ),
+          composer: projectActiveComposer(state, threadId),
         };
       }),
     setThreadListStatus: (threadListStatus) => set({ threadListStatus }),
     setThreadStatus: (threadStatus) => set({ threadStatus }),
-    setRunStatus: (runStatus) => set({ runStatus }),
+    setRunStatus: (runStatus, activeRunThreadId = null) =>
+      set({
+        runStatus,
+        activeRunThreadId:
+          runStatus.type === "running" ? activeRunThreadId : null,
+      }),
     setComposerText: (text) =>
       set((state) => ({
-        composer: {
-          ...state.composer,
+        ...setScopedComposerDraft(state, state.activeThreadId, {
+          ...getComposerDraft(state, state.activeThreadId),
           text,
-        },
-        composerDrafts: {
-          ...state.composerDrafts,
-          [composerDraftKey(state.activeThreadId)]: {
-            ...state.composer,
-            text,
-          },
-        },
+        }),
+      })),
+    setComposerTextForThread: (threadId, text) =>
+      set((state) => ({
+        ...setScopedComposerDraft(state, threadId, {
+          ...getComposerDraft(state, threadId),
+          text,
+        }),
       })),
     resetComposer: () =>
       set((state) => ({
-        composer: initialComposerState,
-        composerDrafts: {
-          ...state.composerDrafts,
-          [composerDraftKey(state.activeThreadId)]: initialComposerState,
-        },
+        ...setScopedComposerDraft(
+          state,
+          state.activeThreadId,
+          initialComposerState,
+        ),
+      })),
+    resetComposerForThread: (threadId) =>
+      set((state) => ({
+        ...setScopedComposerDraft(state, threadId, initialComposerState),
       })),
     setComposerAttachments: (attachments) =>
       set((state) => ({
-        composer: {
-          ...state.composer,
+        ...setScopedComposerDraft(state, state.activeThreadId, {
+          ...getComposerDraft(state, state.activeThreadId),
           attachments,
-        },
-        composerDrafts: {
-          ...state.composerDrafts,
-          [composerDraftKey(state.activeThreadId)]: {
-            ...state.composer,
-            attachments,
-          },
-        },
+        }),
+      })),
+    setComposerAttachmentsForThread: (threadId, attachments) =>
+      set((state) => ({
+        ...setScopedComposerDraft(state, threadId, {
+          ...getComposerDraft(state, threadId),
+          attachments,
+        }),
       })),
     appendComposerAttachments: (attachments) =>
-      set((state) => ({
-        composer: {
-          ...state.composer,
-          attachments: [...state.composer.attachments, ...attachments],
-        },
-        composerDrafts: {
-          ...state.composerDrafts,
-          [composerDraftKey(state.activeThreadId)]: {
-            ...state.composer,
-            attachments: [...state.composer.attachments, ...attachments],
-          },
-        },
-      })),
+      set((state) => {
+        const current = getComposerDraft(state, state.activeThreadId);
+        return {
+          ...setScopedComposerDraft(state, state.activeThreadId, {
+            ...current,
+            attachments: [...current.attachments, ...attachments],
+          }),
+        };
+      }),
     removeComposerAttachment: (attachmentId) =>
-      set((state) => ({
-        composer: {
-          ...state.composer,
-          attachments: state.composer.attachments.filter(
-              (attachment) => attachment.id !== attachmentId,
-          ),
-        },
-        composerDrafts: {
-          ...state.composerDrafts,
-          [composerDraftKey(state.activeThreadId)]: {
-            ...state.composer,
-            attachments: state.composer.attachments.filter(
+      set((state) => {
+        const current = getComposerDraft(state, state.activeThreadId);
+        return {
+          ...setScopedComposerDraft(state, state.activeThreadId, {
+            ...current,
+            attachments: current.attachments.filter(
               (attachment) => attachment.id !== attachmentId,
             ),
-          },
-        },
-      })),
+          }),
+        };
+      }),
     appendMessage: (threadId, message) =>
       set((state) => ({
         threads: state.threads.map((thread) =>

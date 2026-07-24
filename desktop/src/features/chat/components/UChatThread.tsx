@@ -28,7 +28,6 @@ import {
   type ChatWorkspace,
 } from "@/shared/api/thread";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
-import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import {
   UChatThreadView,
   type UChatThreadSlots,
@@ -53,8 +52,13 @@ import {
   DesktopChatMessageExtensionsProvider,
 } from "./DesktopChatMessageExtensions";
 import {
+  AgentSkillComposerEditor,
   AgentSkillComposerSuggestion,
+  AgentToolkitComposerSuggestion,
+  getExplicitToolkitIds,
   insertExplicitSkill,
+  insertExplicitToolkit,
+  resolveExplicitSkillsForSubmission,
 } from "./AgentSkillComposerSuggestion";
 
 const desktopChatThreadSlots = {
@@ -84,12 +88,19 @@ export default function UChatThread() {
   const threads = useChatRuntimeSelector((state) => state.threads);
   const composer = useChatRuntimeSelector((state) => state.composer);
   const runStatus = useChatRuntimeSelector((state) => state.runStatus);
+  const activeRunThreadId = useChatRuntimeSelector(
+    (state) => state.activeRunThreadId,
+  );
   const threadStatus = useChatRuntimeSelector((state) => state.threadStatus);
   const capabilities = useChatRuntimeSelector((state) => state.capabilities);
   const activeThread =
     threads.find((thread) => thread.id === activeThreadId) ?? null;
   const messages = activeThread?.messages ?? [];
-  const isRunning = runStatus.type === "running";
+  const hasRunningTask = runStatus.type === "running";
+  const isRunning = hasRunningTask && activeRunThreadId === activeThreadId;
+  const currentThreadRunStatus = isRunning
+    ? runStatus
+    : ({ type: "idle" } as const);
   const latestAssistantMessage =
     [...messages].reverse().find((message) => message.role === "assistant") ?? null;
   const latestAssistantAgentMetadata =
@@ -126,7 +137,6 @@ export default function UChatThread() {
   const [workspaceRootPathError, setWorkspaceRootPathError] = useState("");
   const [workspaceTargetThreadId, setWorkspaceTargetThreadId] = useState<string | null>(null);
   const avatarOptions = useMemo(() => getBuiltinAvatarPack16Options(), []);
-  const platform = getDesktopRuntime().platform;
 
   const activeThreadWorkspaceId =
     activeThread?.workspaceId ?? null;
@@ -165,12 +175,14 @@ export default function UChatThread() {
       ? activeThread.metadata.roleId
       : undefined;
 
-  const { isSendDisabled, placeholder } = useUChatComposerState({
-    isRunning,
-    hasKnowledgeBase,
-    hasDefaultLlm,
-    hasDefaultEmbedding,
-  });
+  const { isComposerDisabled, isSendDisabled, placeholder } =
+    useUChatComposerState({
+      hasRunningTask,
+      isCurrentThreadRunning: isRunning,
+      hasKnowledgeBase,
+      hasDefaultLlm,
+      hasDefaultEmbedding,
+    });
 
   const modelBadges = useMemo(() => {
     const items = [
@@ -430,7 +442,7 @@ export default function UChatThread() {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
       return;
     }
-    if (!isValidWorkspaceRootPath(rootPath, platform)) {
+    if (!isValidWorkspaceRootPath(rootPath)) {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }
@@ -477,7 +489,15 @@ export default function UChatThread() {
       return;
     }
 
-    await runtime.send({ agentEnabled: true });
+    const requestedToolGroupIds = getExplicitToolkitIds(composer.text);
+    const submissionText = resolveExplicitSkillsForSubmission(composer.text);
+    if (submissionText !== composer.text) {
+      runtime.setComposerText(submissionText);
+    }
+    await runtime.send({
+      agentEnabled: true,
+      ...(requestedToolGroupIds.length > 0 ? { requestedToolGroupIds } : {}),
+    });
   };
 
   const handleToggleAgentEnabled = async () => {
@@ -485,6 +505,12 @@ export default function UChatThread() {
     if (nextEnabled && !hasWorkspaceBound) {
       message.error(t("chat.thread.agent.workspaceRequired"));
       return;
+    }
+    if (!nextEnabled) {
+      const plainText = resolveExplicitSkillsForSubmission(composer.text);
+      if (plainText !== composer.text) {
+        runtime.setComposerText(plainText);
+      }
     }
     if (activeThreadId && activeThread) {
       await runtime.updateThread(activeThreadId, {
@@ -573,11 +599,12 @@ export default function UChatThread() {
           badges={modelBadges}
           messages={messages}
           composer={composer}
-          runStatus={runStatus}
+          runStatus={currentThreadRunStatus}
           threadStatus={threadStatus}
           capabilities={capabilities}
           hasKnowledgeBase={hasKnowledgeBase}
           placeholder={placeholder}
+          isComposerDisabled={isComposerDisabled}
           isSendDisabled={isSendDisabled}
           onComposerTextChange={(value) => runtime.setComposerText(value)}
           onComposerAttachmentsChange={(files) =>
@@ -589,7 +616,19 @@ export default function UChatThread() {
           onComposerAttachmentRemove={(attachmentId) =>
             runtime.removeComposerAttachment(attachmentId)
           }
-          onSend={() => runtime.send()}
+          onSend={() => {
+            if (isAgentEnabled) {
+              return handleAgentSend();
+            }
+            const requestedToolGroupIds = getExplicitToolkitIds(composer.text);
+            const submissionText = resolveExplicitSkillsForSubmission(composer.text);
+            if (submissionText !== composer.text) {
+              runtime.setComposerText(submissionText);
+            }
+            return requestedToolGroupIds.length > 0
+              ? runtime.send({ requestedToolGroupIds })
+              : runtime.send();
+          }}
           onCancelSend={() => runtime.cancelSend()}
           onRegenerate={(messageId) => runtime.regenerate(messageId)}
           onEditUserMessage={(messageId, text, parts) =>
@@ -624,14 +663,36 @@ export default function UChatThread() {
             onApprove: handleApproveAgentRun,
             onReject: handleRejectAgentRun,
           }}
+          renderComposerEditor={
+            isAgentEnabled
+              ? (props) => (
+                  <AgentSkillComposerEditor
+                    text={props.value}
+                    placeholder={props.placeholder}
+                    disabled={props.disabled}
+                    onChange={props.onChange}
+                    onSubmit={props.onSubmit}
+                    onPasteFiles={props.onPasteFiles}
+                  />
+                )
+              : undefined
+          }
           composerSuggestion={
             isAgentEnabled ? (
-              <AgentSkillComposerSuggestion
-                text={composer.text}
-                onSelect={(skillId) =>
-                  runtime.setComposerText(insertExplicitSkill(composer.text, skillId))
-                }
-              />
+              <div className="space-y-1">
+                <AgentSkillComposerSuggestion
+                  text={composer.text}
+                  onSelect={(skillId) =>
+                    runtime.setComposerText(insertExplicitSkill(composer.text, skillId))
+                  }
+                />
+                <AgentToolkitComposerSuggestion
+                  text={composer.text}
+                  onSelect={(groupId) =>
+                    runtime.setComposerText(insertExplicitToolkit(composer.text, groupId))
+                  }
+                />
+              </div>
             ) : undefined
           }
           slots={desktopChatThreadSlots}

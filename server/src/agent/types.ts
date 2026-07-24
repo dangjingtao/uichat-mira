@@ -378,6 +378,16 @@ export type AgentNextAction =
 export interface AgentToolExposureState {
   exposedTools: string[];
   toolMeta: AgentToolMeta[];
+  requestedToolGroups?: AgentRequestedToolGroupHint[];
+}
+
+export interface AgentRequestedToolGroupHint {
+  groupId: string;
+  groupLabel: string;
+  groupDescription: string;
+  toolIds: string[];
+  exposedToolIds: string[];
+  status: "available" | "unavailable" | "unknown";
 }
 
 export interface AgentSchemaReplanDiagnostics {
@@ -526,6 +536,7 @@ export interface AgentRun {
     | "knowledgeBaseId"
     | "intentConfig"
     | "workspaceRoot"
+    | "requestedToolGroupIds"
   >;
   createdAt: string;
   updatedAt: string;
@@ -546,6 +557,7 @@ export interface AgentRunStore {
       | "knowledgeBaseId"
       | "intentConfig"
       | "workspaceRoot"
+      | "requestedToolGroupIds"
     >;
   }): AgentRun;
   get(runId: string): AgentRun | undefined;
@@ -581,6 +593,7 @@ export interface AgentGraphInput {
   knowledgeBaseId?: string | null;
   intentConfig?: AgentIntentEmbeddingConfig;
   workspaceRoot?: string | null;
+  requestedToolGroupIds?: string[];
   approvedInvocations?: AgentApprovedInvocation[];
   policyDecision?: AgentPolicyDecision;
   /**

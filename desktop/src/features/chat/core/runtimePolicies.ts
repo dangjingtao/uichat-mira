@@ -81,28 +81,17 @@ export const desktopSendLifecyclePolicy: ChatSendLifecyclePolicy = {};
 
 const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/](?:.*)?$/;
 const windowsUncPathPattern = /^\\\\[^\\\/]+[\\\/][^\\\/]+/;
-const unixAbsolutePathPattern = /^\//;
 
-export const isValidWorkspaceRootPath = (value: string, platform: string) => {
+export const isValidWorkspaceRootPath = (value: string) => {
   const rootPath = value.trim();
   if (!rootPath) {
     return false;
   }
 
-  const isWindowsAbsolutePath =
+  return (
     windowsAbsolutePathPattern.test(rootPath) ||
-    windowsUncPathPattern.test(rootPath);
-  const isUnixAbsolutePath = unixAbsolutePathPattern.test(rootPath);
-
-  if (platform === "win32") {
-    return isWindowsAbsolutePath;
-  }
-
-  if (platform === "browser") {
-    return isWindowsAbsolutePath || isUnixAbsolutePath;
-  }
-
-  return isUnixAbsolutePath;
+    windowsUncPathPattern.test(rootPath)
+  );
 };
 
 export const createDesktopComposerActions = ({

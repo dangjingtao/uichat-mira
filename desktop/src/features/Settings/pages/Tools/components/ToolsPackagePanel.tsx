@@ -1,4 +1,4 @@
-import { LoaderCircle, Play, Settings2, Wrench } from "lucide-react";
+import { LoaderCircle, Play, Settings2 } from "lucide-react";
 import SegmentedTabs from "@/shared/ui/SegmentedTabs";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
@@ -47,7 +47,7 @@ export default function ToolsPackagePanel({
   labels,
 }: ToolsPackagePanelProps) {
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-ui-panel border border-border bg-surface-primary">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-ui-panel border border-border bg-surface-primary">
       <div className="border-b border-border px-4 py-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -77,15 +77,26 @@ export default function ToolsPackagePanel({
                 className="min-w-0"
                 size="sm"
               />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onOpenArgsModal}
-                disabled={!selectedTool}
-              >
-                <Settings2 className="h-4 w-4" />
-                {labels.config}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onOpenArgsModal}
+                  disabled={!selectedTool}
+                >
+                  <Settings2 className="h-4 w-4" />
+                  {labels.config}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onRun}
+                  disabled={isRunning || !selectedTool}
+                >
+                  {isRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  {labels.execute}
+                </Button>
+              </div>
             </div>
 
             {selectedTool?.id === "terminal_session" && terminalSummary ? (
@@ -131,24 +142,8 @@ export default function ToolsPackagePanel({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="min-h-0 flex-1 overflow-hidden">{tracePanel}</div>
-
-        <div className="shrink-0 flex items-center justify-between gap-3 pt-4">
-          <div className="flex items-center gap-2 text-xs text-text-secondary">
-            <Wrench className="h-3.5 w-3.5" />
-            <span>{selectedTool?.mode ?? "sync"}</span>
-          </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onRun}
-            disabled={isRunning || !selectedTool}
-          >
-            {isRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {labels.execute}
-          </Button>
-        </div>
       </div>
     </div>
   );

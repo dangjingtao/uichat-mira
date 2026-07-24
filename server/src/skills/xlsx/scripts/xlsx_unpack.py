@@ -3,8 +3,9 @@
 """
 xlsx_unpack.py — Unpack an xlsx file into a working directory for XML editing.
 
-Usage:
-    python3 xlsx_unpack.py <input.xlsx> <output_dir>
+Invocation:
+    This script is invoked by the internal WenShu Runtime launcher with the
+    input workbook and output directory as arguments.
 
 What it does:
 1. Unzips the xlsx (which is a ZIP archive)

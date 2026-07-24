@@ -5,6 +5,7 @@ import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capabil
 import { listCapabilityDefinitions } from "@/harness/registry";
 import { reconcileWenshuOfficeHarnessCapabilities } from "@/harness/wenshu-office-capability";
 import { externalExpertService } from "@/microapps/external-expert/index.js";
+import { withWorkbenchMetadata } from "@/mcp/workbench-metadata.js";
 import { prepareSkillContext, type SkillContext } from "@/skills/context/index.js";
 import { readSkillDirectiveFromRequestContext } from "@/skills/flow/context.js";
 import type {
@@ -15,6 +16,7 @@ import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 import { matchToolCandidatesByEmbedding } from "../intent/embedding-capability-matcher";
+import type { AgentRequestedToolGroupHint } from "../types";
 import { getLatestUserQuestion } from "./shared";
 
 const EXTERNAL_EXPERT_TOOL_ID = "ask_external_expert";
@@ -48,11 +50,85 @@ const filterExternalExpertExposure = <T extends Awaited<
   };
 };
 
+const resolveRequestedToolGroupHints = (
+  definitions: ReturnType<typeof listCapabilityDefinitions>,
+  requestedGroupIds: string[] | undefined,
+): AgentRequestedToolGroupHint[] => {
+  const requested = [
+    ...new Set(
+      (requestedGroupIds ?? []).map((groupId) => groupId.trim()).filter(Boolean),
+    ),
+  ];
+  if (requested.length === 0) return [];
+
+  const definitionsByGroup = new Map<
+    string,
+    ReturnType<typeof withWorkbenchMetadata>
+  >();
+  for (const definition of withWorkbenchMetadata(definitions)) {
+    const groupId = definition.workbench?.groupId;
+    if (!groupId) continue;
+    const groupDefinitions = definitionsByGroup.get(groupId) ?? [];
+    groupDefinitions.push(definition);
+    definitionsByGroup.set(groupId, groupDefinitions);
+  }
+
+  return requested.map((groupId) => {
+    const groupDefinitions = definitionsByGroup.get(groupId) ?? [];
+    const workbench = groupDefinitions[0]?.workbench;
+    return {
+      groupId,
+      groupLabel: workbench?.groupLabel ?? groupId,
+      groupDescription: workbench?.groupDescription ?? "",
+      toolIds: groupDefinitions.map((definition) => definition.id),
+      exposedToolIds: [],
+      status: groupDefinitions.length > 0 ? "unavailable" : "unknown",
+    };
+  });
+};
+
+const buildToolGroupBiasedQuery = (
+  query: string,
+  requestedToolGroups: AgentRequestedToolGroupHint[],
+) => {
+  const knownGroups = requestedToolGroups.filter((group) => group.toolIds.length > 0);
+  if (knownGroups.length === 0) return query;
+
+  const preference = knownGroups
+    .map(
+      (group) =>
+        `${group.groupLabel} (${group.groupId}): ${group.groupDescription}; tools=${group.toolIds.join(", ")}`,
+    )
+    .join("\n");
+  return `${query}\n\n用户明确选择了以下工具包作为本轮工具偏好：\n${preference}`;
+};
+
+const resolveRequestedToolGroupAvailability = (
+  requestedToolGroups: AgentRequestedToolGroupHint[],
+  exposedToolIds: string[],
+): AgentRequestedToolGroupHint[] => {
+  const exposed = new Set(exposedToolIds);
+  return requestedToolGroups.map((group) => {
+    const exposedGroupToolIds = group.toolIds.filter((toolId) => exposed.has(toolId));
+    return {
+      ...group,
+      exposedToolIds: exposedGroupToolIds,
+      status:
+        group.status === "unknown"
+          ? "unknown"
+          : exposedGroupToolIds.length > 0
+            ? "available"
+            : "unavailable",
+    };
+  });
+};
+
 const toAgentToolExposureState = (
   exposedToolIds: string[],
   exposedDefinitions: Array<
     Awaited<ReturnType<typeof matchToolCandidatesByEmbedding>>["toolExposure"]["exposedDefinitions"][number]
   >,
+  requestedToolGroups: AgentRequestedToolGroupHint[],
 ) => ({
   exposedTools: exposedToolIds,
   toolMeta: exposedDefinitions.map((definition) => ({
@@ -65,6 +141,7 @@ const toAgentToolExposureState = (
     tags: definition.tags,
     capabilities: definition.capabilities,
   })),
+  ...(requestedToolGroups.length > 0 ? { requestedToolGroups } : {}),
 });
 
 type SkillRuntimeProjection = {
@@ -260,12 +337,20 @@ export const prepareContextNode = async (
       && (definition.id !== EXTERNAL_EXPERT_TOOL_ID || externalExpertAvailable))
     .map((definition) => definition.id);
   const query = getLatestUserQuestion(state.messages) || state.goal.text;
+  const requestedToolGroups = resolveRequestedToolGroupHints(
+    toolDefinitions,
+    state.requestedToolGroupIds,
+  );
   const matcherResult = filterExternalExpertExposure(
     await matchToolCandidatesByEmbedding({
-      query,
+      query: buildToolGroupBiasedQuery(query, requestedToolGroups),
       config: state.intentConfig,
     }),
     externalExpertAvailable,
+  );
+  const requestedToolGroupsWithAvailability = resolveRequestedToolGroupAvailability(
+    requestedToolGroups,
+    matcherResult.toolExposure.exposedToolIds,
   );
   const skillDirective = readSkillDirectiveFromRequestContext(
     state.requestContextMessages,
@@ -289,6 +374,7 @@ export const prepareContextNode = async (
   const toolExposure = toAgentToolExposureState(
     [...matcherResult.toolExposure.exposedToolIds],
     [...matcherResult.toolExposure.exposedDefinitions],
+    requestedToolGroupsWithAvailability,
   );
   const toolIntent = matcherResult;
 
@@ -320,6 +406,33 @@ export const prepareContextNode = async (
     },
   });
 
+  if (requestedToolGroupsWithAvailability.length > 0) {
+    const availableGroups = requestedToolGroupsWithAvailability.filter(
+      (group) => group.status === "available",
+    );
+    const unavailableGroups = requestedToolGroupsWithAvailability.filter(
+      (group) => group.status !== "available",
+    );
+    await emitStepNode(emit, {
+      runId: state.runId,
+      nodeId: "agent-toolkit-context",
+      nodeType: "reason",
+      phase: "done",
+      label: availableGroups.length > 0 ? "应用工具包" : "工具包不可用",
+      summary:
+        availableGroups.length > 0
+          ? `已将 ${availableGroups.map((group) => group.groupLabel).join("、")} 作为本轮工具偏好`
+          : "所选工具包当前没有可供 Planner 调用的工具",
+      details: {
+        requestedToolGroups: requestedToolGroupsWithAvailability,
+        availableGroupIds: availableGroups.map((group) => group.groupId),
+        unavailableGroupIds: unavailableGroups.map((group) => group.groupId),
+        selectionMode: "planner_preference",
+        changesToolExposure: false,
+      },
+    });
+  }
+
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-prepare-context",
@@ -333,6 +446,7 @@ export const prepareContextNode = async (
       autoAllowedTools,
       exposedToolCount: toolExposure.exposedTools.length,
       exposedToolIds: toolExposure.exposedTools,
+      requestedToolGroups: requestedToolGroupsWithAvailability,
       activeSkillId: skillContext?.primary?.id ?? null,
       activeSkillVersion: skillContext?.primary?.version ?? null,
       activeSkillFlowPhase: skillRuntime?.phase ?? null,
