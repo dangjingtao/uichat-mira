@@ -15,9 +15,19 @@ import {
 } from "../node-runtime";
 import type { AgentFinalizationPacket, AgentNextAction } from "../types";
 
-const runFrozenParentFinalizationPath = (
+const runFrozenParentDecisionPath = (
   state: AgentNodeState,
 ): Partial<AgentNodeState> | null => {
+  if (state.nextAction?.type === "ask_user") {
+    // A forked Skill Agent may hand back a governed needs_input boundary. The
+    // Parent owns the user interaction, but Main Planner must not reinterpret
+    // the missing-information decision or take construction ownership back.
+    return {
+      nextAction: state.nextAction,
+      schemaReplanDiagnostics: undefined,
+    };
+  }
+
   if (state.nextAction?.type !== "answer" || !state.finalizationPacket) {
     return null;
   }
@@ -151,8 +161,8 @@ export const nextActionPlannerNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
-  const frozenFinalization = runFrozenParentFinalizationPath(state);
-  if (frozenFinalization) return frozenFinalization;
+  const frozenParentDecision = runFrozenParentDecisionPath(state);
+  if (frozenParentDecision) return frozenParentDecision;
 
   const skillDirectiveResult = await runSkillDirectivePlannerPath(state, emit);
   if (skillDirectiveResult) return skillDirectiveResult;
