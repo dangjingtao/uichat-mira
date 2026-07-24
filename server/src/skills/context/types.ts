@@ -1,3 +1,12 @@
+export type SkillExecutionContextMode = "inline" | "fork";
+
+export type SkillExecutionManifest = {
+  context: SkillExecutionContextMode;
+  agent?: string;
+  allowedTools: string[];
+  runtimeBindings: string[];
+};
+
 export type SkillManifest = {
   id: string;
   name: string;
@@ -8,6 +17,7 @@ export type SkillManifest = {
   category?: string;
   license?: string;
   runtimeRequirements?: string[];
+  execution?: SkillExecutionManifest;
 };
 
 export type SkillContent = {
@@ -63,6 +73,7 @@ export type SkillContext = {
     version: string;
     name: string;
     body: string;
+    execution?: SkillExecutionManifest;
   };
   resources: SkillResource[];
   disclosedResources: Array<{
