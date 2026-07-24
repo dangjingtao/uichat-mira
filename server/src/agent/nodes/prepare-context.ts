@@ -6,6 +6,10 @@ import { listCapabilityDefinitions } from "@/harness/registry";
 import { reconcileWenshuOfficeHarnessCapabilities } from "@/harness/wenshu-office-capability";
 import { prepareSkillContext, type SkillContext } from "@/skills/context/index.js";
 import { readSkillDirectiveFromRequestContext } from "@/skills/flow/context.js";
+import type {
+  SkillInterruption,
+  SkillRequirement,
+} from "@/skills/flow/types.js";
 import { evaluateAgentToolPolicy } from "../policy";
 import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
@@ -31,12 +35,6 @@ const toAgentToolExposureState = (
   })),
 });
 
-type SkillRuntimeRequirement = {
-  kind: "user_input";
-  description: string;
-  requiredFor: string;
-};
-
 type SkillRuntimeProjection = {
   skillId: string;
   sessionId: string;
@@ -44,9 +42,10 @@ type SkillRuntimeProjection = {
   status: "running" | "interrupted" | "completed";
   flowCompleted: boolean;
   deliveryReady: boolean;
+  interruptionReason?: SkillInterruption["reason"];
   round?: number;
   maxRounds?: number;
-  requirements: SkillRuntimeRequirement[];
+  requirements: SkillRequirement[];
 };
 
 type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
@@ -54,27 +53,65 @@ type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
   skillRuntime?: SkillRuntimeProjection;
 };
 
+const normalizeSkillRequirements = (
+  requirements: SkillRequirement[] | undefined,
+): SkillRequirement[] =>
+  (requirements ?? [])
+    .filter(
+      (requirement) =>
+        Boolean(requirement) &&
+        typeof requirement.id === "string" &&
+        typeof requirement.kind === "string" &&
+        typeof requirement.description === "string" &&
+        typeof requirement.requiredFor === "string",
+    )
+    .map((requirement) => ({
+      id: requirement.id.trim(),
+      kind: requirement.kind,
+      description: requirement.description.trim(),
+      requiredFor: requirement.requiredFor.trim(),
+      ...(requirement.acceptedFormats?.length
+        ? { acceptedFormats: [...requirement.acceptedFormats] }
+        : {}),
+      ...(requirement.alternatives?.length
+        ? { alternatives: [...requirement.alternatives] }
+        : {}),
+    }))
+    .filter(
+      (requirement) =>
+        requirement.id && requirement.description && requirement.requiredFor,
+    );
+
 const toSkillRuntimeProjection = (
   directive: ReturnType<typeof readSkillDirectiveFromRequestContext>,
 ): SkillRuntimeProjection | undefined => {
   if (!directive) return undefined;
 
-  const requirementDescription = directive.question?.trim();
-  const requirements: SkillRuntimeRequirement[] =
-    directive.requiredAction === "ask_user" && requirementDescription
-      ? [
-          {
-            kind: "user_input",
-            description: requirementDescription,
-            requiredFor: `${directive.skillId}:${directive.phase}`,
-          },
-        ]
-      : [];
+  const structuredRequirements = normalizeSkillRequirements(
+    directive.interruption?.requirements,
+  );
+  const legacyQuestion = directive.question?.trim();
+  const requirements =
+    structuredRequirements.length > 0
+      ? structuredRequirements
+      : directive.requiredAction === "ask_user" && legacyQuestion
+        ? [
+            {
+              id: `${directive.skillId}:${directive.phase}:legacy-user-input`,
+              kind: "user_input" as const,
+              description: legacyQuestion,
+              requiredFor: `${directive.skillId}:${directive.phase}`,
+            },
+          ]
+        : [];
+  const interruptionReason =
+    directive.interruption?.reason ??
+    (requirements.length > 0 ? "missing_requirement" : undefined);
 
   const status: SkillRuntimeProjection["status"] =
     directive.deliveryReady || directive.flowCompleted
       ? "completed"
-      : requirements.length > 0
+      : interruptionReason || requirements.length > 0
         ? "interrupted"
         : "running";
 
@@ -85,6 +122,7 @@ const toSkillRuntimeProjection = (
     status,
     flowCompleted: directive.flowCompleted,
     deliveryReady: directive.deliveryReady,
+    ...(interruptionReason ? { interruptionReason } : {}),
     ...(directive.round !== undefined ? { round: directive.round } : {}),
     ...(directive.maxRounds !== undefined ? { maxRounds: directive.maxRounds } : {}),
     requirements,
@@ -234,6 +272,7 @@ export const prepareContextNode = async (
             status: skillRuntime.status,
             flowCompleted: skillRuntime.flowCompleted,
             deliveryReady: skillRuntime.deliveryReady,
+            interruptionReason: skillRuntime.interruptionReason ?? null,
             requirementCount: skillRuntime.requirements.length,
             round: skillRuntime.round ?? null,
             maxRounds: skillRuntime.maxRounds ?? null,
@@ -262,6 +301,7 @@ export const prepareContextNode = async (
       activeSkillFlowStatus: skillRuntime?.status ?? null,
       activeSkillFlowCompleted: skillRuntime?.flowCompleted ?? null,
       activeSkillDeliveryReady: skillRuntime?.deliveryReady ?? null,
+      activeSkillInterruptionReason: skillRuntime?.interruptionReason ?? null,
       activeSkillRequirementCount: skillRuntime?.requirements.length ?? 0,
       skillMatchSource: skillContext?.match?.source ?? null,
       skillResourceCount: skillContext?.resources.length ?? 0,
