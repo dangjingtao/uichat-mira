@@ -1,21 +1,18 @@
 # PPTX Skill — Validation and repair loop
 
-Read this reference after `office_presentation operation=validate` returns errors or meaningful warnings, or when the final PPTX inspection does not match the requested deck.
+Read this reference after `office_presentation operation=validate` returns errors or meaningful warnings.
 
 ## Required loop
 
 ```text
 build complete entry + pageFiles
 → office_presentation validate
-→ repair blocking errors
-→ validate again
+→ repair blocking protocol errors
 → office_presentation create
-→ office_presentation inspect
-→ repair if final slide count/content is wrong
 → deliver artifact
 ```
 
-Do not call `create` while validation contains blocking errors. Do not treat a file existing on disk as completion.
+`inspect` is a separate diagnostic operation. Do not use semantic readback, visual guessing, or LLM judgment as a mandatory completion gate after deterministic rendering.
 
 ## Reading an issue
 
@@ -66,7 +63,7 @@ Although Mira transports the project as JSON, the runtime materializes YAML-comp
 
 ### `PageNotFoundWarning`
 
-Ensure every `entry.pages` path exists in `pageFiles` with exactly the same normalized relative path. Missing pages also cause final slide-count verification failure.
+Ensure every `entry.pages` path exists in `pageFiles` with exactly the same normalized relative path. A missing page is a protocol defect and must be fixed before rendering.
 
 ## Blocking semantic errors
 
@@ -92,7 +89,7 @@ Use a supported PowerPoint shape name. Prefer common names such as `rect`, `roun
 
 ### `EmptySrcError`, `SrcNotFoundWarning`
 
-Provide a valid workspace-resolved image path or a data URI. Do not use an inaccessible URL or a path outside the workspace.
+Provide an existing workspace-resolved image file. The current renderer does not accept data URIs. Missing assets must be fixed as input/protocol errors; do not rely on placeholder fallback behavior.
 
 ### `EmptyDataWarning`, `CountMismatchWarning`, `InconsistentRowsWarning`
 
@@ -105,7 +102,7 @@ For tables/charts:
 
 ## Overflow and layout warnings
 
-Warnings are not automatically fatal, but meaningful ones must be reviewed.
+Warnings are not automatically fatal, but meaningful ones must be reviewed before the valid protocol is sent to the renderer.
 
 ### `TextOverflowWarning`
 
@@ -139,16 +136,17 @@ Use numeric `[x, y, width, height]` values unless a verified expression is neede
 
 Increase contrast between text and its effective background. Prefer theme-level corrections when the problem affects multiple slides.
 
-## Final inspection gate
+## Renderer contract
 
-After `create`, `inspect` must confirm:
+After the checker accepts the protocol, renderer behavior must be deterministic:
 
-- `slideCount` equals `entry.pages.length`;
-- requested text appears in the final editable PPTX;
-- expected pictures/tables/charts are present when requested;
-- no accidental blank page exists.
+- supported legal input must render as specified;
+- unsupported input must fail explicitly;
+- missing assets must fail explicitly;
+- accepted fields must not be silently ignored;
+- the renderer must not substitute semantic guesses or placeholder content and still report success.
 
-The Python runtime already fails creation when expected text from `content.text` is missing. The Parent Agent must treat that failure as recoverable tool evidence, fix the project, and retry rather than claiming partial success.
+If a legal protocol input exposes a renderer defect, fix the checker/protocol/renderer contract. Do not add an LLM or post-render semantic fallback.
 
 ## What not to do
 
@@ -156,4 +154,5 @@ The Python runtime already fails creation when expected text from `content.text`
 - Do not generate a raster image of each slide as the default solution.
 - Do not delete requested content merely to make validation pass.
 - Do not ignore all warnings mechanically.
+- Do not use `inspect` or an LLM to redefine a successful deterministic render as failed based on semantic comparison.
 - Do not deliver only `pptx-spec.json`, `.pptd`, or `.page` files when the user asked for PowerPoint.
