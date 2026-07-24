@@ -11,6 +11,30 @@ coverage/
 .keys/
 mira-clipper-ext/.keys/
 .test-artifact/
+
+# Python runtime and test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+site-packages/
+dist-packages/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Generated test and coverage reports
+desktop/test-report/
+server/test-report/
+server/server-coverage/
+server/client-coverage/
+
 .local-runtimes/
 .local-models/
 apps/desktop/release/
