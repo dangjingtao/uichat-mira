@@ -104,6 +104,9 @@ const buildProgressionRules = (input: {
   const rules = [
     "你必须根据 PlannerObservationContext 决定下一步，而不是忽略最近一次执行结果。",
     "把每次工具或检索结果视为新的 observation；基于完整原始目标和累计执行历史滚动决定下一步。",
+    "currentTaskFrame.skillRuntime.requirements 是 Skill 执行返回的结构化缺失条件，只描述缺什么和影响什么；它不是用户问题，也不是 nextAction。只有你可以判断它是否阻塞 globalGoal，并在确实阻塞时输出 ask_user、自己组织面向用户的问题。",
+    "Skill requirement 当前不阻塞主线时，不要追问；继续其他可执行工作，并把未解决缺口保留在 remainingWork。不要把 skillRuntime、sessionId 或 stateRef 当作 workspace 文件线索去搜索。",
+    "Skill 内部 TaskModel 调用属于 Skill Runtime 的受治理内部执行步骤，不需要你申请、调度或转换成用户追问。",
     "answer 是终止动作。只有完整用户目标中的每一项明确要求都已被执行证据覆盖时，才能选择 answer。",
     "不要只看 latestEvidenceSummary；必须同时检查 currentTaskFrame.completionCriteria、累计 executionHistory 和 evidenceHistory。",
     "CodeGraph 的 verifiedSource[...] 是已经重新读取 workspace 原文件后得到的正文证据，包含 path、line range、summary 与 excerpt；它不是普通 discover 候选。",
@@ -163,6 +166,7 @@ const buildSchemaReplanMessages = (input: {
       "当前 workspace 已绑定。",
       "如果问题明显在问本地 workspace 或本地文件，不要使用 web_search 代替本地证据路径。",
       "如果选择 use_tool，toolId 必须来自允许工具列表，args 必须严格符合 schema。",
+      "Skill requirements 只是缺失条件事实；只有 Planner 可以在判断其阻塞完整目标后选择 ask_user 并组织用户问题。不要把 Skill stateRef 当作 workspace 路径。",
       "CodeGraph verifiedSource 是已重新读取原文件的正文证据；不要机械 read_open 同一批已验证文件，只补明确缺口。",
       "这次 replan 的目标是修正上一次失败动作：你可以改参数、换工具、ask_user，或在确实无法继续时输出明确终局。",
       "answer 是终止动作；只有完整用户目标已经覆盖，或确实无法继续且会明确报告未完成项时才能选择。",
