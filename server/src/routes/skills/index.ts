@@ -153,7 +153,7 @@ const skillsRoutes: FastifyPluginAsync = async (app) => {
         invalidateSkillDiscovery();
         const detail = await getSkillCatalogDetail(imported.id);
         if (!detail) throw new Error("Imported Skill could not be rediscovered");
-        return success(withRuntimeStatus(detail), `Skill「${imported.name}」已添加`);
+        return success(withRuntimeStatus(detail), `Skill「${imported.name}」已导入`);
       } catch (error) {
         throw badRequest(error instanceof Error ? error.message : "Markdown Skill 导入失败");
       }
@@ -211,8 +211,14 @@ const skillsRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{ Params: { id: string } }>(
     "/skills/:id",
     routeHandler<{ Params: { id: string } }>("Failed to delete Skill", async (request) => {
+      const detail = await getSkillCatalogDetail(request.params.id);
+      if (!detail) throw notFound(`Skill not found: ${request.params.id}`);
+      if (detail.origin !== "user") {
+        throw badRequest("Only user-imported Skills can be deleted");
+      }
+
       const registry = getDefaultSkillRegistry();
-      await registry.refresh();
+      await registry.ensureLoaded();
       const manifest = registry.get(request.params.id);
       if (!manifest) throw notFound(`Skill not found: ${request.params.id}`);
       try {
