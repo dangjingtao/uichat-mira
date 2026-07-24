@@ -7,6 +7,9 @@ import { resolveUserSkillsRoot } from "./context/scanner.js";
 const MAX_IMPORTED_SKILL_BYTES = 512 * 1024;
 const RESERVED_SKILL_IDS = new Set(["docx", "xlsx", "pdf", "pptx"]);
 const DEFAULT_CATEGORY = "内容创作";
+const BLOCKED_VISIBILITIES = new Set(["internal", "private", "hidden"]);
+
+type SkillVisibility = "public" | "internal" | "private" | "hidden";
 
 const stripQuotes = (value: string) => {
   const trimmed = value.trim();
@@ -80,8 +83,17 @@ const normalizeCategory = (value: string) => {
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
     .replace(/\s+/g, " ")
     .replace(/[. ]+$/g, "")
+    .trim()
+    .replace(/^[._]+/, "")
     .trim();
   return normalized && normalized !== "." && normalized !== ".." ? normalized : DEFAULT_CATEGORY;
+};
+
+const normalizeVisibility = (value: unknown): SkillVisibility => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return BLOCKED_VISIBILITIES.has(normalized)
+    ? (normalized as Exclude<SkillVisibility, "public">)
+    : "public";
 };
 
 const yamlValue = (value: string) => JSON.stringify(value);
@@ -148,6 +160,7 @@ const buildSkillMarkdown = (input: {
   source: string;
   category: string;
   description: string;
+  visibility: SkillVisibility;
   featured: boolean;
   body: string;
   preservedMetadata?: Array<[string, string]>;
@@ -161,7 +174,7 @@ const buildSkillMarkdown = (input: {
     `version: ${yamlValue(input.version)}`,
     `source: ${yamlValue(input.source)}`,
     `category: ${yamlValue(input.category)}`,
-    "visibility: public",
+    `visibility: ${input.visibility}`,
     ...(input.featured ? ["featured: true"] : []),
     ...(input.preservedMetadata ?? []).map(([key, value]) => `${key}: ${yamlValue(value)}`),
     "---",
@@ -176,6 +189,7 @@ export type ImportedMarkdownSkill = {
   source: string;
   category: string;
   description: string;
+  visibility: SkillVisibility;
   entry: string;
   content: string;
   featured?: boolean;
@@ -214,6 +228,7 @@ export const importMarkdownSkill = async (input: {
   const description = String(
     parsed.metadata.description || deriveDescription(parsed.body, name),
   ).trim();
+  const visibility = normalizeVisibility(parsed.metadata.visibility);
   const featured = booleanValue(parsed.metadata.featured);
 
   const preservedMetadata = Object.entries(parsed.metadata).filter(
@@ -238,6 +253,7 @@ export const importMarkdownSkill = async (input: {
     source,
     category,
     description,
+    visibility,
     featured,
     body: parsed.body,
     preservedMetadata,
@@ -249,7 +265,7 @@ export const importMarkdownSkill = async (input: {
   const entry = path.join(skillDir, "SKILL.md");
   await fs.writeFile(entry, content, "utf8");
 
-  return { id, name, version, source, category, description, entry, content, featured };
+  return { id, name, version, source, category, description, visibility, entry, content, featured };
 };
 
 export const updateUserSkill = async (
@@ -270,6 +286,7 @@ export const updateUserSkill = async (
   const description = input.description?.trim() || String(
     parsed.metadata.description || deriveDescription(parsed.body, name),
   ).trim();
+  const visibility = normalizeVisibility(parsed.metadata.visibility);
   const featured = input.featured ?? booleanValue(parsed.metadata.featured);
   const preservedMetadata = Object.entries(parsed.metadata).filter(
     ([key]) =>
@@ -293,6 +310,7 @@ export const updateUserSkill = async (
     source,
     category,
     description,
+    visibility,
     featured,
     body: parsed.body,
     preservedMetadata,
@@ -320,6 +338,7 @@ export const updateUserSkill = async (
     source,
     category,
     description,
+    visibility,
     entry: targetEntry,
     content,
     featured,
