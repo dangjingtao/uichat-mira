@@ -49,7 +49,6 @@ const EXTERNAL_PACKAGE_FILE_MAP: Record<string, Record<string, string>> = {
 };
 
 export type SkillPackageOrigin = "built-in" | "user" | "external";
-export type SkillPackageStatus = "bundled" | "installed";
 export type SkillFileKind =
   | "entry"
   | "reference"
@@ -68,7 +67,6 @@ export type SkillCatalogSummary = {
   category: string;
   description: string;
   origin: SkillPackageOrigin;
-  packageStatus: SkillPackageStatus;
   featured: boolean;
   license?: string;
   runtimeRequirements: string[];
@@ -210,7 +208,6 @@ const toSummary = async (manifest: SkillManifest): Promise<SkillCatalogSummary> 
     category: manifest.category || builtIn?.category || "其他",
     description: manifest.description,
     origin: resolveOrigin(manifest),
-    packageStatus: builtIn ? "bundled" : "installed",
     featured: builtIn?.featured ?? parseBoolean(metadata.featured),
     ...(manifest.license || builtIn?.license ? { license: manifest.license || builtIn?.license } : {}),
     runtimeRequirements,
