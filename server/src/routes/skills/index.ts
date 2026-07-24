@@ -12,6 +12,7 @@ import {
 } from "@/skills/catalog.js";
 import { getDefaultSkillContextProvider } from "@/skills/context/provider.js";
 import { getDefaultSkillRegistry } from "@/skills/context/scanner.js";
+import { migrateLegacyUserSkillPackages } from "@/skills/user-skill-migration.js";
 import {
   deleteUserSkill,
   importMarkdownSkill,
@@ -114,6 +115,9 @@ const invalidateSkillDiscovery = () => {
 };
 
 const skillsRoutes: FastifyPluginAsync = async (app) => {
+  const migration = await migrateLegacyUserSkillPackages();
+  if (migration.migrated.length > 0) invalidateSkillDiscovery();
+
   app.get(
     "/skills/catalog",
     routeHandler("Failed to list Skill catalog", async () => {
