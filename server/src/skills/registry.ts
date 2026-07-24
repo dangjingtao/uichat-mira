@@ -8,6 +8,8 @@ export type BuiltInSkillPackageDefinition = {
   category: string;
   description: string;
   bundled?: boolean;
+  featured?: boolean;
+  license?: string;
   runtimePack?: {
     id: "wenshu-office";
     version: string;
@@ -68,6 +70,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     description:
       "创建和审阅 Word DOCX：结构化文档生成、非破坏性副本、原生批注与 Track Changes 修订，并保留复杂文档的安全编辑边界。",
     bundled: true,
+    featured: true,
     runtimeCapabilities: ["office_document"],
     packageFiles: [
       "SKILL.md",
@@ -89,6 +92,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     category: "办公效率",
     description:
       "电子表格高级处理工具，支持公式驱动模型、格式、图表、校验，以及三表模型、DCF 和可比公司分析等财务建模方法。",
+    featured: true,
     runtimePack: { id: "wenshu-office", version: "1.0.0", required: true },
     runtimeCapabilities: ["office_spreadsheet"],
     packageFiles: [
@@ -112,6 +116,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     category: "办公效率",
     description:
       "专业 PDF 创建与处理：结构化报告、目录、图表、公式、引用，以及提取、表单、合并拆分、旋转裁切和元数据操作。",
+    featured: true,
     runtimePack: { id: "wenshu-office", version: "1.0.0", required: true },
     runtimeCapabilities: ["office_pdf"],
     packageFiles: [
@@ -130,6 +135,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     category: "办公效率",
     description:
       "结构化生成可编辑 PowerPoint，支持主题、文本、形状、图片、表格和图表，并在生成前执行布局校验。",
+    featured: true,
     runtimePack: { id: "wenshu-office", version: "1.0.0", required: true },
     runtimeCapabilities: ["office_presentation"],
     packageFiles: [
