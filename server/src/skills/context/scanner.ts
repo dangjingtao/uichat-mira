@@ -6,6 +6,8 @@ import type { SkillManifest } from "./types.js";
 
 const FRONTMATTER_BOUNDARY = "---";
 const MAX_MANIFEST_BYTES = 16 * 1024;
+const PUBLIC_VISIBILITY = "public";
+const BLOCKED_VISIBILITIES = new Set(["internal", "private", "hidden"]);
 
 const stripQuotes = (value: string) => {
   const trimmed = value.trim();
@@ -88,55 +90,150 @@ const isDirectory = async (target: string) => {
   }
 };
 
+const isFile = async (target: string) => {
+  try {
+    return (await fs.stat(target)).isFile();
+  } catch {
+    return false;
+  }
+};
+
+const isReservedDirectory = (name: string) => name.startsWith(".") || name.startsWith("_");
+
+const samePath = (left: string, right: string) => {
+  const a = path.resolve(left);
+  const b = path.resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+};
+
+type SkillCandidate = {
+  directoryId: string;
+  skillFile: string;
+  categoryFromDirectory?: string;
+  userInstalled: boolean;
+};
+
+const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillManifest | null> => {
+  let manifestWindow: string;
+  try {
+    manifestWindow = await readFrontmatterWindow(candidate.skillFile);
+  } catch {
+    return null;
+  }
+
+  const frontmatter = parseFrontmatter(manifestWindow);
+  const fallback = getBuiltInSkillPackage(candidate.directoryId);
+  const visibility = String(frontmatter.visibility || "").trim().toLowerCase();
+
+  if (BLOCKED_VISIBILITIES.has(visibility)) return null;
+
+  // User-installed packages are public by the explicit install action. Bundled packages
+  // already registered in registry.ts are also public. Any other source-tree package must
+  // opt in explicitly, so an internal/helper SKILL.md cannot silently reach Agent matching.
+  const publicEligible =
+    candidate.userInstalled || Boolean(fallback) || visibility === PUBLIC_VISIBILITY;
+  if (!publicEligible) return null;
+
+  const id = String(
+    frontmatter.id || frontmatter.name || fallback?.id || candidate.directoryId,
+  ).trim();
+  if (!id) return null;
+
+  return {
+    id,
+    name: String(
+      frontmatter.displayName ||
+        frontmatter.title ||
+        fallback?.name ||
+        frontmatter.name ||
+        id,
+    ).trim(),
+    description:
+      String(frontmatter.description || fallback?.description || "").trim() || id,
+    version: String(frontmatter.version || fallback?.version || "1.0.0"),
+    entry: candidate.skillFile,
+    ...(frontmatter.source || fallback?.source
+      ? { source: String(frontmatter.source || fallback?.source).trim() }
+      : {}),
+    ...(candidate.categoryFromDirectory || frontmatter.category || fallback?.category
+      ? {
+          category: String(
+            candidate.categoryFromDirectory || frontmatter.category || fallback?.category,
+          ).trim(),
+        }
+      : {}),
+    ...(frontmatter.license ? { license: String(frontmatter.license).trim() } : {}),
+    ...(fallback?.runtimePack
+      ? { runtimeRequirements: [`${fallback.runtimePack.id}@${fallback.runtimePack.version}`] }
+      : {}),
+  };
+};
+
+/**
+ * Public Skill discovery contract:
+ *
+ *   <root>/<category>/<skill>/SKILL.md  -> canonical public package layout
+ *   <user-root>/<skill>/SKILL.md       -> legacy user-import compatibility
+ *   <system-root>/<skill>/SKILL.md     -> legacy only for registered built-ins or visibility: public
+ *
+ * A directory that already contains SKILL.md is treated as a complete Skill Package and is
+ * never descended into. This is the structural boundary that prevents references/scripts/
+ * helper SKILL.md files from becoming independent catalog entries or Agent-matchable Skills.
+ * Directories beginning with '_' or '.' are reserved/internal and are never scanned.
+ */
 export class SkillScanner {
   async scan(paths = resolveSkillRootCandidates()): Promise<SkillManifest[]> {
     const manifests: SkillManifest[] = [];
     const seen = new Set<string>();
+    const userSkillsRoot = resolveUserSkillsRoot();
 
     for (const root of paths) {
       if (!(await isDirectory(root))) continue;
+      const userInstalledRoot = samePath(root, userSkillsRoot);
       const entries = await fs.readdir(root, { withFileTypes: true });
+
       for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const skillDir = path.join(root, entry.name);
-        const skillFile = path.join(skillDir, "SKILL.md");
-        let manifestWindow: string;
+        if (!entry.isDirectory() || isReservedDirectory(entry.name)) continue;
+        const firstLevelDir = path.join(root, entry.name);
+        const flatSkillFile = path.join(firstLevelDir, "SKILL.md");
+
+        // Legacy flat package. Never descend further once a package boundary is found.
+        if (await isFile(flatSkillFile)) {
+          const manifest = await readCandidateManifest({
+            directoryId: entry.name,
+            skillFile: flatSkillFile,
+            userInstalled: userInstalledRoot,
+          });
+          if (manifest && !seen.has(manifest.id)) {
+            seen.add(manifest.id);
+            manifests.push(manifest);
+          }
+          continue;
+        }
+
+        // Canonical layout: first level is category, second level is one Skill Package.
+        let skillEntries: Awaited<ReturnType<typeof fs.readdir>>;
         try {
-          manifestWindow = await readFrontmatterWindow(skillFile);
+          skillEntries = await fs.readdir(firstLevelDir, { withFileTypes: true });
         } catch {
           continue;
         }
 
-        const frontmatter = parseFrontmatter(manifestWindow);
-        const fallback = getBuiltInSkillPackage(entry.name);
-        const id = String(frontmatter.id || frontmatter.name || fallback?.id || entry.name).trim();
-        if (!id || seen.has(id)) continue;
+        for (const skillEntry of skillEntries) {
+          if (!skillEntry.isDirectory() || isReservedDirectory(skillEntry.name)) continue;
+          const skillFile = path.join(firstLevelDir, skillEntry.name, "SKILL.md");
+          if (!(await isFile(skillFile))) continue;
 
-        seen.add(id);
-        manifests.push({
-          id,
-          name: String(
-            frontmatter.displayName ||
-              frontmatter.title ||
-              fallback?.name ||
-              frontmatter.name ||
-              id,
-          ).trim(),
-          description:
-            String(frontmatter.description || fallback?.description || "").trim() || id,
-          version: String(frontmatter.version || fallback?.version || "1.0.0"),
-          entry: skillFile,
-          ...(frontmatter.source || fallback?.source
-            ? { source: String(frontmatter.source || fallback?.source).trim() }
-            : {}),
-          ...(frontmatter.category || fallback?.category
-            ? { category: String(frontmatter.category || fallback?.category).trim() }
-            : {}),
-          ...(frontmatter.license ? { license: String(frontmatter.license).trim() } : {}),
-          ...(fallback?.runtimePack
-            ? { runtimeRequirements: [`${fallback.runtimePack.id}@${fallback.runtimePack.version}`] }
-            : {}),
-        });
+          const manifest = await readCandidateManifest({
+            directoryId: skillEntry.name,
+            skillFile,
+            categoryFromDirectory: entry.name,
+            userInstalled: userInstalledRoot,
+          });
+          if (!manifest || seen.has(manifest.id)) continue;
+          seen.add(manifest.id);
+          manifests.push(manifest);
+        }
       }
     }
 
