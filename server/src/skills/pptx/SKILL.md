@@ -1,6 +1,6 @@
 ---
 name: pptx
-description: "Create editable PowerPoint presentations with WenShu through Kimi's native multi-file PPTD DSL, mandatory checking, rendering, and final PPTX inspection."
+description: "Create editable PowerPoint presentations with WenShu through Kimi's native multi-file PPTD DSL, strict protocol checking, and deterministic rendering."
 ---
 
 # Core route
@@ -22,7 +22,7 @@ Do not load every reference into context at once. Read the smallest resource nee
 - `skill://pptx/references/minimal-deck.json` — read for the first native deck, after a schema failure, or when a compact known-good project is needed.
 - `skill://pptx/references/pptd-project-contract.md` — read when constructing `entry`, `pageFiles`, theme, paths, fills, bounds, or text alignment.
 - `skill://pptx/references/element-cookbook.md` — read only when exact rich-text, shape, image, icon, table, or chart fields are needed.
-- `skill://pptx/references/validation-and-repair.md` — read after checker errors/warnings or failed final inspection.
+- `skill://pptx/references/validation-and-repair.md` — read after checker errors or meaningful warnings.
 
 References are L2 context resources, not new tools. Reading one does not alter ToolExposure or create a hidden Skill loop. Continue through the normal Parent Agent cycle:
 
@@ -30,7 +30,7 @@ References are L2 context resources, not new tools. Reading one does not alter T
 Planner → tool call → Evidence → Planner
 ```
 
-A normal PPT task therefore involves several internal interactions: construct or update the project, validate, repair, create, inspect, and possibly repair again. Do not ask the user between these steps unless requirements are genuinely ambiguous or an approval boundary requires user action.
+A normal PPT task may involve several internal interactions while constructing and validating the protocol input. Once a valid project is passed to `create`, renderer success or renderer failure is authoritative. Do not ask a model to reinterpret the produced PPTX as a completion gate.
 
 # Required project contract
 
@@ -101,7 +101,7 @@ Use Kimi's original element fields:
 - `table`: rows, cells, column widths, row heights and table style;
 - `chart`: type, data, x/y fields, axes, legend, labels and series styles.
 
-Images may use workspace-relative files or data URIs. Fonts are not embedded by WenShu; use common system font families and allow PowerPoint fallback. The bundled runtime keeps Kimi's lightweight icon renderer but does not ship a large font or stock-image library.
+Image sources must resolve to real files inside the selected workspace before rendering. Do not send data URIs to the current renderer. Fonts are not embedded by WenShu; use common system font families and allow PowerPoint fallback. The bundled runtime keeps Kimi's lightweight icon renderer but does not ship a large font or stock-image library.
 
 # Workflow
 
@@ -109,34 +109,33 @@ Images may use workspace-relative files or data URIs. Fonts are not embedded by 
 2. Design the complete deck structure and theme first.
 3. Read only the required L2 references.
 4. Produce the complete `entry + pageFiles` project.
-5. Run `operation=validate` or the equivalent bundled-runtime validation call.
-6. Use checker Evidence to repair every blocking error and review meaningful warnings.
-7. Validate again after repairs.
-8. Run `operation=create` only after validation passes.
-9. Inspect the generated PPTX and verify slide count and actual text content.
-10. Repair and repeat when inspection does not satisfy the request.
-11. Deliver the `.pptx` artifact, not only the intermediate spec/project files.
+5. Run `operation=validate` when protocol validation is needed before creation.
+6. Repair every blocking protocol error and review meaningful warnings.
+7. Run `operation=create` with the valid project.
+8. Treat deterministic renderer success as success and renderer failure as failure.
+9. Use `operation=inspect` only when the user explicitly requests inspection or for diagnostics/development testing; it is not a completion gate.
+10. Deliver the `.pptx` artifact, not only the intermediate spec/project files.
 
 For long decks, prepare all page files before creating. Do not validate and deliver one slide at a time.
 
 # Hard rules
 
 1. Kimi's checker/parser/renderer are the source of truth; do not bypass them.
-2. A generated file existing on disk is not completion.
-3. If requested text is absent from final PPTX inspection, the task failed and must be repaired.
-4. Keep native text, shapes, tables and charts editable whenever supported.
-5. Do not claim arbitrary lossless editing of an existing complex PPTX.
-6. `write_file` may persist project/spec files, but it is not the presentation renderer.
-7. `terminal_session` may invoke the bundled runtime, but it must not generate a new ad-hoc renderer.
+2. Do not use an LLM or semantic readback to decide whether deterministic renderer output counts as success.
+3. If a legal protocol input cannot be rendered faithfully, fix the protocol/checker/renderer contract; do not add a model fallback.
+4. Unsupported inputs must be rejected explicitly rather than silently replaced, ignored, or guessed.
+5. Keep native text, shapes, tables and charts editable whenever supported.
+6. Do not claim arbitrary lossless editing of an existing complex PPTX.
+7. `write_file` may persist project/spec files, but it is not the presentation renderer.
+8. `terminal_session` may invoke the bundled runtime, but it must not generate a new ad-hoc renderer.
 
 # Completion
 
-A PPT task is complete only when:
+A PPT creation task is complete when:
 
-- the native PPTD project has no blocking checker errors;
-- the generated `.pptx` exists and opens through inspection;
-- final slide count matches `entry.pages`;
-- expected text is read back from the final PPTX;
-- requested images/icons/tables/charts are present when applicable;
-- important layout warnings are fixed or explicitly reported;
-- the final artifact is the generated PPTX.
+- the input satisfies the PPTD protocol and checker contract;
+- the deterministic renderer completes successfully;
+- the `.pptx` artifact is written successfully;
+- the final artifact is returned to the user.
+
+`inspect` is an explicit diagnostic capability, not a mandatory post-render verification step.
