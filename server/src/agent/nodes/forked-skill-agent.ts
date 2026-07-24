@@ -44,6 +44,16 @@ const toObservationStatus = (
   return recoverable === false ? "blocked" : "failed";
 };
 
+const boundedJson = (value: unknown, maxChars = 8_000) => {
+  try {
+    const text = JSON.stringify(value);
+    if (!text) return "null";
+    return text.length <= maxChars ? text : `${text.slice(0, maxChars)}…`;
+  } catch {
+    return "[unserializable]";
+  }
+};
+
 const findApprovalRequirement = (
   requirements: SkillAgentRequirement[] | undefined,
 ): SkillAgentRequirement | undefined =>
@@ -173,11 +183,17 @@ export const forkedSkillAgentNode = async (
     ...(result.summary ? [result.summary] : []),
     `Tool calls: ${result.trace?.toolCalls.join(", ") || "none"}`,
     `Artifacts: ${result.artifacts.length}`,
+    ...(result.artifacts.length
+      ? [`Artifact records: ${boundedJson(result.artifacts)}`]
+      : []),
+    ...(result.evidence.length
+      ? [`Skill execution evidence: ${boundedJson(result.evidence)}`]
+      : []),
     ...(result.requirements?.length
-      ? [`Requirements: ${JSON.stringify(result.requirements)}`]
+      ? [`Requirements: ${boundedJson(result.requirements)}`]
       : []),
     ...(result.missingEvidence?.length
-      ? [`Missing evidence: ${JSON.stringify(result.missingEvidence)}`]
+      ? [`Missing evidence: ${boundedJson(result.missingEvidence)}`]
       : []),
   ];
 
