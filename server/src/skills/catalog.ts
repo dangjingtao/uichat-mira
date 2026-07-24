@@ -1,6 +1,7 @@
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolveWenshuToolPath } from "@/microapps/office-suite/python-runtime.js";
 import { getDefaultSkillRegistry, resolveUserSkillsRoot } from "./context/scanner.js";
 import { getBuiltInSkillPackage, listBuiltInSkillPackages } from "./registry.js";
 import type { SkillManifest } from "./context/types.js";
@@ -30,6 +31,22 @@ const MAX_CATALOG_FILES = 200;
 const MAX_PREVIEW_BYTES = 256 * 1024;
 const MAX_FILE_CONTENT_BYTES = 512 * 1024;
 const MAX_FRONTMATTER_BYTES = 32 * 1024;
+
+const EXTERNAL_PACKAGE_FILE_MAP: Record<string, Record<string, string>> = {
+  xlsx: {
+    "runtime/xlsx_runtime.py": "xlsx/xlsx_runtime.py",
+    "runtime/xlsx_finalize.py": "xlsx/xlsx_finalize.py",
+    "runtime/xlsx_tools.py": "xlsx/xlsx_tools.py",
+    "LICENSE.txt": "xlsx/LICENSE.txt",
+  },
+  pdf: {
+    "runtime/pdf_create_runtime.py": "pdf/pdf_create_runtime.py",
+    "runtime/pdf_runtime.py": "pdf/pdf_runtime.py",
+  },
+  pptx: {
+    "runtime/pptx_runtime.py": "pptx/pptx_runtime.py",
+  },
+};
 
 export type SkillPackageOrigin = "built-in" | "user" | "external";
 export type SkillPackageStatus = "bundled" | "installed";
@@ -197,7 +214,7 @@ const toSummary = async (manifest: SkillManifest): Promise<SkillCatalogSummary> 
 const mimeTypeFor = (relativePath: string) => {
   const extension = path.extname(relativePath).toLowerCase();
   if (extension === ".md") return "text/markdown";
-  if ([".json"].includes(extension)) return "application/json";
+  if (extension === ".json") return "application/json";
   if ([".yaml", ".yml"].includes(extension)) return "application/yaml";
   if (extension === ".xml") return "application/xml";
   if (extension === ".html") return "text/html";
@@ -224,21 +241,46 @@ const kindFor = (relativePath: string): SkillFileKind => {
   return "other";
 };
 
-const inspectFile = async (root: string, relativePath: string): Promise<SkillFileDescriptor> => {
-  const normalized = relativePath.split("\\").join("/");
-  const absolute = path.resolve(root, normalized);
-  const extension = path.extname(normalized).toLowerCase();
-  let size: number | null = null;
-  let exists = false;
-  if (isPathWithin(root, absolute)) {
+const normalizeRelativePath = (relativePath: string) =>
+  relativePath.replace(/^\/+/, "").split("\\").join("/");
+
+const resolvePackageFilePath = async (skillId: string, root: string, relativePath: string) => {
+  const normalized = normalizeRelativePath(relativePath);
+  if (!normalized || normalized.split("/").some((segment) => segment === "..")) return null;
+
+  const local = path.resolve(root, normalized);
+  if (isPathWithin(root, local)) {
     try {
-      const stat = await fs.stat(absolute);
-      if (stat.isFile()) {
-        size = stat.size;
-        exists = true;
-      }
+      if ((await fs.stat(local)).isFile()) return local;
     } catch {
-      // Declared package files may point at an execution implementation that is not embedded in the Skill package.
+      // Continue to explicit packaged-file mappings below.
+    }
+  }
+
+  const toolRelativePath = EXTERNAL_PACKAGE_FILE_MAP[skillId]?.[normalized];
+  if (!toolRelativePath) return null;
+  try {
+    const toolPath = resolveWenshuToolPath(toolRelativePath);
+    return (await fs.stat(toolPath)).isFile() ? toolPath : null;
+  } catch {
+    return null;
+  }
+};
+
+const inspectFile = async (
+  skillId: string,
+  root: string,
+  relativePath: string,
+): Promise<SkillFileDescriptor> => {
+  const normalized = normalizeRelativePath(relativePath);
+  const extension = path.extname(normalized).toLowerCase();
+  const resolved = await resolvePackageFilePath(skillId, root, normalized);
+  let size: number | null = null;
+  if (resolved) {
+    try {
+      size = (await fs.stat(resolved)).size;
+    } catch {
+      size = null;
     }
   }
   const previewable = TEXT_FILE_EXTENSIONS.has(extension) || normalized.toLowerCase() === "skill.md";
@@ -250,8 +292,8 @@ const inspectFile = async (root: string, relativePath: string): Promise<SkillFil
     mimeType: mimeTypeFor(normalized),
     size,
     previewable,
-    contentAvailable: exists && previewable,
-    declaredOnly: !exists,
+    contentAvailable: Boolean(resolved) && previewable,
+    declaredOnly: !resolved,
   };
 };
 
@@ -275,7 +317,7 @@ export const getSkillCatalogDetail = async (id: string): Promise<SkillCatalogDet
   const discoveredFiles = await listRelativeFiles(root);
   const declaredFiles = getBuiltInSkillPackage(id)?.packageFiles ?? [];
   const filePaths = [...new Set(["SKILL.md", ...declaredFiles, ...discoveredFiles])];
-  const files = await Promise.all(filePaths.map((relativePath) => inspectFile(root, relativePath)));
+  const files = await Promise.all(filePaths.map((relativePath) => inspectFile(id, root, relativePath)));
   return { ...summary, files };
 };
 
@@ -286,17 +328,17 @@ export const getSkillCatalogFileContent = async (
   const manifest = await getManifest(id);
   if (!manifest) return null;
   const root = path.dirname(manifest.entry);
-  const normalized = relativePath.replace(/^\/+/, "").split("\\").join("/");
+  const normalized = normalizeRelativePath(relativePath);
   if (!normalized || normalized.split("/").some((segment) => segment === "..")) return null;
-  const absolute = path.resolve(root, normalized);
-  if (!isPathWithin(root, absolute)) return null;
   const extension = path.extname(normalized).toLowerCase();
   if (!(TEXT_FILE_EXTENSIONS.has(extension) || normalized.toLowerCase() === "skill.md")) return null;
+  const resolved = await resolvePackageFilePath(id, root, normalized);
+  if (!resolved) return null;
   try {
-    const stat = await fs.stat(absolute);
+    const stat = await fs.stat(resolved);
     if (!stat.isFile()) return null;
     const readLength = Math.min(stat.size, MAX_FILE_CONTENT_BYTES);
-    const handle = await fs.open(absolute, "r");
+    const handle = await fs.open(resolved, "r");
     try {
       const buffer = Buffer.alloc(readLength);
       const { bytesRead } = await handle.read(buffer, 0, readLength, 0);
