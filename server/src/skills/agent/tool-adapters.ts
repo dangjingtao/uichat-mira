@@ -128,6 +128,7 @@ export const createPrivateWenShuRuntimeToolBinding = (input: {
     throw new Error(`Unknown private WenShu runtime adapter: ${input.runtimeId}`);
   }
   const definition = implementation.definition;
+  const consumedApprovals = new Set<string>();
 
   return {
     id: definition.id,
@@ -136,11 +137,14 @@ export const createPrivateWenShuRuntimeToolBinding = (input: {
     inputSchema: definition.inputSchema,
     execute: async (args, signal) => {
       const inputHash = createInvocationInputHash(args);
-      const approvalGranted = hasExactApproval(
+      const approvalKey = `${definition.id}:${inputHash}`;
+      const exactApprovalAvailable = hasExactApproval(
         definition.id,
         inputHash,
         input.execution.approvedInvocations,
       );
+      const approvalGranted =
+        exactApprovalAvailable && !consumedApprovals.has(approvalKey);
 
       if (definition.capabilities.requiresApproval && !approvalGranted) {
         return {
@@ -152,6 +156,13 @@ export const createPrivateWenShuRuntimeToolBinding = (input: {
           terminate: true,
           requirement: approvalRequirement(definition.id, inputHash, args),
         };
+      }
+
+      // Approval is a one-shot execution grant for this exact invocation inside
+      // this fork. Consume it before the side-effecting runtime starts so a
+      // partial failure cannot silently make the same approval reusable.
+      if (definition.capabilities.requiresApproval && approvalGranted) {
+        consumedApprovals.add(approvalKey);
       }
 
       const artifacts: McpArtifact[] = [];
