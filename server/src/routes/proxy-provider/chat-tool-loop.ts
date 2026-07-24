@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { createOpenAICompatibleClient } from "@/services/openai-compatible-provider.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import { ConversationTrimmer } from "@/services/conversation-trimmer.js";
 import { executeHarnessInvocation } from "@/harness/invocations.js";
 import { resolveProviderForRole } from "@/services/provider-proxy.service/resolution.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
@@ -93,13 +94,13 @@ const trimToolLoopMessages = (messages: NormalizedChatMessage[]) => {
     );
   });
 
-  if (sanitizedNonSystemMessages.length <= MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES) {
-    return [...systemMessages, ...sanitizedNonSystemMessages];
-  }
-
   return [
     ...systemMessages,
-    ...sanitizedNonSystemMessages.slice(-MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES),
+    ...ConversationTrimmer.take(
+      sanitizedNonSystemMessages,
+      MAX_TOOL_LOOP_NON_SYSTEM_MESSAGES,
+      "tail",
+    ),
   ];
 };
 
