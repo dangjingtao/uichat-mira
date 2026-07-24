@@ -116,8 +116,28 @@ export const runWenShuPiSkillAgentPilot = async (input: {
   approvedInvocations?: SkillAgentApprovedInvocation[];
 }): Promise<SkillAgentExecutionResult> => {
   const prepared = prepareWenShuPiSkillAgentPilot(input);
-  return await runPiSkillAgent({
+  const result = await runPiSkillAgent({
     execution: prepared.execution,
     tools: prepared.tools,
   });
+
+  if (
+    result.status === "completed" &&
+    result.evidence.length === 0 &&
+    result.artifacts.length === 0
+  ) {
+    return {
+      status: "insufficient_evidence",
+      summary:
+        "Forked Skill Agent declared completion without authoritative runtime Evidence or Artifact support.",
+      evidence: result.evidence,
+      artifacts: result.artifacts,
+      missingEvidence: [
+        "At least one authoritative Skill runtime Evidence or Artifact record is required before completed may be accepted.",
+      ],
+      trace: result.trace,
+    };
+  }
+
+  return result;
 };
