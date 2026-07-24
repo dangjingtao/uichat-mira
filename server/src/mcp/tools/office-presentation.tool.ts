@@ -104,19 +104,6 @@ const assertNoBlockingValidationErrors = (validation: unknown, label = "Presenta
   }
 };
 
-const assertFinalInspection = (spec: JsonRecord, inspection: unknown, label: string) => {
-  const entry = isRecord(spec.entry) ? spec.entry : {};
-  const expectedPages = Array.isArray(entry.pages) ? entry.pages.length : 0;
-  const record = isRecord(inspection) ? inspection : {};
-  const actualPages = typeof record.slideCount === "number" ? record.slideCount : undefined;
-  if (actualPages === undefined) {
-    throw mcpBadRequest(`${label} inspection did not return slideCount`);
-  }
-  if (actualPages !== expectedPages) {
-    throw mcpBadRequest(`${label} verification failed: expected ${expectedPages} slides, got ${actualPages}`);
-  }
-};
-
 const createOne = async (input: { outputPath: string; spec: JsonRecord }) => {
   if (!input.outputPath.toLowerCase().endsWith(".pptx")) {
     throw mcpBadRequest("outputPath must be a .pptx file");
@@ -130,12 +117,7 @@ const createOne = async (input: { outputPath: string; spec: JsonRecord }) => {
     outputPath: resolvedOutput,
     spec: preparedSpec,
   });
-  const inspection = await executePresentationSkillRuntime({
-    operation: "inspect",
-    inputPath: resolvedOutput,
-  });
-  assertFinalInspection(preparedSpec, inspection, input.outputPath);
-  return { outputPath: input.outputPath, validation, created, inspection };
+  return { outputPath: input.outputPath, validation, created };
 };
 
 const nativePptdSpecSchema = () => ({
@@ -166,7 +148,7 @@ export const officePresentationTool: McpToolImplementation = {
     id: "office_presentation",
     title: "Office Presentation",
     description:
-      "Task-level PPTX capability backed by Kimi's original multi-file PPTD checker/parser/renderer. Validate or create a native {entry,pageFiles} project, create a prepared batch, or inspect final PPTX output. Creation fails when final slide count or requested text is missing.",
+      "Task-level PPTX capability backed by Kimi's original multi-file PPTD checker/parser/renderer. Validate or create a native {entry,pageFiles} project, create a prepared batch, or explicitly inspect an existing PPTX for diagnostics.",
     domain: "edit",
     source: "internal",
     mode: "sync",
@@ -256,7 +238,6 @@ export const officePresentationTool: McpToolImplementation = {
         outputPath: string;
         validation: unknown;
         created: unknown;
-        inspection: unknown;
       }> = [];
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index]!;
@@ -269,13 +250,8 @@ export const officePresentationTool: McpToolImplementation = {
           outputPath: resolvedOutput,
           spec: entry.spec,
         });
-        const inspection = await executePresentationSkillRuntime({
-          operation: "inspect",
-          inputPath: resolvedOutput,
-        });
-        assertFinalInspection(entry.spec, inspection, entry.outputPath);
         const validation = validations[index]!.validation;
-        outputs.push({ outputPath: entry.outputPath, validation, created, inspection });
+        outputs.push({ outputPath: entry.outputPath, validation, created });
         context.addArtifact({
           kind: "document",
           title: path.basename(entry.outputPath),
@@ -284,7 +260,6 @@ export const officePresentationTool: McpToolImplementation = {
             path: entry.outputPath,
             officeOperation: "create_batch",
             validation,
-            inspection,
           },
         });
       }
@@ -293,7 +268,7 @@ export const officePresentationTool: McpToolImplementation = {
         result: { operation, count: outputs.length, outputs },
         evidence: {
           status: "completed",
-          actionTaken: `Created and verified ${outputs.length} presentations`,
+          actionTaken: `Created ${outputs.length} presentations`,
           facts: outputs.map((item) => `Output: ${item.outputPath}`),
           data: {
             kind: "office_presentation",
@@ -319,25 +294,19 @@ export const officePresentationTool: McpToolImplementation = {
         path: outputPath,
         officeOperation: "create",
         validation: result.validation,
-        inspection: result.inspection,
       },
     });
     return {
       result: { operation, ...result },
       evidence: {
         status: "completed",
-        actionTaken: `Created and verified presentation at ${outputPath}`,
-        facts: [
-          `Output: ${outputPath}`,
-          `Validation: ${summarize(result.validation)}`,
-          `Inspection: ${summarize(result.inspection)}`,
-        ],
+        actionTaken: `Created presentation at ${outputPath}`,
+        facts: [`Output: ${outputPath}`, `Validation: ${summarize(result.validation)}`],
         data: {
           kind: "office_presentation",
           operation,
           outputPath,
           validation: result.validation,
-          inspection: result.inspection,
         },
       },
     };
