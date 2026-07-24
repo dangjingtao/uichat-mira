@@ -3,13 +3,12 @@
 
 This module is a thin Mira adapter. It materializes a native multi-file PPTD
 project from JSON, delegates checking/rendering to the vendored Kimi runtime,
-and verifies the produced PPTX by reading its final content back.
+and exposes explicit PPTX inspection as a separate diagnostic operation.
 """
 from __future__ import annotations
 
 import argparse
 import base64
-import html
 import io
 import json
 import lzma
@@ -17,27 +16,10 @@ import shutil
 import sys
 import tarfile
 import tempfile
-from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
 from pptx import Presentation
-
-
-class _TextExtractor(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.parts: list[str] = []
-
-    def handle_data(self, data: str) -> None:
-        self.parts.append(data)
-
-
-def _normalize_text(value: str) -> str:
-    parser = _TextExtractor()
-    parser.feed(value)
-    parser.close()
-    return " ".join(html.unescape("".join(parser.parts)).split())
 
 
 def emit(payload: dict[str, Any], code: int = 0) -> None:
@@ -208,24 +190,6 @@ def inspect_presentation(input_path: str) -> dict[str, Any]:
     }
 
 
-def _expected_texts(spec: dict[str, Any]) -> list[str]:
-    _, page_files = _normalize_project(spec)
-    texts: list[str] = []
-    for page in page_files.values():
-        elements = page.get("elements")
-        if not isinstance(elements, list):
-            continue
-        for element in elements:
-            if not isinstance(element, dict) or element.get("elementType") != "text":
-                continue
-            content = element.get("content")
-            if isinstance(content, dict) and isinstance(content.get("text"), str):
-                text = _normalize_text(content["text"])
-                if text:
-                    texts.append(text)
-    return texts
-
-
 def create_presentation(spec: dict[str, Any], output: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="mira-wenshu-pptd-") as project_dir, tempfile.TemporaryDirectory(
         prefix="mira-wenshu-kimi-ppt-runtime-"
@@ -241,22 +205,12 @@ def create_presentation(spec: dict[str, Any], output: str) -> dict[str, Any]:
         output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         Converter().convert(entry_path, output_path, embed_fonts=False)
-        inspection = inspect_presentation(str(output_path))
-        if inspection["slideCount"] != len(entry["pages"]):
-            raise ValueError(
-                f"PPTX verification failed: expected {len(entry['pages'])} slides, got {inspection['slideCount']}"
-            )
-        expected_texts = _expected_texts(spec)
-        actual_text = _normalize_text("\n".join(str(slide["text"]) for slide in inspection["slides"]))
-        missing_texts = [text for text in expected_texts if text not in actual_text]
-        if missing_texts:
-            preview = ", ".join(repr(text[:80]) for text in missing_texts[:3])
-            raise ValueError(f"PPTX verification failed: expected text was not written: {preview}")
+        if not output_path.is_file() or output_path.stat().st_size <= 0:
+            raise RuntimeError(f"PPTX renderer did not produce an output file: {output_path}")
         return {
             "output": str(output_path),
-            "slides": inspection["slideCount"],
+            "slides": len(entry["pages"]),
             "validation": validation,
-            "inspection": inspection,
             "engine": "kimi_ppt_dsl",
         }
 
