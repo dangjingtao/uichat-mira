@@ -6,9 +6,10 @@ import {
 } from "./catalog.js";
 
 describe("Skill presentation catalog", () => {
-  it("keeps list payload lightweight and separates package metadata from files", async () => {
+  it("keeps list payload lightweight and separates package status from runtime requirements", async () => {
     const skills = await listSkillCatalogSummaries();
     const docx = skills.find((skill) => skill.id === "docx");
+    const xlsx = skills.find((skill) => skill.id === "xlsx");
 
     expect(docx).toMatchObject({
       id: "docx",
@@ -17,6 +18,13 @@ describe("Skill presentation catalog", () => {
       featured: true,
     });
     expect(docx?.runtimeRequirements).toEqual([]);
+    expect(xlsx).toMatchObject({
+      id: "xlsx",
+      origin: "built-in",
+      packageStatus: "bundled",
+      featured: true,
+      runtimeRequirements: ["wenshu-office@1.0.0"],
+    });
     expect(docx).not.toHaveProperty("files");
     expect(docx).not.toHaveProperty("content");
     expect(docx).not.toHaveProperty("fileContents");
@@ -29,6 +37,21 @@ describe("Skill presentation catalog", () => {
     const content = await getSkillCatalogFileContent("docx", "SKILL.md");
     expect(content?.content).toContain("description:");
     expect(content?.truncated).toBe(false);
+  });
+
+  it("resolves packaged WenShu runtime source files without inlining them into catalog lists", async () => {
+    const detail = await getSkillCatalogDetail("xlsx");
+    expect(
+      detail?.files.find((file) => file.path === "runtime/xlsx_runtime.py"),
+    ).toMatchObject({
+      kind: "runtime",
+      previewable: true,
+      contentAvailable: true,
+      declaredOnly: false,
+    });
+
+    const content = await getSkillCatalogFileContent("xlsx", "runtime/xlsx_runtime.py");
+    expect(content?.content).toContain("WenShu spreadsheet runtime");
   });
 
   it("rejects path traversal and missing package files", async () => {
