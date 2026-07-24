@@ -99,7 +99,7 @@ Use a known `shapeName`; invalid names are checker errors. Prefer common PowerPo
 
 Fit modes: `fill`, `contain`, `cover`.
 
-`src` may be a workspace-resolved local file or data URI. Do not reference arbitrary paths outside the selected workspace.
+`src` must resolve to an existing file inside the selected workspace before rendering. Do not use data URIs with the current renderer and do not reference arbitrary paths outside the workspace.
 
 ## Icon
 
@@ -116,9 +116,9 @@ Fit modes: `fill`, `contain`, `cover`.
 }
 ```
 
-Icons use Font Awesome-style names such as `fas:rocket`. The bundled WenShu runtime keeps a lightweight icon renderer and fallback path; it does not ship the large Kimi font collection or a stock-image library.
+Icons use Font Awesome-style names such as `fas:rocket`. The bundled WenShu runtime keeps a lightweight icon renderer and does not ship the large Kimi font collection or a stock-image library.
 
-Unknown icon names may produce `InvalidIconWarning` or use fallback behavior. Prefer common icons and verify the final inspection.
+Use known, tested icon names. Do not rely on unknown-name fallback as a valid protocol behavior; unsupported icon names should be treated as protocol defects rather than accepted semantic substitutions.
 
 ## Table
 
@@ -161,6 +161,7 @@ Rules:
 - A cell supports `content`, `fill`, `border`, `rowSpan`, and `colSpan`.
 - Spanned cells occupy following grid positions; do not manually duplicate merged placeholders.
 - Cell `content` uses the same text-content fields as a text element.
+- Do not specify table-level rotation, opacity, or flip in the current protocol; the renderer does not implement those transforms.
 
 Example table theme:
 
@@ -238,8 +239,10 @@ Important fields:
 - `y`: one field or an array of value field names;
 - `names`: display names matching the `y` series order;
 - `size`: numeric field for bubble charts;
-- `seriesStyle`: map keyed by series field, supporting fill, border, line, width, marker, combo subtype, primary/secondary axis, and data labels;
+- `seriesStyle`: map keyed by series field, supporting the fields implemented for that chart family;
 - `secondaryAxis`: secondary value-axis configuration for combo charts.
+
+Do not set `seriesStyle.*.marker` on `bar` or `area` charts; the current renderer does not implement markers for those series types. Do not specify chart-level rotation, opacity, or flip; those transforms are not implemented.
 
 Keep chart data inside the DSL as actual records. Do not turn a chart into a screenshot unless the task explicitly requires raster output.
 
