@@ -27,6 +27,9 @@ export type SkillAgentRequirement = {
   kind: "user_input" | "evidence" | "resource" | "capability" | "approval";
   description: string;
   requiredFor: string;
+  toolId?: string;
+  input?: Record<string, unknown>;
+  inputHash?: string;
 };
 
 export type SkillAgentExecutionResult = {
