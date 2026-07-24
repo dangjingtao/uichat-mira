@@ -51,6 +51,7 @@ export type SkillAgentExecutionResult = {
 export type SkillAgentApprovedInvocation = {
   toolId: string;
   inputHash: string;
+  input?: Record<string, unknown>;
 };
 
 export type SkillAgentExecutionInput = {
