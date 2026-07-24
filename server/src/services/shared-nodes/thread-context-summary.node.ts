@@ -1,5 +1,6 @@
 import { nowIso } from "@/utils/time.js";
 import type { MessageResponse } from "@/services/thread.service.js";
+import { ConversationTrimmer } from "@/services/conversation-trimmer.js";
 import { llmSharedNode } from "./llm.node.js";
 
 export interface ThreadContextSummaryResult {
@@ -20,29 +21,35 @@ const describeMessage = (message: MessageResponse) => {
     .filter(Boolean);
 
   if (textParts.length > 0) {
-    return textParts.join("\n").slice(0, MAX_PART_TEXT_LENGTH);
+    return ConversationTrimmer.trimText(
+      textParts.join("\n"),
+      MAX_PART_TEXT_LENGTH,
+      { ellipsis: false },
+    );
   }
 
-  return message.parts
-    .map((part) => {
-      if (part.type === "image") {
-        return part.filename?.trim() ? `[图片: ${part.filename.trim()}]` : "[图片]";
-      }
+  return ConversationTrimmer.trimText(
+    message.parts
+      .map((part) => {
+        if (part.type === "image") {
+          return part.filename?.trim() ? `[图片: ${part.filename.trim()}]` : "[图片]";
+        }
 
-      if (part.type === "file") {
-        return `[文件: ${part.filename.trim()}]`;
-      }
+        if (part.type === "file") {
+          return `[文件: ${part.filename.trim()}]`;
+        }
 
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n")
-    .slice(0, MAX_PART_TEXT_LENGTH);
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n"),
+    MAX_PART_TEXT_LENGTH,
+    { ellipsis: false },
+  );
 };
 
 const buildTranscript = (messages: MessageResponse[]) =>
-  messages
-    .slice(-MAX_SUMMARY_MESSAGES)
+  ConversationTrimmer.take(messages, MAX_SUMMARY_MESSAGES, "tail")
     .map((message) => `${message.role === "user" ? "用户" : "助手"}: ${describeMessage(message)}`)
     .filter((line) => !line.endsWith(": "))
     .join("\n\n");
