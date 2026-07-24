@@ -37,11 +37,15 @@ const hasExactApproval = (
 const approvalRequirement = (
   toolId: string,
   inputHash: string,
+  args: Record<string, unknown>,
 ): SkillAgentRequirement => ({
   id: `approval:${toolId}:${inputHash}`,
   kind: "approval",
   description: `${toolId} requires approval for this exact invocation before the forked Skill agent may continue.`,
   requiredFor: toolId,
+  toolId,
+  input: structuredClone(args),
+  inputHash,
 });
 
 const toModelPayload = (value: unknown) => {
@@ -96,7 +100,7 @@ export const createHarnessSkillAgentToolBinding = (input: {
           evidence: record.evidence,
           artifacts: record.artifacts,
           terminate: true,
-          requirement: approvalRequirement(definition.id, inputHash),
+          requirement: approvalRequirement(definition.id, inputHash, args),
         };
       }
 
@@ -146,7 +150,7 @@ export const createPrivateWenShuRuntimeToolBinding = (input: {
             inputHash,
           },
           terminate: true,
-          requirement: approvalRequirement(definition.id, inputHash),
+          requirement: approvalRequirement(definition.id, inputHash, args),
         };
       }
 
