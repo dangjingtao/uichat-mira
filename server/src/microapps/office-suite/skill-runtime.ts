@@ -36,7 +36,7 @@ export const executePdfSkillRuntime = async (input: {
   box?: number[];
 }) =>
   await withWenshuTempDir("pdf", async (tempDir) => {
-    const args = [input.operation];
+    const args: string[] = [input.operation];
     if (input.inputPath) args.push("--input", input.inputPath);
     if (input.inputPaths?.length) args.push("--inputs", ...input.inputPaths);
     if (input.outputPath) args.push("--output", input.outputPath);
@@ -86,7 +86,7 @@ export const executeSpreadsheetSkillRuntime = async (input: {
       return getData(result);
     }
 
-    const args = [input.operation];
+    const args: string[] = [input.operation];
     if (input.inputPath) args.push("--input", input.inputPath);
     if (input.outputPath) args.push("--output", input.outputPath);
     let specPath: string | undefined;
@@ -134,7 +134,7 @@ export const executePresentationSkillRuntime = async (input: {
   spec?: Record<string, unknown>;
 }) =>
   await withWenshuTempDir("pptx", async (tempDir) => {
-    const args = [input.operation];
+    const args: string[] = [input.operation];
     if (input.inputPath) args.push("--input", input.inputPath);
     if (input.outputPath) args.push("--output", input.outputPath);
     if (input.spec) {
