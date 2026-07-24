@@ -16,10 +16,10 @@ Related:
 
 ## Purpose
 
-本合同只定义两件事：
+本合同定义两件事：
 
 1. **什么目录算一个用户可见 / Agent 可匹配的 Skill Package**；
-2. **内部 helper / reference / script 如何保证不会因为存在 `SKILL.md` 而误入 SkillRegistry。**
+2. **内部 helper / reference / script 如何保证不会因为存在 `SKILL.md` 而误入 `SkillRegistry`。**
 
 Skill 的业务定义、渐进式披露和 Runtime 边界仍以 `README.md`、`skill-context-design.md`、`skill-package-runtime-contract.md` 为真相源。
 
@@ -27,7 +27,7 @@ Skill 的业务定义、渐进式披露和 Runtime 边界仍以 `README.md`、`s
 
 ## 1. Canonical 目录结构
 
-新 Skill 使用两级目录：
+新增 Skill 统一使用两级目录：
 
 ```text
 <skills-root>/
@@ -50,9 +50,9 @@ Skill 的业务定义、渐进式披露和 Runtime 边界仍以 `README.md`、`s
 
 因此：
 
-> **一个二级 Skill 目录只产生一个 Catalog 卡片，也只产生一个可进入 SkillRegistry 的 Skill Manifest。**
+> **一个二级 Skill 目录 = 一个 Catalog 卡片 = 一个可进入 SkillRegistry 的 Skill Manifest。**
 
-`SKILL.md` 内部的 `category` 只用于旧版平铺目录兼容；对于 canonical 两级目录，一级目录名是分类真相源。
+对于 canonical 两级目录，一级目录名是分类真相源；`SKILL.md` 里的 `category` 只保留给旧平铺目录兼容。
 
 ---
 
@@ -80,11 +80,11 @@ Scanner **不得继续递归扫描这个目录内部的任何 `SKILL.md`**。
         SKILL.md               <- 即使存在，也不得注册为独立 Skill
 ```
 
-这条规则用于防止：
+这条规则直接防止：
 
 - reference 被误显示成 Skill；
-- helper Skill 被 Agent Matcher 直接命中；
-- scripts/runtime 内部说明文件污染 Skill Catalog；
+- helper 被 Agent Matcher 直接命中；
+- scripts/runtime 内部说明污染 Catalog；
 - 一个 Skill Package 因内部目录结构产生多个“幽灵 Skill”。
 
 ---
@@ -99,9 +99,13 @@ Skills Catalog
 SkillMatcher / Agent SkillContext
 ```
 
-因此 **“扫描到了文件”不等于“允许暴露给 Agent”**。
+因此：
 
-当前 public eligibility：
+```text
+SKILL.md exists
+!=
+Registry eligible
+```
 
 ### 用户安装目录
 
@@ -113,27 +117,25 @@ SkillMatcher / Agent SkillContext
 
 默认视为 public，因为用户已经完成显式安装动作。
 
-用户 Skill 仍可通过 frontmatter 显式声明：
+用户 Skill 若显式声明：
 
 ```yaml
 visibility: internal
 ```
 
-此时不得进入 Registry。
+则必须阻断，不得进入 Registry。
 
 ### 系统 / 源码 Skill 根目录
 
-非用户安装根目录中的 Skill Package，必须满足至少一个条件：
+新增系统 Skill 必须使用 canonical 两级目录，并满足：
 
-```text
-1. 是 registry.ts 中明确注册的 built-in Skill；
-或
-2. SKILL.md frontmatter 显式声明 visibility: public
+```yaml
+visibility: public
 ```
 
-否则默认不进入 Registry。
+或属于 `registry.ts` 明确注册的 built-in。
 
-这意味着系统内部 helper 即使误放了 `SKILL.md`，也不会仅凭文件存在自动暴露给 Agent。
+没有 public eligibility 的系统 helper，不得仅因为存在 `SKILL.md` 自动进入 Registry。
 
 ---
 
@@ -146,13 +148,13 @@ visibility: internal
 _<anything>
 ```
 
-推荐内部包统一放：
+推荐内部包放在：
 
 ```text
 <skills-root>/_internal/<helper-id>/...
 ```
 
-`_internal` 下即使存在：
+即使 `_internal` 下出现：
 
 ```text
 SKILL.md
@@ -161,13 +163,13 @@ visibility: public
 
 Scanner 仍必须忽略。
 
-目录边界是第一道安全门，frontmatter 不是绕过目录边界的后门。
+目录边界是第一道安全门，frontmatter 不能绕过目录边界。
 
 ---
 
 ## 5. Legacy compatibility
 
-为避免现有安装立即失效，V1 保留两种平铺兼容：
+V1 为现有数据保留有限兼容，但**不允许继续新增平铺 Skill**。
 
 ### 旧用户安装包
 
@@ -177,25 +179,45 @@ Scanner 仍必须忽略。
 
 继续可发现。
 
-用户下一次编辑分类时，应迁移为：
+用户下一次编辑分类时迁移为：
 
 ```text
 <user-skills-root>/<category>/<skill-id>/SKILL.md
 ```
 
-迁移必须移动整个 Skill Package 目录，不能只移动 `SKILL.md`，以免丢失 references/templates/scripts。
+迁移必须移动整个 Skill Package 目录，不能只移动 `SKILL.md`，避免丢失 references/templates/scripts。
 
 ### 旧系统 built-in
 
-当前 DOCX / XLSX / PDF / PPTX 等已在 `registry.ts` 明确注册的 built-in，可以暂时保留：
+`registry.ts` 已明确注册的 built-in（DOCX / XLSX / PDF / PPTX）允许继续使用旧平铺结构：
 
 ```text
 <system-skills-root>/<skill-id>/SKILL.md
 ```
 
-未注册的平铺系统目录不得因为含有 `SKILL.md` 自动成为 public Skill。
+### 旧系统用户可见 Skill
 
-Legacy flat layout 只用于兼容，不作为新增 Skill 的推荐结构。
+历史上已经存在一批平铺的用户可见 Skill，例如带完整展示信息的 Mira Lab Skill。
+
+为避免本次安全修正把这些现有 Skill 一起隐藏，Scanner 只兼容满足以下完整公共 manifest 特征的旧平铺包：
+
+```text
+id
++ displayName/title
++ category
+```
+
+同时：
+
+```yaml
+visibility: internal
+```
+
+永远优先阻断。
+
+这条兼容只用于旧数据迁移期。**新增系统 Skill 不得依赖该兼容规则，必须改用两级目录 + `visibility: public`。**
+
+`pptx-swarm` 这类只有 `name + description` 的内部 helper 不满足旧公共 manifest 条件，因此不会进入 Registry。
 
 ---
 
@@ -203,15 +225,13 @@ Legacy flat layout 只用于兼容，不作为新增 Skill 的推荐结构。
 
 `pptx-swarm` 不是独立用户 Skill。
 
-正确结构：
+正确语义：
 
 ```text
 pptx
   SKILL.md
   reference/pptx-swarm.md
 ```
-
-语义：
 
 ```text
 普通 PPT
@@ -222,22 +242,14 @@ pptx
   -> 按需披露 pptx-swarm reference
 ```
 
-不得存在：
+不得同时存在两个顶级可匹配 Skill：
 
 ```text
 pptx
-+
 pptx-swarm
 ```
 
-两个顶级可匹配 Skill。
-
-否则会造成：
-
-- Catalog 重复卡片；
-- Matcher 竞争同一业务目标；
-- 内部执行策略被误当成用户能力；
-- Agent 可能直接命中 helper，而绕过 `pptx` 的完整 Skill 合同。
+否则会造成 Catalog 重复、Matcher 竞争，以及内部执行策略绕过 `pptx` 主合同直接暴露给 Agent。
 
 ---
 
@@ -257,7 +269,7 @@ Registry eligible
   -> Matcher eligible
 ```
 
-因此安全边界必须发生在：
+安全边界必须发生在：
 
 ```text
 SkillScanner
@@ -269,7 +281,7 @@ Catalog + Matcher
 
 **内部 Skill / helper 必须在进入 Registry 之前被过滤。**
 
-禁止依赖前端隐藏卡片来解决 Agent 暴露问题；前端隐藏不改变 `SkillMatcher` 的候选集合。
+禁止依赖前端隐藏卡片解决 Agent 暴露问题；前端隐藏不改变 `SkillMatcher` 的候选集合。
 
 ---
 
@@ -299,8 +311,8 @@ Catalog + Matcher
 3. Skill Package 内部禁止递归发现新的顶级 Skill。
 4. reference/template/example/script/runtime 内部文件不得自动进入 Registry。
 5. `_` / `.` 开头目录永远是非公开发现区域。
-6. 系统源码中的非 built-in Skill 必须显式 `visibility: public` 才能进入 Registry。
-7. 用户显式安装的 Skill 默认 public，但 `visibility: internal` 必须优先阻断。
-8. 前端隐藏不是安全边界；内部 Skill 必须在 Scanner -> Registry 之前过滤。
-9. `pptx-swarm` 只能作为 `pptx` 的按需 reference，不得作为独立顶级 Skill。
-10. 旧平铺目录只保留兼容，不得作为新增 Skill 的默认结构。
+6. 新增系统源码 Skill 必须显式 `visibility: public` 或属于明确 built-in。
+7. 旧平铺公共 manifest 兼容只用于迁移，不得作为新规范。
+8. 用户显式安装的 Skill 默认 public，但 `visibility: internal` 必须优先阻断。
+9. 前端隐藏不是安全边界；内部 Skill 必须在 Scanner -> Registry 之前过滤。
+10. `pptx-swarm` 只能作为 `pptx` 的按需 reference，不得作为独立顶级 Skill。
