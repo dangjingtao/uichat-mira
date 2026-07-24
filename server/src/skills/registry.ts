@@ -28,6 +28,13 @@ export type BuiltInSkillPackageDefinition = {
   };
 };
 
+export type ListedBuiltInSkillPackageDefinition = Omit<
+  BuiltInSkillPackageDefinition,
+  "id"
+> & {
+  id: string;
+};
+
 const STATEFUL_RUNTIME_REQUIREMENTS = [
   "SkillDefinition version binding",
   "SkillInstance state/stage",
@@ -148,9 +155,10 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
   },
 ];
 
-export const listBuiltInSkillPackages = (): BuiltInSkillPackageDefinition[] =>
+export const listBuiltInSkillPackages = (): ListedBuiltInSkillPackageDefinition[] =>
   BUILT_IN_SKILL_PACKAGES.map((definition) => ({
     ...definition,
+    id: definition.id,
     ...(definition.runtimePack ? { runtimePack: { ...definition.runtimePack } } : {}),
     runtimeCapabilities: [...definition.runtimeCapabilities],
     packageFiles: [...definition.packageFiles],
