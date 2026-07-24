@@ -10,29 +10,6 @@ const getData = (result: {
   result: { status: string; data?: unknown; [key: string]: unknown };
 }) => result.result.data ?? result.result;
 
-const normalizePresentationRuntimeSpec = (value: Record<string, unknown>) => {
-  const spec = structuredClone(value);
-  const pages = Array.isArray(spec.pages) ? spec.pages : [];
-  for (const pageValue of pages) {
-    if (!pageValue || typeof pageValue !== "object" || Array.isArray(pageValue)) continue;
-    const page = pageValue as Record<string, unknown>;
-    const elements = Array.isArray(page.elements) ? page.elements : [];
-    for (const elementValue of elements) {
-      if (!elementValue || typeof elementValue !== "object" || Array.isArray(elementValue)) {
-        continue;
-      }
-      const element = elementValue as Record<string, unknown>;
-      const content = element.content;
-      if (!content || typeof content !== "object" || Array.isArray(content)) continue;
-      const record = content as Record<string, unknown>;
-      // python-pptx has no stable FillFormat.transparency setter across versions.
-      // Use fill="transparent" for no-fill and ignore this unsupported numeric field.
-      delete record.transparency;
-    }
-  }
-  return spec;
-};
-
 export const executePdfSkillRuntime = async (input: {
   operation:
     | "create"
@@ -162,7 +139,7 @@ export const executePresentationSkillRuntime = async (input: {
     if (input.outputPath) args.push("--output", input.outputPath);
     if (input.spec) {
       const specPath = path.join(tempDir, "spec.json");
-      writeJsonFile(specPath, normalizePresentationRuntimeSpec(input.spec));
+      writeJsonFile(specPath, input.spec);
       args.push("--spec", specPath);
     }
     const result = await runWenshuPython({
