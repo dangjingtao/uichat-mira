@@ -15,6 +15,23 @@ import {
 } from "../node-runtime";
 import type { AgentFinalizationPacket, AgentNextAction } from "../types";
 
+const runFrozenParentFinalizationPath = (
+  state: AgentNodeState,
+): Partial<AgentNodeState> | null => {
+  if (state.nextAction?.type !== "answer" || !state.finalizationPacket) {
+    return null;
+  }
+
+  // A completed forked Skill Agent has already transferred task-local execution
+  // back to the Parent as a frozen finalization decision. Do not invoke Main
+  // Planner again and accidentally reconstruct the deliverable a second time.
+  return {
+    nextAction: state.nextAction,
+    finalizationPacket: state.finalizationPacket,
+    schemaReplanDiagnostics: undefined,
+  };
+};
+
 const runSkillDirectivePlannerPath = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -134,6 +151,9 @@ export const nextActionPlannerNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
+  const frozenFinalization = runFrozenParentFinalizationPath(state);
+  if (frozenFinalization) return frozenFinalization;
+
   const skillDirectiveResult = await runSkillDirectivePlannerPath(state, emit);
   if (skillDirectiveResult) return skillDirectiveResult;
   return baseNextActionPlannerNode(state, emit);
