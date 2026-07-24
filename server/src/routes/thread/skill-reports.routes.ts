@@ -10,6 +10,13 @@ import {
 } from "@/skills/flow/report-files.js";
 import { notFound, routeHandler } from "@/utils/route-errors.js";
 
+type SkillReportRoute = {
+  Params: {
+    id: string;
+    sessionId: string;
+  };
+};
+
 const hasPersistedReportMarker = (input: {
   threadId: string;
   sessionId: string;
@@ -62,41 +69,47 @@ const ensureOwnedReportSession = async (input: {
 };
 
 export const registerThreadSkillReportRoutes = async (app: FastifyInstance) => {
-  app.get<{ Params: { id: string; sessionId: string } }>(
+  app.get<SkillReportRoute>(
     "/threads/:id/skill-reports/:sessionId/html",
-    routeHandler("Failed to load skill report HTML", async (request, reply) => {
-      await ensureOwnedReportSession({
-        threadId: request.params.id,
-        sessionId: request.params.sessionId,
-        userId: request.authUser!.id,
-      });
-      const filePath = resolveSkillReportHtmlPath(request.params.sessionId);
-      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-        throw notFound("Skill report HTML not found");
-      }
-      reply.type("text/html; charset=utf-8");
-      return reply.send(fs.createReadStream(filePath));
-    }),
+    routeHandler<SkillReportRoute>(
+      "Failed to load skill report HTML",
+      async (request, reply) => {
+        await ensureOwnedReportSession({
+          threadId: request.params.id,
+          sessionId: request.params.sessionId,
+          userId: request.authUser!.id,
+        });
+        const filePath = resolveSkillReportHtmlPath(request.params.sessionId);
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+          throw notFound("Skill report HTML not found");
+        }
+        reply.type("text/html; charset=utf-8");
+        return reply.send(fs.createReadStream(filePath));
+      },
+    ),
   );
 
-  app.get<{ Params: { id: string; sessionId: string } }>(
+  app.get<SkillReportRoute>(
     "/threads/:id/skill-reports/:sessionId/pdf",
-    routeHandler("Failed to load skill report PDF", async (request, reply) => {
-      await ensureOwnedReportSession({
-        threadId: request.params.id,
-        sessionId: request.params.sessionId,
-        userId: request.authUser!.id,
-      });
-      const filePath = resolveSkillReportPdfPath(request.params.sessionId);
-      if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-        throw notFound("Skill report PDF not found");
-      }
-      reply.type("application/pdf");
-      reply.header(
-        "Content-Disposition",
-        `attachment; filename*=UTF-8''${encodeURIComponent("两个人的备孕全景报告.pdf")}`,
-      );
-      return reply.send(fs.createReadStream(filePath));
-    }),
+    routeHandler<SkillReportRoute>(
+      "Failed to load skill report PDF",
+      async (request, reply) => {
+        await ensureOwnedReportSession({
+          threadId: request.params.id,
+          sessionId: request.params.sessionId,
+          userId: request.authUser!.id,
+        });
+        const filePath = resolveSkillReportPdfPath(request.params.sessionId);
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+          throw notFound("Skill report PDF not found");
+        }
+        reply.type("application/pdf");
+        reply.header(
+          "Content-Disposition",
+          `attachment; filename*=UTF-8''${encodeURIComponent("两个人的备孕全景报告.pdf")}`,
+        );
+        return reply.send(fs.createReadStream(filePath));
+      },
+    ),
   );
 };
