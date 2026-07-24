@@ -18,6 +18,11 @@ const asPositiveNumber = (value: unknown, fallback: number) =>
     ? Math.floor(value)
     : fallback;
 
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+
 type PiModel = NonNullable<NonNullable<AgentOptions["initialState"]>["model"]>;
 
 const resolvePiModel = (): { model: PiModel; apiKey: string } => {
@@ -109,6 +114,59 @@ const parseCompletionEnvelope = (raw: string) => {
   return null;
 };
 
+const normalizeCompletionRequirements = (
+  value: unknown,
+): SkillAgentRequirement[] => {
+  if (!Array.isArray(value)) return [];
+
+  const allowedKinds = new Set<SkillAgentRequirement["kind"]>([
+    "user_input",
+    "evidence",
+    "resource",
+    "capability",
+  ]);
+
+  return value.flatMap((item, index) => {
+    if (typeof item === "string" && item.trim()) {
+      return [
+        {
+          id: `completion:user_input:${index}`,
+          kind: "user_input" as const,
+          description: item.trim(),
+          requiredFor: "delegated_goal",
+        },
+      ];
+    }
+
+    const record = asRecord(item);
+    const description =
+      typeof record?.description === "string" ? record.description.trim() : "";
+    if (!record || !description) return [];
+
+    const requestedKind = record.kind;
+    const kind =
+      typeof requestedKind === "string" &&
+      allowedKinds.has(requestedKind as SkillAgentRequirement["kind"])
+        ? (requestedKind as Exclude<SkillAgentRequirement["kind"], "approval">)
+        : "user_input";
+
+    return [
+      {
+        id:
+          typeof record.id === "string" && record.id.trim()
+            ? record.id.trim()
+            : `completion:${kind}:${index}`,
+        kind,
+        description,
+        requiredFor:
+          typeof record.requiredFor === "string" && record.requiredFor.trim()
+            ? record.requiredFor.trim()
+            : "delegated_goal",
+      },
+    ];
+  });
+};
+
 const buildSystemPrompt = (input: SkillAgentExecutionInput) => {
   const primary = input.skillContext.primary;
   if (!primary) throw new Error("Forked Skill agent requires one primary SkillContext");
@@ -126,8 +184,10 @@ const buildSystemPrompt = (input: SkillAgentExecutionInput) => {
     "All file paths and artifacts must stay inside the bound workspace unless a provided tool explicitly returns another managed artifact reference.",
     "When deterministic runtime execution fails, treat the runtime result as authoritative. Never reinterpret failure as success.",
     "If evidence is insufficient, keep working while an allowed tool can materially close the gap. If the gap cannot be closed, return insufficient_evidence or needs_input.",
+    "Approval requirements are emitted only by tools. Never invent an approval requirement in your final JSON.",
+    "For needs_input, requirements must be objects with kind user_input|evidence|resource|capability, description, and requiredFor.",
     "At the end, output exactly one JSON object and no prose outside it:",
-    '{"status":"completed|insufficient_evidence|needs_input|failed","summary":"...","missingEvidence":[],"requirements":[],"recoverable":true}',
+    '{"status":"completed|insufficient_evidence|needs_input|failed","summary":"...","missingEvidence":[],"requirements":[{"kind":"user_input","description":"...","requiredFor":"..."}],"recoverable":true}',
     "",
     `<skill id="${primary.id}" version="${primary.version}" name="${primary.name}">`,
     primary.body,
@@ -235,6 +295,9 @@ export const runPiSkillAgent = async (input: {
     };
   }
 
+  // Tool-produced requirements are authoritative governance boundaries. This is
+  // the only path allowed to carry an approval requirement with exact invocation
+  // metadata; model-authored completion JSON cannot mint approval authority.
   if (requirements.length > 0) {
     return {
       status: "needs_input",
@@ -272,8 +335,8 @@ export const runPiSkillAgent = async (input: {
             : [],
         }
       : {}),
-    ...(status === "needs_input" && Array.isArray(completion.requirements)
-      ? { requirements: completion.requirements as SkillAgentRequirement[] }
+    ...(status === "needs_input"
+      ? { requirements: normalizeCompletionRequirements(completion.requirements) }
       : {}),
     ...(status === "failed"
       ? {
