@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -212,7 +213,7 @@ export class SkillScanner {
         }
 
         // Canonical layout: first level is category, second level is one Skill Package.
-        let skillEntries: Awaited<ReturnType<typeof fs.readdir>>;
+        let skillEntries: Dirent[];
         try {
           skillEntries = await fs.readdir(firstLevelDir, { withFileTypes: true });
         } catch {
