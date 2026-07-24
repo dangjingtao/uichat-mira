@@ -36,6 +36,11 @@ const toArtifact = (input: {
   buffer: input.buffer,
 });
 
+const normalizeWarnings = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+
 const failure = (input: {
   task: OfficeRuntimeTask;
   startedAt: number;
@@ -228,7 +233,7 @@ export const executeOfficeRuntimeTask = async (
             buffer: modified.buffer,
           }),
         ],
-        warnings: "warnings" in modified ? modified.warnings : [],
+        warnings: normalizeWarnings("warnings" in modified ? modified.warnings : undefined),
       };
     }
 
