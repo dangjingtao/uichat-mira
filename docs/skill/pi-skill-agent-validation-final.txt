@@ -1,5 +1,5 @@
 Pi Skill Agent final validation
-source_commit=3c3b24de7bd0a09aa9173acae54943d56d30da7a
+source_commit=b617ebb874eec9f8eaccd6833ebd28de8538f685
 install_status=0
 typecheck_status=0
 tests_status=0
@@ -14,9 +14,9 @@ Lockfile is up to date, resolution step is skipped
 Progress: resolved 1, reused 0, downloaded 0, added 0
 Packages: +1530
 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-Progress: resolved 1530, reused 1258, downloaded 0, added 0
-Progress: resolved 1530, reused 1520, downloaded 0, added 593
-Progress: resolved 1530, reused 1520, downloaded 0, added 1210
+Progress: resolved 1530, reused 1121, downloaded 0, added 0
+Progress: resolved 1530, reused 1520, downloaded 0, added 521
+Progress: resolved 1530, reused 1520, downloaded 0, added 1197
 Progress: resolved 1530, reused 1520, downloaded 0, added 1530, done
 
 devDependencies:
@@ -31,7 +31,7 @@ devDependencies:
 + png2icons 2.0.1
 + typescript 5.9.3
 
-Done in 5.7s
+Done in 6.4s
 
 ===== typecheck tail =====
 
@@ -43,7 +43,7 @@ Done in 5.7s
 
 [1m[46m RUN [49m[22m [36mv3.2.6 [39m[90m/home/runner/work/uichat-mira/uichat-mira/server[39m
 
- [32m✓[39m src/agent/nodes/forked-skill-agent.approval.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/agent/nodes/forked-skill-agent.approval.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 5[2mms[22m[39m
  [32m✓[39m src/agent/nodes/prepare-context-with-forked-skill.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 2[2mms[22m[39m
  [32m✓[39m src/skills/agent/tool-adapters.approval.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 9[2mms[22m[39m
  [32m✓[39m src/agent/pi-loop/forked-skill-finalization.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
@@ -51,8 +51,8 @@ Done in 5.7s
 
 [2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
 [2m      Tests [22m [1m[32m9 passed[39m[22m[90m (9)[39m
-[2m   Start at [22m 06:54:07
-[2m   Duration [22m 3.25s[2m (transform 1.25s, setup 0ms, collect 3.00s, tests 20ms, environment 0ms, prepare 61ms)[22m
+[2m   Start at [22m 06:55:15
+[2m   Duration [22m 3.54s[2m (transform 1.36s, setup 0ms, collect 3.27s, tests 19ms, environment 0ms, prepare 66ms)[22m
 
 
 ===== DOCX smoke tail =====
