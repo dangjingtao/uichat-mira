@@ -4,14 +4,37 @@ import type {
   SkillDirective,
   SkillFlowRuntimeInput,
   SkillFlowRuntimeResult,
+  SkillRequirement,
   StoredSkillFlowSession,
 } from "../flow/types.js";
 import { toSkillFlowStateRef } from "../flow/state-store.js";
 
-const FIRST_QUESTION =
-  "先把你们目前的情况尽量告诉我：双方年龄、备孕多久、有没有怀孕/流产或试管经历、女方月经和做过的检查、男方有没有精液检查，以及你们现在最担心什么。记得多少说多少，不用整理，不知道的直接跳过。";
-const FINAL_CONFIRMATION_QUESTION =
-  "我基本了解完整了。还有什么你觉得很重要、但我一直没问到的吗？没有的话直接告诉我“没有了”就可以。";
+const INITIAL_REQUIREMENT: SkillRequirement = {
+  id: "fertility-baseline-context",
+  kind: "user_input",
+  description:
+    "缺少双方的基础备孕背景，包括年龄、备孕时长、妊娠/流产或辅助生殖经历、女方月经与检查、男方精液检查，以及当前最担心的问题。用户可以自由叙述，未知项可以跳过。",
+  requiredFor: "建立首轮备孕评估状态并识别后续最高价值信息缺口",
+  acceptedFormats: ["natural_language"],
+};
+
+const FINAL_CONFIRMATION_REQUIREMENT: SkillRequirement = {
+  id: "fertility-final-confirmation",
+  kind: "user_input",
+  description:
+    "需要用户确认是否还有尚未提供但重要的备孕、检查或治疗信息；没有补充时也需要明确确认。",
+  requiredFor: "结束信息收集并进入报告生成",
+  acceptedFormats: ["natural_language", "explicit_no_more_information"],
+};
+
+const FALLBACK_REQUIREMENT: SkillRequirement = {
+  id: "fertility-additional-context",
+  kind: "user_input",
+  description:
+    "还缺少可能影响当前备孕计划的关键检查结果、既往妊娠或辅助生殖经历，以及重要生活方式背景。用户只需提供记得的内容，不要求完整或整理成表格。",
+  requiredFor: "继续完善备孕评估并判断是否可以进入最终确认",
+  acceptedFormats: ["natural_language"],
+};
 
 export const FERTILITY_DIMENSION_IDS = [
   "female_endometrium",
@@ -80,6 +103,41 @@ const uniqueStrings = (values: unknown, limit = 40) =>
         ),
       ].slice(0, limit)
     : [];
+
+const normalizeUserInputRequirement = (
+  value: unknown,
+  fallback: SkillRequirement,
+): SkillRequirement => {
+  if (!isRecord(value)) return fallback;
+
+  const id =
+    typeof value.id === "string" && value.id.trim()
+      ? value.id.trim().slice(0, 120)
+      : fallback.id;
+  const description =
+    typeof value.description === "string" && value.description.trim()
+      ? value.description.trim()
+      : fallback.description;
+  const requiredFor =
+    typeof value.requiredFor === "string" && value.requiredFor.trim()
+      ? value.requiredFor.trim()
+      : fallback.requiredFor;
+  const acceptedFormats = uniqueStrings(value.acceptedFormats, 8);
+  const alternatives = uniqueStrings(value.alternatives, 8);
+
+  return {
+    id,
+    kind: "user_input",
+    description,
+    requiredFor,
+    ...(acceptedFormats.length > 0
+      ? { acceptedFormats }
+      : fallback.acceptedFormats
+        ? { acceptedFormats: [...fallback.acceptedFormats] }
+        : {}),
+    ...(alternatives.length > 0 ? { alternatives } : {}),
+  };
+};
 
 export type FertilityDimension = {
   id: string;
@@ -210,7 +268,7 @@ const isLikelyActivationOnly = (query: string) => {
   );
 };
 
-const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskModel。你的职责不是诊断或开处方，而是把用户自由叙述整理成结构化事实，并为下一轮访谈寻找最高价值的信息缺口。
+const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskModel。你的职责不是诊断或开处方，而是把用户自由叙述整理成结构化事实，并找出下一步最高价值的外部信息缺口。
 
 硬规则：
 1. 只返回 JSON，不要 Markdown。
@@ -221,8 +279,8 @@ const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskMo
 6. AMH/AFC 主要反映卵巢储备/促排反应背景，不能单独等同卵子质量或自然受孕概率。
 7. 不做疾病诊断，不给处方药方案，不给个体化药物/保健品剂量；建议分 selfCare / discussWithClinician / testsToConsider。
 8. 不把免疫、凝血、精子 DNA 碎片等检查当作所有人的常规必查项；没有明确指征时标记为需医生判断。
-9. nextQuestion 只问一轮里最值得问的一组相关信息，语言自然，不要像表格审讯。
-10. readyForFinalConfirmation 只有在继续追问的边际价值已经较低时才为 true。
+9. nextRequirement 只描述当前最高价值的缺失信息、它为什么需要以及可接受的输入形式。它不是面向用户的问题，不要写“请问”“能否告诉我”等追问话术。
+10. readyForFinalConfirmation 只有在继续收集信息的边际价值已经较低时才为 true。
 
 输出结构：
 {
@@ -245,7 +303,12 @@ const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskMo
     }
   ],
   "readyForFinalConfirmation": false,
-  "nextQuestion": ""
+  "nextRequirement": {
+    "id": "稳定的缺口标识",
+    "description": "缺少的业务信息，不写成用户问题",
+    "requiredFor": "这项信息影响哪一步判断",
+    "acceptedFormats": ["natural_language"]
+  }
 }`;
 
 const analyzeTurn = async (input: {
@@ -277,7 +340,11 @@ const analyzeTurn = async (input: {
           parts: [],
         },
       ],
-      { maxTokens: 1200, temperature: 0 },
+      {
+        maxTokens: 1200,
+        temperature: 0,
+        purpose: "fertility-assessment-analyze-turn",
+      },
     ),
   );
 
@@ -293,10 +360,10 @@ const analyzeTurn = async (input: {
           .slice(0, 2)
       : [],
     readyForFinalConfirmation: parsed.readyForFinalConfirmation === true,
-    nextQuestion:
-      typeof parsed.nextQuestion === "string" && parsed.nextQuestion.trim()
-        ? parsed.nextQuestion.trim()
-        : "还有哪些你记得的检查结果、治疗经历或生活习惯，可能会影响你们现在的备孕计划？",
+    nextRequirement: normalizeUserInputRequirement(
+      parsed.nextRequirement,
+      FALLBACK_REQUIREMENT,
+    ),
   };
 };
 
@@ -341,8 +408,10 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
         flowCompleted: false,
         round: 0,
         maxRounds: input.session.maxRounds,
-        requiredAction: "ask_user",
-        question: FIRST_QUESTION,
+        interruption: {
+          reason: "missing_requirement",
+          requirements: [INITIAL_REQUIREMENT],
+        },
       });
       return {
         session: withProcessedState(input.session, {
@@ -368,8 +437,7 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
         contradictions: currentState.contradictions,
         dimensionUpdates: [],
         readyForFinalConfirmation: false,
-        nextQuestion:
-          "你可以继续把记得的检查结果、既往怀孕或试管经历告诉我，数字不必整理得很完美；我会自己归类。",
+        nextRequirement: FALLBACK_REQUIREMENT,
       };
     }
 
@@ -428,8 +496,12 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
       flowCompleted: false,
       round: nextRound,
       maxRounds: input.session.maxRounds,
-      requiredAction: "ask_user",
-      question: shouldConfirm ? FINAL_CONFIRMATION_QUESTION : analysis.nextQuestion,
+      interruption: {
+        reason: "missing_requirement",
+        requirements: [
+          shouldConfirm ? FINAL_CONFIRMATION_REQUIREMENT : analysis.nextRequirement,
+        ],
+      },
     });
 
     return {
