@@ -1,5 +1,5 @@
 import { fertilityAssessmentRuntime } from "../fertility-assessment/runtime.js";
-import { fertilityReportRuntime } from "../fertility-report/runtime.js";
+import { fertilityAssessmentReportRuntime } from "../fertility-assessment/runtime/report-handoff.js";
 import type {
   SkillConversationFlowRuntime,
   SkillDirectiveHandoffRuntime,
@@ -10,7 +10,10 @@ const conversationFlowRuntimes = new Map<string, SkillConversationFlowRuntime>([
 ]);
 
 const directiveHandoffRuntimes = new Map<string, SkillDirectiveHandoffRuntime>([
-  [fertilityReportRuntime.skillId, fertilityReportRuntime],
+  // Legacy internal handoff key emitted by the current assessment runtime.
+  // It resolves to an execution stage owned by the single public
+  // fertility-assessment Skill and is not a discoverable Skill package.
+  ["fertility-report", fertilityAssessmentReportRuntime],
 ]);
 
 export const getSkillConversationFlowRuntime = (skillId: string) =>
