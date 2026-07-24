@@ -35,7 +35,7 @@ import {
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import { getSkillPresentation, type SkillIconKind } from "./catalog";
 
-const BASE_CATEGORIES = ["已添加", "精选技能"];
+const BASE_CATEGORIES = ["全部技能", "精选技能"];
 const PREFERRED_CATEGORIES = ["办公效率", "商业金融", "内容创作", "学术研究", "营销增长", "工程研发"];
 
 const iconConfig: Record<SkillIconKind, { Icon: typeof FileText; className: string }> = {
@@ -62,7 +62,7 @@ const runtimeClassName = (status: SkillRuntimeStatus) => {
 
 const originLabel = (origin: SkillCatalogItem["origin"]) => {
   if (origin === "built-in") return "内置";
-  if (origin === "user") return "用户添加";
+  if (origin === "user") return "用户导入";
   return "外部来源";
 };
 
@@ -115,7 +115,7 @@ const toSkillView = (skill: SkillCatalogItem): SkillView => {
 export default function SkillsSettings() {
   const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const [activeCategory, setActiveCategory] = useState("已添加");
+  const [activeCategory, setActiveCategory] = useState("全部技能");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -162,14 +162,14 @@ export default function SkillsSettings() {
   }, [skillViews]);
 
   useEffect(() => {
-    if (!categories.includes(activeCategory)) setActiveCategory("已添加");
+    if (!categories.includes(activeCategory)) setActiveCategory("全部技能");
   }, [activeCategory, categories]);
 
   const visibleSkills = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return skillViews.filter((skill) => {
-      const matchesCategory = activeCategory === "已添加"
-        ? skill.packageStatus === "bundled" || skill.packageStatus === "installed"
+      const matchesCategory = activeCategory === "全部技能"
+        ? true
         : activeCategory === "精选技能"
           ? skill.featured
           : skill.category === activeCategory;
@@ -194,10 +194,10 @@ export default function SkillsSettings() {
     try {
       const imported = await importSkillMarkdown(file);
       await loadCatalog();
-      setActiveCategory("已添加");
+      setActiveCategory("全部技能");
       setQuery("");
       setSelectedSkill(imported);
-      showNotice(`「${imported.name}」已添加`);
+      showNotice(`「${imported.name}」已导入`);
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Markdown Skill 导入失败");
     } finally {
@@ -243,7 +243,7 @@ export default function SkillsSettings() {
   };
 
   const handleDelete = async (skill: SkillDetail) => {
-    if (!window.confirm(`删除「${skill.name}」？此操作会移除本地 Skill Package。`)) return;
+    if (!window.confirm(`永久删除「${skill.name}」？本地 Skill Package 及其全部文件都会被移除。`)) return;
     setDeletingSkillId(skill.id);
     try {
       await deleteSkill(skill.id);
@@ -351,8 +351,7 @@ function SkillCard({ skill, loading, onOpen }: { skill: SkillView; loading: bool
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h4 className="truncate text-sm font-semibold text-text-primary">{skill.name}</h4>
-              <span className="text-xs text-success-text">已添加</span>
-              {runtime ? <span className={`text-xs ${runtimeClassName(skill.runtime.status)}`}>· {runtime}</span> : null}
+              {runtime ? <span className={`text-xs ${runtimeClassName(skill.runtime.status)}`}>{runtime}</span> : null}
             </div>
             <p className="mt-1 text-xs text-text-tertiary">来自 {skill.source}</p>
           </div>
@@ -484,7 +483,6 @@ function SkillDetailModal({
       title={
         <div className="flex w-full min-w-0 items-center gap-3">
           <span className="truncate">{skill.name}</span>
-          <span className="text-xs text-success-text">已添加</span>
           <div className="ml-auto flex shrink-0 items-center gap-1">
             {skill.origin === "user" ? (
               <>
