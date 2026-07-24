@@ -61,6 +61,7 @@ describe("private WenShu runtime approval consumption", () => {
       execution: {
         goal: "Create smoke.docx",
         skillContext: {
+          instruction: "Create documents safely.",
           primary: {
             id: "docx",
             version: "1.0.0",
