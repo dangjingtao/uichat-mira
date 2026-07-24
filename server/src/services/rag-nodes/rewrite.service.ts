@@ -2,6 +2,7 @@ import {
   providerProxyService,
   type NormalizedChatMessage,
 } from "@/services/provider-proxy.service/index.js";
+import { ConversationTrimmer } from "@/services/conversation-trimmer.js";
 import { writeStructuredLog } from "@/logger";
 import type { RagNodeResult } from "@/services/rag-node-contract";
 import {
@@ -100,8 +101,10 @@ const looksLikeValidRewrite = (originalQuestion: string, rewrittenQuestion: stri
   return rewrittenLength <= Math.max(120, Array.from(originalQuestion).length * 3);
 };
 
+const RECENT_HISTORY_LIMIT = 6;
+
 const getRecentHistory = (history?: NormalizedChatMessage[]) =>
-  (history ?? []).slice(-6);
+  ConversationTrimmer.take(history ?? [], RECENT_HISTORY_LIMIT, "tail");
 
 const shouldRewriteQuestion = (
   question: string,
