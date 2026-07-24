@@ -8,10 +8,17 @@ import { getDefaultSkillContextProvider } from "@/skills/context/provider.js";
 import { importMarkdownSkill } from "@/skills/user-skills.js";
 import { success } from "@/utils/index.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
+import skillsRoutes from "../../skills/index.js";
 
 const MAX_SKILL_MARKDOWN_BYTES = 512 * 1024;
 
 export const registerWenshuCapabilityPackRoutes = async (app: FastifyInstance) => {
+  // Canonical Skill presentation/management API is owned by routes/skills.
+  // It is registered here only because the current server composition groups
+  // settings routes under the micro-app router; callers use /skills/* paths.
+  await app.register(skillsRoutes);
+
+  // Legacy dev compatibility. New UI code must use /skills/*.
   app.get(
     "/microapps/office-suite/skills/catalog",
     routeHandler("Failed to list Skill packages", async () =>
