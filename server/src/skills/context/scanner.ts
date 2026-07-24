@@ -129,24 +129,12 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
 
   if (BLOCKED_VISIBILITIES.has(visibility)) return null;
 
-  // Legacy source-tree public Skills predate visibility metadata. Preserve only manifests
-  // that clearly carry user-facing identity + grouping fields. New source-tree Skills must
-  // use canonical category/skill layout and visibility: public.
-  const legacyPublicManifest = Boolean(
-    candidate.legacyFlat &&
-      frontmatter.id &&
-      (frontmatter.displayName || frontmatter.title) &&
-      frontmatter.category,
-  );
-
-  // User-installed packages are public by the explicit install action. Bundled packages
-  // already registered in registry.ts are also public. Other source-tree packages must pass
-  // an explicit/legacy public gate, so a helper SKILL.md cannot silently reach Agent matching.
-  const publicEligible =
-    candidate.userInstalled ||
-    Boolean(fallback) ||
-    visibility === PUBLIC_VISIBILITY ||
-    legacyPublicManifest;
+  // Source-tree flat packages are no longer a generic public-Skill surface.
+  // Flat compatibility is limited to explicit built-ins and legacy user-installed packages.
+  // Every other source-tree Skill must live at <category>/<skill-id>/SKILL.md.
+  const publicEligible = candidate.legacyFlat
+    ? candidate.userInstalled || Boolean(fallback)
+    : candidate.userInstalled || Boolean(fallback) || visibility === PUBLIC_VISIBILITY;
   if (!publicEligible) return null;
 
   const id = String(
@@ -187,14 +175,13 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
 /**
  * Public Skill discovery contract:
  *
- *   <root>/<category>/<skill>/SKILL.md  -> canonical public package layout
- *   <user-root>/<skill>/SKILL.md       -> legacy user-import compatibility
- *   <system-root>/<skill>/SKILL.md     -> legacy built-in / complete public-manifest compatibility only
+ *   <root>/<category>/<skill>/SKILL.md -> canonical public package layout
+ *   <user-root>/<skill>/SKILL.md      -> legacy user-install compatibility only
+ *   <system-root>/<skill>/SKILL.md    -> registered built-ins only
  *
- * A directory that already contains SKILL.md is treated as a complete Skill Package and is
- * never descended into. This is the structural boundary that prevents references/scripts/
- * helper SKILL.md files from becoming independent catalog entries or Agent-matchable Skills.
- * Directories beginning with '_' or '.' are reserved/internal and are never scanned.
+ * A directory that already contains SKILL.md is a complete package boundary and is never
+ * descended into. Nested references/scripts/helpers therefore cannot become independent
+ * catalog entries or Agent-matchable Skills. Directories beginning with '_' or '.' are ignored.
  */
 export class SkillScanner {
   async scan(paths = resolveSkillRootCandidates()): Promise<SkillManifest[]> {
@@ -212,7 +199,6 @@ export class SkillScanner {
         const firstLevelDir = path.join(root, entry.name);
         const flatSkillFile = path.join(firstLevelDir, "SKILL.md");
 
-        // Legacy flat package. Never descend further once a package boundary is found.
         if (await isFile(flatSkillFile)) {
           const manifest = await readCandidateManifest({
             directoryId: entry.name,
@@ -227,7 +213,6 @@ export class SkillScanner {
           continue;
         }
 
-        // Canonical layout: first level is category, second level is one Skill Package.
         let skillEntries: Dirent[];
         try {
           skillEntries = await fs.readdir(firstLevelDir, { withFileTypes: true });
