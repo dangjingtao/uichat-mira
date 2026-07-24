@@ -11,7 +11,6 @@ import {
 import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
 import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
-import { officeDocumentTool } from "../mcp/tools/office-document.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
 import { readLocateTool } from "../mcp/tools/read-locate.tool.js";
@@ -55,10 +54,10 @@ export const initializeHarnessRuntime = () => {
   registerCapability(replaceBlockTool);
   registerCapability(deletePathTool);
   registerCapability(movePathTool);
-  registerCapability(officeDocumentTool);
 
-  // Optional PDF/XLSX/PPT capabilities are reconciled from verified local
-  // runtime-pack readiness. Skill matching never controls this registration.
+  // WenShu document types are exposed as Skills, not duplicate Harness tools.
+  // Keep runtime-pack readiness observable while ensuring legacy office_* wrappers
+  // are not left registered from older bootstrap paths or persisted processes.
   reconcileWenshuOfficeHarnessCapabilities();
 
   // Compatibility-only implementations for persisted/legacy invocations.
