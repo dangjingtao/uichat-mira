@@ -112,6 +112,7 @@ type SkillCandidate = {
   skillFile: string;
   categoryFromDirectory?: string;
   userInstalled: boolean;
+  legacyFlat: boolean;
 };
 
 const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillManifest | null> => {
@@ -128,11 +129,24 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
 
   if (BLOCKED_VISIBILITIES.has(visibility)) return null;
 
+  // Legacy source-tree public Skills predate visibility metadata. Preserve only manifests
+  // that clearly carry user-facing identity + grouping fields. New source-tree Skills must
+  // use canonical category/skill layout and visibility: public.
+  const legacyPublicManifest = Boolean(
+    candidate.legacyFlat &&
+      frontmatter.id &&
+      (frontmatter.displayName || frontmatter.title) &&
+      frontmatter.category,
+  );
+
   // User-installed packages are public by the explicit install action. Bundled packages
-  // already registered in registry.ts are also public. Any other source-tree package must
-  // opt in explicitly, so an internal/helper SKILL.md cannot silently reach Agent matching.
+  // already registered in registry.ts are also public. Other source-tree packages must pass
+  // an explicit/legacy public gate, so a helper SKILL.md cannot silently reach Agent matching.
   const publicEligible =
-    candidate.userInstalled || Boolean(fallback) || visibility === PUBLIC_VISIBILITY;
+    candidate.userInstalled ||
+    Boolean(fallback) ||
+    visibility === PUBLIC_VISIBILITY ||
+    legacyPublicManifest;
   if (!publicEligible) return null;
 
   const id = String(
@@ -175,7 +189,7 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
  *
  *   <root>/<category>/<skill>/SKILL.md  -> canonical public package layout
  *   <user-root>/<skill>/SKILL.md       -> legacy user-import compatibility
- *   <system-root>/<skill>/SKILL.md     -> legacy only for registered built-ins or visibility: public
+ *   <system-root>/<skill>/SKILL.md     -> legacy built-in / complete public-manifest compatibility only
  *
  * A directory that already contains SKILL.md is treated as a complete Skill Package and is
  * never descended into. This is the structural boundary that prevents references/scripts/
@@ -204,6 +218,7 @@ export class SkillScanner {
             directoryId: entry.name,
             skillFile: flatSkillFile,
             userInstalled: userInstalledRoot,
+            legacyFlat: true,
           });
           if (manifest && !seen.has(manifest.id)) {
             seen.add(manifest.id);
@@ -230,6 +245,7 @@ export class SkillScanner {
             skillFile,
             categoryFromDirectory: entry.name,
             userInstalled: userInstalledRoot,
+            legacyFlat: false,
           });
           if (!manifest || seen.has(manifest.id)) continue;
           seen.add(manifest.id);
