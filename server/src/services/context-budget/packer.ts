@@ -1,10 +1,10 @@
 import type { NormalizedChatMessage } from "@/services/provider-proxy.message-protocol.js";
+import { ConversationTrimmer } from "@/services/conversation-trimmer.js";
 import { createAuditSection, createBaseAudit } from "./audit.js";
 import { getContextBudgetPolicy } from "./policies.js";
 import {
   estimateMessageTokens,
   estimateMessagesTokens,
-  estimateTextTokens,
 } from "./token-estimator.js";
 import type {
   ContextBudgetPackInput,
@@ -14,8 +14,6 @@ import type {
   PackedContextPayload,
 } from "./types.js";
 
-const TEXT_PART_OVERHEAD_TOKENS = 6;
-
 const withTextPart = (message: NormalizedChatMessage): NormalizedChatMessage => ({
   ...message,
   parts:
@@ -23,82 +21,6 @@ const withTextPart = (message: NormalizedChatMessage): NormalizedChatMessage => 
       ? message.parts
       : [{ type: "text", text: message.content }],
 });
-
-const trimTextToTokenBudget = (text: string, tokenBudget: number) => {
-  if (tokenBudget <= 0) {
-    return "";
-  }
-
-  if (estimateTextTokens(text) <= tokenBudget) {
-    return text;
-  }
-
-  const chars = Array.from(text);
-  let low = 0;
-  let high = chars.length;
-  let best = "";
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const candidate = chars.slice(0, mid).join("");
-    if (estimateTextTokens(candidate) <= tokenBudget) {
-      best = candidate;
-      low = mid + 1;
-      continue;
-    }
-    high = mid - 1;
-  }
-
-  return best.trimEnd();
-};
-
-const trimMessageContent = (
-  message: NormalizedChatMessage,
-  tokenBudget: number,
-): NormalizedChatMessage | null => {
-  const contentBudget = Math.max(tokenBudget - TEXT_PART_OVERHEAD_TOKENS, 0);
-  const content = trimTextToTokenBudget(message.content, contentBudget);
-  if (!content.trim()) {
-    return null;
-  }
-
-  return withTextPart({
-    role: message.role,
-    content,
-  });
-};
-
-const keepMessagesWithinBudget = (
-  messages: NormalizedChatMessage[],
-  tokenBudget: number,
-  direction: "head" | "tail",
-) => {
-  if (tokenBudget <= 0 || messages.length === 0) {
-    return [] as NormalizedChatMessage[];
-  }
-
-  const ordered = direction === "tail" ? [...messages].reverse() : messages;
-  const kept: NormalizedChatMessage[] = [];
-  let usedTokens = 0;
-
-  for (const message of ordered) {
-    const tokens = estimateMessageTokens(message);
-    const remaining = tokenBudget - usedTokens;
-    if (tokens <= remaining) {
-      kept.push(message);
-      usedTokens += tokens;
-      continue;
-    }
-
-    const trimmed = trimMessageContent(message, remaining);
-    if (trimmed) {
-      kept.push(trimmed);
-    }
-    break;
-  }
-
-  return direction === "tail" ? kept.reverse() : kept;
-};
 
 const packPayloadMessages = <TMeta>(
   payloads: ContextBudgetPayload<TMeta>[] | undefined,
@@ -129,7 +51,7 @@ const packPayloadMessages = <TMeta>(
       continue;
     }
 
-    const trimmedMessages = keepMessagesWithinBudget(
+    const trimmedMessages = ConversationTrimmer.toTokenBudget(
       payload.messages,
       Math.max(remaining, 0),
       "head",
@@ -171,7 +93,7 @@ const rebalanceForMaxInput = (input: {
   const fixedTokens = estimateMessagesTokens(fixedMessages);
   const historyBudget = Math.max(maxInputTokens - fixedTokens, 0);
 
-  return keepMessagesWithinBudget(
+  return ConversationTrimmer.toTokenBudget(
     input.historyMessages,
     Math.min(historyBudget, estimateMessagesTokens(input.historyMessages)),
     "tail",
@@ -209,12 +131,12 @@ export const packContextBudget = <TMeta = unknown>(
     latestUserMessage,
   ];
 
-  const prefaceMessages = keepMessagesWithinBudget(
+  const prefaceMessages = ConversationTrimmer.toTokenBudget(
     input.sections.prefaceMessages ?? [],
     policy.prefaceMaxTokens,
     "head",
   );
-  const instructionMessages = keepMessagesWithinBudget(
+  const instructionMessages = ConversationTrimmer.toTokenBudget(
     input.sections.instructionMessages ?? [],
     policy.instructionMaxTokens,
     "head",
@@ -224,7 +146,7 @@ export const packContextBudget = <TMeta = unknown>(
     policy.payloadMaxTokens,
   );
   const payloadMessages = payloads.flatMap((payload) => payload.messages);
-  let historyMessages = keepMessagesWithinBudget(
+  let historyMessages = ConversationTrimmer.toTokenBudget(
     input.sections.historyMessages ?? [],
     policy.historyMaxTokens,
     "tail",
