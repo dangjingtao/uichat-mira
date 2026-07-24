@@ -285,6 +285,13 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
           return finishRunWithError(state, emit);
         }
 
+        // A forked Skill Agent may surface an approval boundary while preparing
+        // its isolated execution. Pause before the Parent loop interprets the
+        // frozen Skill invocation as a normal Planner/Harness tool call.
+        if (state.pendingApproval) {
+          return pauseRunForApproval(state, emit);
+        }
+
         if (state.pendingToolCall) {
           const resumedResult = await executeFrozenToolCall(state, emit);
           if (resumedResult) {
