@@ -1,108 +1,110 @@
 ---
 name: xlsx
-description: "Create, modify and validate Excel workbooks through Mira WenShu. Supports formula-driven models, styling, charts, conditional formatting, named ranges, citations and finance modeling workflows."
+description: "Open, create, read, analyze, edit, fix, and validate Excel/spreadsheet files through an XML-first workflow derived from MiniMax's MIT-licensed minimax-xlsx skill. Preserve existing workbook structure, keep formulas live, and use deterministic scripts for packing and validation."
+license: MIT
+metadata:
+  upstream: "MiniMax-AI/skills/skills/minimax-xlsx"
+  upstreamCommit: "60aaae52bb2af8162732751a4332f62a5fef518b"
 ---
 
-# Routing
+# Mira WenShu XLSX
 
-Use `office_spreadsheet` for `.xlsx` creation, modification, inspection, recalculation preparation and verification.
+This Skill uses the MiniMax XLSX workflow as its implementation baseline.
 
-```text
-office_spreadsheet
-  create
-  modify
-  inspect
-  recalc
-  verify
-```
+SkillContext provides execution instructions and package resources only. It does not expand canonical ToolExposure. Use the currently exposed generic file/terminal capabilities to materialize and run this package. Do not route XLSX work back through the legacy openpyxl `office_spreadsheet` create/modify path when this Skill is active.
 
-Do not expose `set_cell`, `add_chart`, `merge_cells` or other openpyxl/Excel SDK primitives as Agent tools. Those operations belong inside the workbook spec.
+## Task routing
 
-# Workbook specification
+| Task | Method | Reference |
+|---|---|---|
+| READ / ANALYZE existing data | `scripts/xlsx_reader.py` + pandas when available | `skill://xlsx/references/read-analyze.md` |
+| CREATE new `.xlsx` | copy `templates/minimal_xlsx/`, edit OOXML, pack | `skill://xlsx/references/create.md` + `skill://xlsx/references/format.md` |
+| EDIT existing `.xlsx/.xlsm` | unpack → targeted OOXML edit → pack | `skill://xlsx/references/edit.md` |
+| FIX formulas | unpack → repair `<f>` nodes → pack | `skill://xlsx/references/fix.md` |
+| VALIDATE formulas/package | deterministic scripts | `skill://xlsx/references/validate.md` |
 
-The high-level spec supports:
-- workbook metadata;
-- sheets;
-- row arrays and addressed cells;
-- native Excel formulas;
-- fonts, fills, alignment, borders and number formats;
-- column widths, row heights, freeze panes and gridline visibility;
-- merged ranges;
-- comments and hyperlinks;
-- conditional formatting;
-- column/bar/line/pie charts;
-- named ranges;
-- `Sources` entries with source name, URL and notes.
+Do not load every reference at once. Read only the reference needed for the current route.
 
-# Formula rule — mandatory
+## CREATE
 
-If a value can be derived by a workbook formula, keep it as an Excel formula.
+Start from `skill://xlsx/templates/minimal_xlsx/`; do not build a package from an ad-hoc ZIP layout.
 
-Allowed hardcoded values:
-- true raw/historical reported data;
-- user-provided inputs;
-- explicit assumptions.
-
-Do not calculate projected, rolled-forward, allocated, linked or valuation outputs in Python and paste final numbers into cells. The delivered workbook must remain linked, traceable and updateable.
-
-# External data
-
-When external data is used, preserve citations in the workbook. Use at least:
+Core flow:
 
 ```text
-Source Name | Source URL
+plan workbook structure
+→ copy minimal_xlsx template
+→ edit workbook/sharedStrings/styles/worksheet XML
+→ scripts/xlsx_pack.py
+→ scripts/formula_check.py
+→ optional scripts/libreoffice_recalc.py when real recalculation is available/required
+→ deliver .xlsx
 ```
 
-Do not fabricate citations or hide source URLs behind calculated values.
+Every derived value must remain an Excel formula. Hardcode only raw facts, user inputs, and explicit assumptions.
 
-# Finance routing
+## EDIT / FIX
 
-Finance work uses the same `office_spreadsheet` runtime but stricter modeling semantics.
+Never recreate an existing workbook from scratch merely to make an edit. Never use an openpyxl round-trip as the default edit path for an existing complex workbook because it can lose unsupported OOXML structures.
 
-## Three-statement model
-Use when the task requires linked Income Statement / Balance Sheet / Cash Flow, forecast schedules, working capital, debt, retained earnings, cash roll-forward or a forecast foundation for valuation.
+Use:
 
-Required principles:
-- Raw Data remains historical-only.
-- Historical mappings reconcile to reported totals before forecast opening balances are used.
-- Forecast/derived outputs are formula-linked.
-- Include visible Balance Check.
-- Reconcile Balance Sheet cash to Cash Flow ending cash by year.
-- Retained earnings roll-forward must reconcile.
+```text
+scripts/xlsx_unpack.py input.xlsx workdir/
+→ edit only the requested OOXML nodes
+→ scripts/xlsx_pack.py workdir/ output.xlsx
+→ scripts/formula_check.py output.xlsx
+```
 
-## DCF
-Build from a forecast model unless the user explicitly asks for a simplified standalone DCF.
-Keep NOPAT, UFCF, WACC, terminal value, discounting, EV → Equity Value → implied share price and sensitivities formula-linked.
+Preserve sheet names, unrelated cells, VBA/pivot/chart/sparkline/package parts, relationships, and formatting unless the request explicitly changes them.
 
-## Comps
-Use for peer tables, trading multiples, valuation ranges and implied valuation. Keep market/company data sourced, assumptions visible and calculations formula-linked.
+For `.xlsm`, preserve `vbaProject.bin` and all existing package relationships/content types.
 
-# Recalculation and validation
+## READ / ANALYZE
 
-Create/modify flows perform recalculation preparation and verification.
+Reading and analysis must not modify the source file. Use `scripts/xlsx_reader.py` for structure/data discovery. pandas/openpyxl may be used for read-only analysis when available; they are not the write path for CREATE/EDIT.
 
-Recalculation provider order:
-1. optional Python `formulas` library when available;
-2. LibreOffice headless when available;
-3. set workbook calculation mode to automatic/full recalculation on open.
+## Formula rules
 
-Verification checks formula errors and compatibility risks. Do not present a workbook as fully validated when blocking reconciliation/model checks remain unresolved.
+1. Derived/projected/linked values stay as formulas, never Python-computed pasted values.
+2. Cross-sheet references must target real sheet names.
+3. Do not silently replace unsupported formulas, chart types, styles, or workbook structures with guessed alternatives.
+4. A protocol or package construct that cannot be preserved or executed faithfully must fail explicitly.
 
-# Hard rules
+## Deterministic validation
 
-1. Existing workbook modification is non-destructive by default; write a new `.xlsx`.
-2. Do not flatten formulas to hardcoded results.
-3. Do not silently drop workbook structure just to make an edit easier.
-4. External data requires source citations.
-5. After creation/modification, verification Evidence is required before completion.
-6. Complex finance tasks must include their model checks before delivery.
+Validation is code, not model judgment.
 
-# Completion
+- `scripts/xlsx_pack.py` rejects malformed XML before packing.
+- `scripts/formula_check.py` performs static formula/package checks.
+- `scripts/libreoffice_recalc.py` is an optional Tier-2 recalculation path when LibreOffice is actually available.
 
-A workbook task is complete only when:
-- requested workbook/artifact exists and is readable;
-- formulas/sheets/formatting/charts requested by the task are present;
-- recalculation preparation completed;
-- verification has no unresolved blocking errors;
-- source citations are present when external data was used;
-- finance-specific reconciliation checks required by the task are present and resolved.
+Do not use an LLM to inspect generated values and decide whether deterministic code "probably worked". If a deterministic operation fails, repair the protocol/input or implementation.
+
+Dynamic recalculation is not silently downgraded to success. If LibreOffice is unavailable, report that Tier-2 recalculation was unavailable; do not claim that formulas were recalculated.
+
+## Financial formatting baseline
+
+- hard-coded input / assumption font: blue `0000FF`
+- formula / computed result font: black `000000`
+- cross-sheet reference formula font: green `00B050`
+
+Read `skill://xlsx/references/format.md` before building a styled financial workbook.
+
+## Hard rules
+
+1. CREATE uses the OOXML template path.
+2. EDIT/FIX preserve the original package and edit OOXML surgically.
+3. Never flatten live formulas into hardcoded calculated outputs.
+4. Never silently drop workbook structures to make an operation easier.
+5. Never fabricate source citations or business data.
+6. Never treat model visual/readback judgment as an execution-success gate.
+7. Always write the requested final workbook artifact, not only intermediate XML/spec files.
+
+## Completion
+
+A task is complete when the requested deterministic operation succeeded, the final workbook artifact was written, and the required deterministic validation for that route passed. Optional Tier-2 recalculation is only claimed when it actually ran successfully.
+
+## Upstream
+
+Implementation baseline: MiniMax `minimax-xlsx`, MIT licensed, pinned to upstream commit `60aaae52bb2af8162732751a4332f62a5fef518b`. Mira-specific changes are limited to Skill routing, capability boundaries, and package paths.
