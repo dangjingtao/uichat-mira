@@ -9,7 +9,10 @@ import type {
 import type { SkillContext } from "@/skills/context/types.js";
 import { getSkillAgentExecutionProfile } from "@/skills/agent/profiles.js";
 import { runWenShuPiSkillAgentPilot } from "@/skills/agent/wenshu-pilot.js";
-import type { SkillAgentRequirement } from "@/skills/agent/types.js";
+import type {
+  SkillAgentApprovedInvocation,
+  SkillAgentRequirement,
+} from "@/skills/agent/types.js";
 
 const isPiSkillRuntimeEnabled = () => {
   const value = process.env.MIRA_SKILL_AGENT_RUNTIME?.trim().toLowerCase();
@@ -34,6 +37,28 @@ const isSkillAgentPendingToolCall = (
       "origin" in pendingToolCall &&
       pendingToolCall.origin === "skill_agent",
   );
+
+const getReplayApprovedInvocations = (
+  state: AgentNodeState,
+): SkillAgentApprovedInvocation[] => {
+  const pendingToolCall = state.pendingToolCall;
+  if (!isSkillAgentPendingToolCall(pendingToolCall)) return [];
+
+  // Only the invocation currently frozen for this resume may cross back into
+  // the new fork. Older approvals from previous fork boundaries must not become
+  // reusable grants that can repeat already-executed side effects.
+  return (state.approvedInvocations ?? [])
+    .filter(
+      (approval) =>
+        approval.toolId === pendingToolCall.toolId &&
+        approval.inputHash === pendingToolCall.inputHash,
+    )
+    .map((approval) => ({
+      toolId: approval.toolId,
+      inputHash: approval.inputHash,
+      input: approval.input,
+    }));
+};
 
 const toObservationStatus = (
   status: "completed" | "insufficient_evidence" | "needs_input" | "failed",
@@ -171,11 +196,7 @@ export const forkedSkillAgentNode = async (
     workspaceRoot: state.workspaceRoot,
     userId: state.userId,
     threadId: state.threadId,
-    approvedInvocations: state.approvedInvocations?.map((approval) => ({
-      toolId: approval.toolId,
-      inputHash: approval.inputHash,
-      input: approval.input,
-    })),
+    approvedInvocations: getReplayApprovedInvocations(state),
   });
 
   const facts = [
