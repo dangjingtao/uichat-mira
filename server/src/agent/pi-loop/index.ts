@@ -299,6 +299,13 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
           }
         }
 
+        // A completed forked Skill Agent returns a frozen Parent finalization
+        // packet from prepareContext. Task-local construction is already done:
+        // go straight to Generate instead of handing control back to Main Planner.
+        if (state.nextAction?.type === "answer" && state.finalizationPacket) {
+          return finishRunWithAnswer(state, emit);
+        }
+
         while (true) {
           await runStep({
             traceNodeName: "nextActionPlanner",
