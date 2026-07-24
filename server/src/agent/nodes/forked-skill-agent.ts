@@ -28,7 +28,8 @@ const getSkillContext = (state: AgentNodeState) =>
 
 const isSkillAgentPendingToolCall = (
   pendingToolCall: AgentToolCallRequest | undefined,
-): pendingToolCall is Extract<AgentToolCallRequest, { source: "llm_tool_call" }> & {
+): pendingToolCall is AgentToolCallRequest & {
+  source: "llm_tool_call";
   origin: "skill_agent";
   skillId?: string;
 } =>
