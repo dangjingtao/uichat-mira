@@ -40,7 +40,7 @@ const baseState = (): AgentNodeState =>
 describe("forkedSkillAgentNode approval replay scope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.MIRA_SKILL_AGENT_RUNTIME = "pi-core";
+    delete process.env.MIRA_SKILL_AGENT_RUNTIME;
     mocks.getProfile.mockReturnValue({
       skillId: "docx",
       engine: "pi-agent-core",
@@ -55,6 +55,12 @@ describe("forkedSkillAgentNode approval replay scope", () => {
       artifacts: [],
       trace: { engine: "pi-agent-core", skillId: "docx", toolCalls: [] },
     });
+  });
+
+  it("runs a profiled Skill without requiring a runtime environment flag", async () => {
+    await forkedSkillAgentNode(baseState());
+
+    expect(mocks.runPilot).toHaveBeenCalledOnce();
   });
 
   it("passes only the currently frozen exact approval into a replay fork", async () => {
