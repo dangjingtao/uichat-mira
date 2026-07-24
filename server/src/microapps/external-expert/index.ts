@@ -44,6 +44,15 @@ const PROVIDERS = new Set<ExternalExpertProvider>(["chatgpt", "kimi", "deepseek"
 const DEFAULT_AGENT_PROVIDER: ExternalExpertProvider = "chatgpt";
 const MAX_AGENT_QUESTION_CHARS = 8_000;
 const MAX_AGENT_CONTEXT_CHARS = 3_000;
+const INVALID_RUNTIME_CONNECTION_CODES = new Set([
+  "BRIDGE_DISCONNECTED",
+  "CHATGPT_LOGIN_REQUIRED",
+  "CHATGPT_NEW_THREAD_UNAVAILABLE",
+  "CHATGPT_PAGE_UNAVAILABLE",
+  "CHATGPT_PAGE_UNSUPPORTED",
+  "CHATGPT_TAB_UNAVAILABLE",
+  "CHATGPT_THREAD_UNAVAILABLE",
+]);
 
 const assertProvider = (provider: unknown): ExternalExpertProvider => {
   if (!PROVIDERS.has(provider as ExternalExpertProvider)) {
@@ -113,6 +122,7 @@ export const createExternalExpertService = (
   const resolveThreadContext =
     dependencies.resolveThreadContext ?? resolveDefaultThreadContext;
   const runtimeBindings = new Map<string, number>();
+  const agentRuntimeBindings = new Map<number, string>();
   const appliedThreadContexts = new Map<string, string>();
 
   const getExpert = (id: string, userId: number) => {
@@ -121,18 +131,9 @@ export const createExternalExpertService = (
     return expert;
   };
 
-  const getOrCreateExpert = (input: {
-    userId: number;
-    provider: ExternalExpertProvider;
-  }) => {
-    const existing = repository
-      .listByUser(input.userId)
-      .find((expert) => expert.provider === input.provider);
-    return existing ?? repository.create({
-      userId: input.userId,
-      name: `${input.provider} 专家`,
-      provider: input.provider,
-    });
+  const isAgentAvailable = (userId: number) => {
+    const expertId = agentRuntimeBindings.get(userId);
+    return expertId !== undefined && runtimeBindings.has(expertId);
   };
 
   const connect = async (input: {
@@ -155,14 +156,18 @@ export const createExternalExpertService = (
         suggestedAction: "确认触界扩展已连接后重新建立专家连接",
       });
     }
-    runtimeBindings.set(expert.id, result.tabId);
-    appliedThreadContexts.delete(expert.id);
-    return repository.updateConnection({
+    const connectedExpert = repository.updateConnection({
       id: expert.id,
       userId: input.userId,
       accountLabel: result.accountLabel,
       status: "ready",
     });
+    runtimeBindings.set(expert.id, result.tabId);
+    if (expert.provider === DEFAULT_AGENT_PROVIDER) {
+      agentRuntimeBindings.set(input.userId, expert.id);
+    }
+    appliedThreadContexts.delete(expert.id);
+    return connectedExpert;
   };
 
   const consult = async (input: {
@@ -178,9 +183,9 @@ export const createExternalExpertService = (
     if (tabId === undefined) {
       throw new ExternalExpertServiceError({
         code: "EXPERT_CONNECTION_UNAVAILABLE",
-        message: "外部专家网页连接不可用，请先建立新的专家连接",
+        message: "外部专家网页连接不可用，请先在问策界面创建连接",
         retryable: true,
-        suggestedAction: "使用 new_conversation 建立新的外部专家连接",
+        suggestedAction: "打开问策界面并点击创建连接",
       });
     }
     try {
@@ -207,7 +212,15 @@ export const createExternalExpertService = (
       }
       return { ...result, provider: expert.provider };
     } catch (error) {
-      if (error instanceof WebBridgeInvocationError && ["CHATGPT_LOGIN_REQUIRED", "CHATGPT_THREAD_UNAVAILABLE", "CHATGPT_PAGE_UNSUPPORTED"].includes(error.code)) {
+      if (
+        error instanceof WebBridgeInvocationError
+        && INVALID_RUNTIME_CONNECTION_CODES.has(error.code)
+      ) {
+        runtimeBindings.delete(expert.id);
+        if (agentRuntimeBindings.get(input.userId) === expert.id) {
+          agentRuntimeBindings.delete(input.userId);
+        }
+        appliedThreadContexts.delete(expert.id);
         repository.updateStatus(expert.id, input.userId, "expired");
       }
       throw error;
@@ -239,15 +252,15 @@ export const createExternalExpertService = (
       });
     }
 
-    const expert = getOrCreateExpert({
-      userId: input.userId,
-      provider: DEFAULT_AGENT_PROVIDER,
-    });
-    if (runtimeBindings.get(expert.id) === undefined) {
-      await connect({
-        userId: input.userId,
-        expertId: expert.id,
-        signal: input.signal,
+    const expertId = agentRuntimeBindings.get(input.userId);
+    const expert = expertId ? repository.getById(expertId, input.userId) : null;
+    if (!expert || !runtimeBindings.has(expert.id)) {
+      agentRuntimeBindings.delete(input.userId);
+      throw new ExternalExpertServiceError({
+        code: "EXPERT_CONNECTION_UNAVAILABLE",
+        message: "外部专家网页连接不可用，请先在问策界面创建连接",
+        retryable: true,
+        suggestedAction: "打开问策界面并点击创建连接",
       });
     }
 
@@ -296,6 +309,7 @@ export const createExternalExpertService = (
     connect,
     consult,
     ask,
+    isAgentAvailable,
   };
 };
 

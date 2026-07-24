@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test, vi } from "vitest";
 import * as harnessInvocations from "@/harness/invocations";
 import * as intentMatcherModule from "../intent/embedding-capability-matcher";
+import { externalExpertService } from "@/microapps/external-expert/index.js";
 import { createInitialAgentGraphState } from "../graph/state";
 import { buildPlannerObservationContext } from "../node-runtime";
 import { prepareContextNode } from "../nodes/prepare-context";
@@ -143,7 +144,6 @@ test("prepareContextNode keeps the initialized currentTaskFrame unchanged", asyn
     }),
   );
 
-  assert.deepEqual(patch.toolExposure?.exposedTools, []);
   assert.equal(patch.toolIntent?.query, "inspect docs");
   assert.deepEqual(initialState.currentTaskFrame, {
     globalGoal: "inspect docs",
@@ -236,6 +236,106 @@ test("prepareContextNode initializes runtime toolExposure independently from too
     );
   } finally {
     matcherSpy.mockRestore();
+  }
+});
+
+test("prepareContextNode hides external expert from a user without a runtime connection", async () => {
+  const externalExpert = makeToolDefinition("ask_external_expert", "external_expert");
+  const readOpen = makeToolDefinition("read_open");
+  const availabilitySpy = vi
+    .spyOn(externalExpertService, "isAgentAvailable")
+    .mockReturnValue(false);
+  const matcherSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "请咨询专家",
+      topCandidates: [
+        {
+          toolId: "ask_external_expert",
+          title: "问策",
+          description: "咨询外部专家",
+          score: 1,
+          embeddingScore: 1,
+          ruleScore: 0,
+          source: "internal",
+          domain: "external_expert",
+          tags: ["问策"],
+        },
+      ],
+      toolCandidates: [
+        {
+          toolId: "ask_external_expert",
+          title: "问策",
+          description: "咨询外部专家",
+          domain: "external_expert",
+          source: "internal",
+          tags: ["问策"],
+          score: 1,
+          embeddingScore: 1,
+          ruleScore: 0,
+          rerankScore: 0,
+          finalScore: 1,
+        },
+      ],
+      toolExposure: {
+        exposedToolIds: ["ask_external_expert", "read_open"],
+        exposedDefinitions: [externalExpert, readOpen],
+        reason: ["matched tools"],
+        blockedCapabilityIds: [],
+        blockedCapabilityReasons: {},
+      },
+      exposureReasons: ["matched tools"],
+    });
+
+  try {
+    const patch = await prepareContextNode(createBaseState({
+      userId: 7,
+      goal: {
+        ...createBaseState().goal,
+        text: "请咨询专家",
+      },
+    }));
+
+    assert.deepEqual(patch.toolExposure?.exposedTools, ["read_open"]);
+    assert.deepEqual(patch.toolIntent?.topCandidates, []);
+    assert.deepEqual(patch.toolIntent?.toolCandidates, []);
+    assert.deepEqual(patch.toolIntent?.toolExposure.exposedToolIds, ["read_open"]);
+    assert.equal(availabilitySpy.mock.calls[0]?.[0], 7);
+  } finally {
+    matcherSpy.mockRestore();
+    availabilitySpy.mockRestore();
+  }
+});
+
+test("prepareContextNode exposes external expert after the current user creates a connection", async () => {
+  const externalExpert = makeToolDefinition("ask_external_expert", "external_expert");
+  const availabilitySpy = vi
+    .spyOn(externalExpertService, "isAgentAvailable")
+    .mockReturnValue(true);
+  const matcherSpy = vi
+    .spyOn(intentMatcherModule, "matchToolCandidatesByEmbedding")
+    .mockResolvedValue({
+      query: "请咨询专家",
+      topCandidates: [],
+      toolCandidates: [],
+      toolExposure: {
+        exposedToolIds: ["ask_external_expert"],
+        exposedDefinitions: [externalExpert],
+        reason: ["matched external expert"],
+        blockedCapabilityIds: [],
+        blockedCapabilityReasons: {},
+      },
+      exposureReasons: ["matched external expert"],
+    });
+
+  try {
+    const patch = await prepareContextNode(createBaseState({ userId: 7 }));
+    assert.deepEqual(patch.toolExposure?.exposedTools, ["ask_external_expert"]);
+    assert.deepEqual(patch.toolIntent?.toolExposure.exposedToolIds, ["ask_external_expert"]);
+    assert.equal(availabilitySpy.mock.calls[0]?.[0], 7);
+  } finally {
+    matcherSpy.mockRestore();
+    availabilitySpy.mockRestore();
   }
 });
 

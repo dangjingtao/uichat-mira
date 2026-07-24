@@ -61,6 +61,23 @@ const createRepository = (initial?: Partial<ExternalExpert>) => {
 };
 
 describe("ExternalExpertService.ask", () => {
+  it("is unavailable until the user creates a connection in 问策", async () => {
+    const { repository } = createRepository();
+    const invokeWebBridge = vi.fn();
+    const service = createExternalExpertService({ repository, invokeWebBridge });
+
+    expect(service.isAgentAvailable(7)).toBe(false);
+    await expect(service.ask({
+      userId: 7,
+      question: "请给建议。",
+    })).rejects.toMatchObject({
+      code: "EXPERT_CONNECTION_UNAVAILABLE",
+      retryable: true,
+      suggestedAction: "打开问策界面并点击创建连接",
+    });
+    expect(invokeWebBridge).not.toHaveBeenCalled();
+  });
+
   it("uses the internally configured expert and appends bounded Mira context", async () => {
     const { repository } = createRepository();
     const invokeWebBridge = vi.fn(async (input: { tool: string; params: { message?: string } }) =>
@@ -78,6 +95,9 @@ describe("ExternalExpertService.ask", () => {
       invokeWebBridge,
       resolveThreadContext,
     });
+    await service.connect({ userId: 7, expertId: "expert-chatgpt" });
+    expect(service.isAgentAvailable(7)).toBe(true);
+    expect(service.isAgentAvailable(8)).toBe(false);
 
     const result = await service.ask({
       userId: 7,
@@ -129,6 +149,7 @@ describe("ExternalExpertService.ask", () => {
       invokeWebBridge,
       resolveThreadContext: () => "当前任务背景。",
     });
+    await service.connect({ userId: 7, expertId: "expert-chatgpt" });
 
     await service.ask({
       userId: 7,
@@ -162,11 +183,43 @@ describe("ExternalExpertService.ask", () => {
       throw sendError;
     });
     const service = createExternalExpertService({ repository, invokeWebBridge });
+    await service.connect({ userId: 7, expertId: "expert-chatgpt" });
 
     await expect(service.ask({
       userId: 7,
       question: "只允许一次发送。",
     })).rejects.toMatchObject({ code: "SEND_NOT_CONFIRMED" });
+    expect(invokeWebBridge.mock.calls.filter(([call]) => call.tool === "expert.send_message")).toHaveLength(1);
+  });
+
+  it("removes Agent availability when the runtime connection becomes stale", async () => {
+    const { repository, getExpert } = createRepository();
+    const staleError = new WebBridgeInvocationError({
+      code: "CHATGPT_TAB_UNAVAILABLE",
+      message: "ChatGPT 标签页已关闭",
+      retryable: true,
+      suggestedAction: "重新创建连接",
+    });
+    const invokeWebBridge = vi.fn(async (input: { tool: string }) => {
+      if (input.tool === "expert.connect") return { tabId: 42 };
+      throw staleError;
+    });
+    const service = createExternalExpertService({ repository, invokeWebBridge });
+    await service.connect({ userId: 7, expertId: "expert-chatgpt" });
+
+    expect(service.isAgentAvailable(7)).toBe(true);
+    await expect(service.ask({
+      userId: 7,
+      question: "检查连接。",
+    })).rejects.toBe(staleError);
+    expect(service.isAgentAvailable(7)).toBe(false);
+    expect(getExpert().status).toBe("expired");
+
+    await expect(service.ask({
+      userId: 7,
+      question: "不要自动重连。",
+    })).rejects.toMatchObject({ code: "EXPERT_CONNECTION_UNAVAILABLE" });
+    expect(invokeWebBridge.mock.calls.filter(([call]) => call.tool === "expert.connect")).toHaveLength(1);
     expect(invokeWebBridge.mock.calls.filter(([call]) => call.tool === "expert.send_message")).toHaveLength(1);
   });
 });

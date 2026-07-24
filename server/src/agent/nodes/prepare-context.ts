@@ -4,6 +4,7 @@
 import { reconcileCodeGraphHarnessCapability } from "@/harness/codegraph-capability";
 import { listCapabilityDefinitions } from "@/harness/registry";
 import { reconcileWenshuOfficeHarnessCapabilities } from "@/harness/wenshu-office-capability";
+import { externalExpertService } from "@/microapps/external-expert/index.js";
 import { prepareSkillContext, type SkillContext } from "@/skills/context/index.js";
 import { readSkillDirectiveFromRequestContext } from "@/skills/flow/context.js";
 import type {
@@ -15,6 +16,37 @@ import { emitStepNode } from "../node-runtime";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime";
 import { matchToolCandidatesByEmbedding } from "../intent/embedding-capability-matcher";
 import { getLatestUserQuestion } from "./shared";
+
+const EXTERNAL_EXPERT_TOOL_ID = "ask_external_expert";
+
+const filterExternalExpertExposure = <T extends Awaited<
+  ReturnType<typeof matchToolCandidatesByEmbedding>
+>>(matcherResult: T, available: boolean): T => {
+  if (available) return matcherResult;
+
+  const unavailableReason =
+    "ask_external_expert is unavailable until the current user creates a connection in 问策";
+  return {
+    ...matcherResult,
+    topCandidates: matcherResult.topCandidates.filter(
+      (candidate) => candidate.toolId !== EXTERNAL_EXPERT_TOOL_ID,
+    ),
+    toolCandidates: matcherResult.toolCandidates.filter(
+      (candidate) => candidate.toolId !== EXTERNAL_EXPERT_TOOL_ID,
+    ),
+    toolExposure: {
+      ...matcherResult.toolExposure,
+      exposedToolIds: matcherResult.toolExposure.exposedToolIds.filter(
+        (toolId) => toolId !== EXTERNAL_EXPERT_TOOL_ID,
+      ),
+      exposedDefinitions: matcherResult.toolExposure.exposedDefinitions.filter(
+        (definition) => definition.id !== EXTERNAL_EXPERT_TOOL_ID,
+      ),
+      reason: [...matcherResult.toolExposure.reason, unavailableReason],
+    },
+    exposureReasons: [...(matcherResult.exposureReasons ?? []), unavailableReason],
+  };
+};
 
 const toAgentToolExposureState = (
   exposedToolIds: string[],
@@ -219,16 +251,22 @@ export const prepareContextNode = async (
 
   reconcileCodeGraphHarnessCapability();
   const wenshuCapabilityState = reconcileWenshuOfficeHarnessCapabilities();
+  const externalExpertAvailable = externalExpertService.isAgentAvailable(state.userId);
 
   const toolDefinitions = listCapabilityDefinitions();
   const autoAllowedTools = toolDefinitions
-    .filter((definition) => evaluateAgentToolPolicy(definition).type === "allow")
+    .filter((definition) =>
+      evaluateAgentToolPolicy(definition).type === "allow"
+      && (definition.id !== EXTERNAL_EXPERT_TOOL_ID || externalExpertAvailable))
     .map((definition) => definition.id);
   const query = getLatestUserQuestion(state.messages) || state.goal.text;
-  const matcherResult = await matchToolCandidatesByEmbedding({
-    query,
-    config: state.intentConfig,
-  });
+  const matcherResult = filterExternalExpertExposure(
+    await matchToolCandidatesByEmbedding({
+      query,
+      config: state.intentConfig,
+    }),
+    externalExpertAvailable,
+  );
   const skillDirective = readSkillDirectiveFromRequestContext(
     state.requestContextMessages,
   );
@@ -310,6 +348,7 @@ export const prepareContextNode = async (
       wenshuRuntimePackAvailable: wenshuCapabilityState.runtimePackAvailable,
       wenshuRegisteredCapabilityIds: wenshuCapabilityState.registeredCapabilityIds,
       codebaseExploreExposed: toolExposure.exposedTools.includes("codebase_explore"),
+      externalExpertAvailable,
       currentTaskFrameWriter:
         "prepareContextNode attaches SkillContext and a bounded Skill runtime projection; Planner remains the sole writer of goal/subtask/completion inference",
     },
