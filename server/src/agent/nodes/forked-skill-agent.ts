@@ -14,11 +14,6 @@ import type {
   SkillAgentRequirement,
 } from "@/skills/agent/types.js";
 
-const isPiSkillRuntimeEnabled = () => {
-  const value = process.env.MIRA_SKILL_AGENT_RUNTIME?.trim().toLowerCase();
-  return value === "pi-core" || value === "pi_core";
-};
-
 type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
   skillContext?: SkillContext;
 };
@@ -135,8 +130,6 @@ export const forkedSkillAgentNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
 ): Promise<Partial<AgentNodeState>> => {
-  if (!isPiSkillRuntimeEnabled()) return {};
-
   const skillContext = getSkillContext(state);
   const skillId = skillContext?.primary?.id;
   if (!skillContext?.primary || !skillId) return {};
