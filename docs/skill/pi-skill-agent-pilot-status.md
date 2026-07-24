@@ -12,7 +12,11 @@ Related: `./pi-skill-agent-execution.md`
 - Pi Agent 只接收 profile 允许的 Harness tools 与 Skill-private runtime adapters，不继承 Main Agent 全量 ToolExposure。
 - `office_document / office_pdf / office_presentation / office_spreadsheet` 不恢复为全局 Harness Tool；当前仅作为私有 runtime adapter 复用。
 - Skill Agent 文件操作绑定当前 workspace。
-- Skill Agent 结果先进入现有 Evidence，再由 Parent Planner / Generate 接管最终输出。
+- Skill Agent private runtime approval 已桥接 Parent `pendingApproval / pendingToolCall / approvedInvocations`，审批绑定 exact `toolId + inputHash + args`，并使用 `origin=skill_agent` 防止 Parent Harness 偷跑 private runtime。
+- forked Skill `completed` 会先写入 Evidence，再冻结 Parent finalization；Main Planner task model 不再二次规划/施工，直接进入 Generate 交付。
+- `insufficient_evidence` 与 recoverable failure 仍回 Parent recovery；terminal failure 进入现有 Main Agent error/C contract，Generate 不运行。
+- WenShu Pi pilot 拒绝无 Evidence 且无 Artifact 的裸 `completed`。
+- 已增加 `pnpm smoke:pi-skill-agent -- --skill docx|pdf|pptx|xlsx` smoke 入口；XLSX create/edit bridge 未完成时只允许对已有工作簿做 diagnostics/read smoke。
 - Pilot 通过 `MIRA_SKILL_AGENT_RUNTIME=pi-core` 显式启用；不开启时保持原执行路径。
 
 ## 当前 Pilot 边界
@@ -37,13 +41,34 @@ Pi Agent 不应自行选择 `python -m kimi_ppt_dsl`。
 
 MiniMax XML-first CREATE / EDIT 尚缺一个正式的 Skill-private runtime bridge，因此 profile 中 `wenshu_xlsx_xml_runtime` 标记为 `pending`。在该桥接完成前，不得伪装为 XLSX create/edit 已完成接入，也不得恢复 `office_spreadsheet` legacy create/modify。
 
-## 尚未完成
+## 尚未完成 / 必须按真实结果验收
 
-1. `pnpm-lock.yaml` 尚未由真实 package-manager install 重新生成；当前仅完成依赖声明。必须在可访问 npm registry 的开发环境执行 `pnpm install` 后提交 lockfile。
-2. 未跑 typecheck / runtime smoke；不能声称 Pi Core 已在 Mira 内成功启动。
-3. Approval 目前在 forked Skill Agent 内以 governed requirement 上抛；尚未完整映射到 Parent `pendingApproval` / resume checkpoint。
-4. 文枢四个 Skill 的 tool/runtime 声明当前由 pilot profile adapter 表达；后续应把正式 schema 收敛进 Skill package manifest/frontmatter，避免双重真相。
-5. XLSX XML-first private runtime bridge 未完成。
+1. `pnpm-lock.yaml` 必须由真实 package-manager install 重新生成并提交；不能手工伪造 lockfile。
+2. 必须在安装完成后真实执行 server typecheck；未拿到命令成功结果前不能声称通过。
+3. 必须在有可用 Mira Model Gateway 配置与 WenShu Runtime Pack 的执行环境跑 DOCX/PDF/PPTX smoke；不能把脚本存在等同于 smoke PASS。
+4. XLSX XML-first private runtime bridge 仍未完成；只验收 read/diagnostics，不宣称 create/edit 完整接入。
+5. 文枢四个 Skill 的 tool/runtime 声明当前由 pilot profile adapter 表达；后续应把正式 schema 收敛进 Skill package manifest/frontmatter，避免双重真相。
+
+## Smoke 输出合同
+
+`smoke:pi-skill-agent` 至少输出并校验：
+
+```text
+skillId
+engine
+workspace
+toolExposure
+privateRuntime
+toolCalls
+approval pause/resume
+result status
+evidence count
+artifact paths
+artifact byte sizes
+mainPlanner execution events
+```
+
+DOCX/PDF/PPTX smoke 要求 non-empty workspace artifact；XLSX 在 XML bridge 完成前要求显式传入已有 `.xlsx` 做 diagnostics/read。任何失败必须 exit code != 0。
 
 ## 验收顺序
 
@@ -55,9 +80,9 @@ pnpm install
 -> PDF smoke
 -> PPTX smoke
 -> XLSX read/diagnostics smoke
--> XLSX XML runtime bridge
 -> approval/resume smoke
--> Parent Generate smoke
+-> Parent Generate / no-Main-Planner-rework smoke
+-> XLSX XML runtime bridge（后续独立完成）
 ```
 
 任何一步失败都按真实失败处理，不使用 LLM 解释性兜底。
