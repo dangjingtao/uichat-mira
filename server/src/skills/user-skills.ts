@@ -347,6 +347,22 @@ export const updateUserSkill = async (
 
 export const deleteUserSkill = async (entry: string) => {
   const resolvedEntry = requireUserSkillEntry(entry);
+  const root = path.resolve(resolveUserSkillsRoot());
   const skillDir = path.dirname(resolvedEntry);
+  const categoryDir = path.dirname(skillDir);
+
   await fs.rm(skillDir, { recursive: true, force: true });
+
+  // Canonical user packages live at <root>/<category>/<skill-id>. When the deleted
+  // Skill was the last package in its category, remove that now-empty category folder too.
+  // Legacy flat packages have categoryDir === root and therefore never remove the root.
+  if (path.resolve(categoryDir) !== root && isPathWithin(root, categoryDir)) {
+    try {
+      const remaining = await fs.readdir(categoryDir);
+      if (remaining.length === 0) await fs.rmdir(categoryDir);
+    } catch {
+      // Package deletion is the primary operation. A concurrently reused/non-empty
+      // category directory must never turn a successful Skill deletion into a failure.
+    }
+  }
 };
