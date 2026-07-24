@@ -27,6 +27,7 @@ describe("Markdown Skill import", () => {
 
     expect(imported.name).toBe("产品复盘教练");
     expect(imported.category).toBe("内容创作");
+    expect(imported.visibility).toBe("public");
     expect(imported.entry).toBe(path.join(root, "内容创作", imported.id, "SKILL.md"));
     expect(imported.content).toContain('displayName: "产品复盘教练"');
     expect(imported.content).toContain("visibility: public");
@@ -41,6 +42,21 @@ describe("Markdown Skill import", () => {
         category: "内容创作",
       }),
     ]);
+  });
+
+  it("preserves explicit internal visibility and keeps that package out of Registry", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "mira-user-skills-"));
+    tempDirs.push(root);
+    process.env.MIRA_USER_SKILLS_ROOT = root;
+
+    const imported = await importMarkdownSkill({
+      fileName: "internal-helper.md",
+      content: `---\nid: internal-helper\ndisplayName: Internal Helper\ndescription: internal only\ncategory: 测试\nvisibility: internal\n---\n\n# Internal`,
+    });
+
+    expect(imported.visibility).toBe("internal");
+    expect(imported.content).toContain("visibility: internal");
+    await expect(new SkillScanner().scan([root])).resolves.toEqual([]);
   });
 
   it("preserves explicit metadata while using category as the first-level directory", async () => {
@@ -58,6 +74,7 @@ describe("Markdown Skill import", () => {
       name: "决策复盘",
       description: "复盘关键决策",
       category: "商业金融",
+      visibility: "public",
     });
     expect(imported.entry).toBe(path.join(root, "商业金融", "decision-review", "SKILL.md"));
   });
@@ -82,6 +99,7 @@ describe("Markdown Skill import", () => {
 
     expect(updated.name).toBe("Demo Skill 2");
     expect(updated.category).toBe("工程研发");
+    expect(updated.visibility).toBe("public");
     expect(updated.featured).toBe(true);
     expect(updated.entry).toBe(path.join(root, "工程研发", imported.id, "SKILL.md"));
     expect(updated.content).toContain('displayName: "Demo Skill 2"');
