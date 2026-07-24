@@ -51,13 +51,6 @@ const SEMANTIC_HINTS: Record<string, Array<{ pattern: RegExp; weight: number; la
       label: "fertility assessment",
     },
   ],
-  "fertility-report": [
-    {
-      pattern: /备孕.*(?:全景)?报告|生育力.*报告/i,
-      weight: 0.84,
-      label: "fertility report",
-    },
-  ],
 };
 
 const normalizeId = (value: string) => value.trim().toLowerCase();
