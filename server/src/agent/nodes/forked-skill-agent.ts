@@ -1,10 +1,15 @@
 import crypto from "node:crypto";
 import { emitStepNode } from "../node-runtime.js";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime.js";
-import type { AgentObservation } from "../types.js";
+import type {
+  AgentApprovalRequest,
+  AgentObservation,
+  AgentToolCallRequest,
+} from "../types.js";
 import type { SkillContext } from "@/skills/context/types.js";
 import { getSkillAgentExecutionProfile } from "@/skills/agent/profiles.js";
 import { runWenShuPiSkillAgentPilot } from "@/skills/agent/wenshu-pilot.js";
+import type { SkillAgentRequirement } from "@/skills/agent/types.js";
 
 const isPiSkillRuntimeEnabled = () => {
   const value = process.env.MIRA_SKILL_AGENT_RUNTIME?.trim().toLowerCase();
@@ -18,6 +23,18 @@ type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
 const getSkillContext = (state: AgentNodeState) =>
   (state.currentTaskFrame as SkillAwareTaskFrame | undefined)?.skillContext;
 
+const isSkillAgentPendingToolCall = (
+  pendingToolCall: AgentToolCallRequest | undefined,
+): pendingToolCall is Extract<AgentToolCallRequest, { source: "llm_tool_call" }> & {
+  origin: "skill_agent";
+  skillId?: string;
+} =>
+  Boolean(
+    pendingToolCall &&
+      "origin" in pendingToolCall &&
+      pendingToolCall.origin === "skill_agent",
+  );
+
 const toObservationStatus = (
   status: "completed" | "insufficient_evidence" | "needs_input" | "failed",
   recoverable?: boolean,
@@ -25,6 +42,57 @@ const toObservationStatus = (
   if (status === "completed") return "ok";
   if (status === "insufficient_evidence" || status === "needs_input") return "partial";
   return recoverable === false ? "blocked" : "failed";
+};
+
+const findApprovalRequirement = (
+  requirements: SkillAgentRequirement[] | undefined,
+): SkillAgentRequirement | undefined =>
+  requirements?.find(
+    (requirement) =>
+      requirement.kind === "approval" &&
+      Boolean(requirement.toolId) &&
+      Boolean(requirement.inputHash) &&
+      Boolean(requirement.input),
+  );
+
+const buildParentApprovalPatch = (input: {
+  state: AgentNodeState;
+  skillId: string;
+  requirement: SkillAgentRequirement;
+  createdAt: string;
+}): Pick<AgentNodeState, "pendingApproval" | "pendingToolCall" | "policyDecision"> => {
+  const toolId = input.requirement.toolId!;
+  const args = structuredClone(input.requirement.input!);
+  const inputHash = input.requirement.inputHash!;
+  const pendingToolCall: AgentToolCallRequest = {
+    toolId,
+    args,
+    inputHash,
+    source: "llm_tool_call",
+    origin: "skill_agent",
+    skillId: input.skillId,
+    createdAt: input.createdAt,
+  };
+  const pendingApproval: AgentApprovalRequest = {
+    id: crypto.randomUUID(),
+    runId: input.state.runId,
+    stepId: `skill_agent:${input.skillId}`,
+    toolId,
+    reason: input.requirement.description,
+    input: args,
+    inputHash,
+    createdAt: input.createdAt,
+  };
+  return {
+    pendingToolCall,
+    pendingApproval,
+    policyDecision: {
+      type: "require_approval",
+      toolId,
+      inputHash,
+      reason: input.requirement.description,
+    },
+  };
 };
 
 export const forkedSkillAgentNode = async (
@@ -54,6 +122,7 @@ export const forkedSkillAgentNode = async (
       allowedHarnessToolIds: profile.allowedHarnessToolIds,
       runtimeBindings: profile.runtimeBindings,
       workspaceRoot: state.workspaceRoot ?? null,
+      approvalResume: isSkillAgentPendingToolCall(state.pendingToolCall),
     },
   });
 
@@ -95,6 +164,7 @@ export const forkedSkillAgentNode = async (
     approvedInvocations: state.approvedInvocations?.map((approval) => ({
       toolId: approval.toolId,
       inputHash: approval.inputHash,
+      input: approval.input,
     })),
   });
 
@@ -153,13 +223,31 @@ export const forkedSkillAgentNode = async (
     createdAt,
   };
 
+  const approvalRequirement = findApprovalRequirement(result.requirements);
+  const approvalPatch = approvalRequirement
+    ? buildParentApprovalPatch({
+        state,
+        skillId,
+        requirement: approvalRequirement,
+        createdAt,
+      })
+    : isSkillAgentPendingToolCall(state.pendingToolCall)
+      ? {
+          pendingApproval: undefined,
+          pendingToolCall: undefined,
+          policyDecision: undefined,
+        }
+      : {};
+
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-forked-skill-agent",
     nodeType: "reason",
     phase: "done",
     label: "技能执行代理",
-    summary: `Pi Skill Agent 已返回：${result.status}`,
+    summary: approvalRequirement
+      ? `Pi Skill Agent 等待审批：${approvalRequirement.toolId}`
+      : `Pi Skill Agent 已返回：${result.status}`,
     details: {
       skillId,
       status: result.status,
@@ -167,8 +255,13 @@ export const forkedSkillAgentNode = async (
       requirementCount: result.requirements?.length ?? 0,
       missingEvidenceCount: result.missingEvidence?.length ?? 0,
       toolCalls: result.trace?.toolCalls ?? [],
+      approvalToolId: approvalRequirement?.toolId ?? null,
+      approvalInputHash: approvalRequirement?.inputHash ?? null,
     },
   });
 
-  return { pendingEvidenceObservation: observation };
+  return {
+    pendingEvidenceObservation: observation,
+    ...approvalPatch,
+  };
 };
