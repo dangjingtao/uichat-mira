@@ -6,7 +6,7 @@ import {
 } from "./catalog.js";
 
 describe("Skill presentation catalog", () => {
-  it("keeps list payload lightweight and separates package status from runtime requirements", async () => {
+  it("keeps list payload lightweight and separates Skill origin from runtime requirements", async () => {
     const skills = await listSkillCatalogSummaries();
     const docx = skills.find((skill) => skill.id === "docx");
     const xlsx = skills.find((skill) => skill.id === "xlsx");
@@ -14,17 +14,17 @@ describe("Skill presentation catalog", () => {
     expect(docx).toMatchObject({
       id: "docx",
       origin: "built-in",
-      packageStatus: "bundled",
       featured: true,
     });
+    expect(docx).not.toHaveProperty("packageStatus");
     expect(docx?.runtimeRequirements).toEqual([]);
     expect(xlsx).toMatchObject({
       id: "xlsx",
       origin: "built-in",
-      packageStatus: "bundled",
       featured: true,
       runtimeRequirements: ["wenshu-office@1.0.0"],
     });
+    expect(xlsx).not.toHaveProperty("packageStatus");
     expect(docx).not.toHaveProperty("files");
     expect(docx).not.toHaveProperty("content");
     expect(docx).not.toHaveProperty("fileContents");
