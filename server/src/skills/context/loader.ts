@@ -34,6 +34,10 @@ const inferResourceKind = (relativePath: string): SkillResourceKind | null => {
   return firstSegment ? DISCLOSABLE_DIRECTORIES[firstSegment] ?? null : null;
 };
 
+const isReservedName = (name: string) => name.startsWith(".") || name.startsWith("_");
+const isNestedSkillManifest = (relativePath: string) =>
+  path.basename(relativePath).toLowerCase() === "skill.md";
+
 const walkFiles = async (root: string, current = ""): Promise<string[]> => {
   const directory = path.join(root, current);
   let entries: Dirent[];
@@ -45,9 +49,10 @@ const walkFiles = async (root: string, current = ""): Promise<string[]> => {
 
   const result: string[] = [];
   for (const entry of entries) {
+    if (isReservedName(entry.name)) continue;
     const relative = path.join(current, entry.name);
     if (entry.isDirectory()) result.push(...(await walkFiles(root, relative)));
-    else if (entry.isFile()) result.push(relative);
+    else if (entry.isFile() && !isNestedSkillManifest(relative)) result.push(relative);
   }
   return result;
 };
