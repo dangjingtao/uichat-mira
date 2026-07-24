@@ -33,6 +33,9 @@ jobs:
       - name: Install dependencies and regenerate lockfile
         run: pnpm install --no-frozen-lockfile
 
+      - name: Typecheck server
+        run: pnpm --filter @ui-chat-mira/server typecheck
+
       - name: Commit generated lockfile
         shell: bash
         run: |
