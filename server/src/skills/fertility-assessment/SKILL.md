@@ -24,15 +24,17 @@ category: 健康
 
 ## Conversation contract
 
-当本 Skill 存在 active SkillDirective 时：
+当本 Skill 存在 active Skill Runtime 时：
 
-1. `flowCompleted=false`：不要自行结束评估流程；优先按 directive.question 自然询问用户。
-2. 不重复询问用户已经明确提供的信息。
-3. 用户可以一次说很多，也可以说得很乱；由 Runtime / TaskModel 自己归类，不要求用户填表。
-4. 一次只推进一个主要问题或一组高度相关的问题，不连续抛出长清单。
-5. 3~5 轮能收够就提前进入最终确认；最多 10 轮只是上限，不是固定问卷长度。
-6. 最终确认只问一次：还有什么重要但没问到的信息。
-7. `flowCompleted=true` 后，按 directive.next 进入报告交付，不继续无休止追问。
+1. `flowCompleted=false` 且存在 `interruption.requirements`：这些字段只描述缺失的业务信息及其影响，不是已经写好的用户问题。
+2. Planner 必须结合完整用户目标判断 requirement 是否阻塞主线；只有 Planner 可以输出 `ask_user` 并组织自然的用户话术。
+3. Skill Runtime 不直接向用户追问，也不输出 `requiredAction=ask_user` 或 `directive.question`。
+4. 不重复要求用户已经明确提供的信息。
+5. 用户可以一次说很多，也可以说得很乱；由 Runtime 内部受治理的 TaskModel 自己归类，不要求用户填表。
+6. 一次只推进一个主要缺口或一组高度相关的缺口，不连续抛出长清单。
+7. 3~5 轮能收够就提前进入最终确认；最多 10 轮只是上限，不是固定问卷长度。
+8. 最终确认只需要一次；Runtime 报告该确认条件，是否现在询问仍由 Planner 决定。
+9. `flowCompleted=true` 后，按确定性的报告生成与交付路径继续，不再无休止收集信息。
 
 ## Medical safety
 
@@ -85,4 +87,4 @@ flowCompleted = true
 next.intent = generate_report
 ```
 
-说明访谈阶段已经结束，可进入 `fertility-report` 报告交付。
+说明访谈阶段已经结束，可进入确定性的报告生成与交付。最终是否结束完整用户任务，仍由 Planner 根据全局完成条件决定。
