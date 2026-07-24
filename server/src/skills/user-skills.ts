@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveUserSkillsRoot } from "./context/scanner.js";
@@ -101,7 +102,7 @@ const fileExists = async (target: string) => {
 
 const userSkillIdExists = async (root: string, id: string) => {
   if (await fileExists(path.join(root, id, "SKILL.md"))) return true;
-  let categories: Awaited<ReturnType<typeof fs.readdir>>;
+  let categories: Dirent[];
   try {
     categories = await fs.readdir(root, { withFileTypes: true });
   } catch {
