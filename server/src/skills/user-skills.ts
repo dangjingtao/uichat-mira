@@ -5,6 +5,7 @@ import { resolveUserSkillsRoot } from "./context/scanner.js";
 
 const MAX_IMPORTED_SKILL_BYTES = 512 * 1024;
 const RESERVED_SKILL_IDS = new Set(["docx", "xlsx", "pdf", "pptx"]);
+const DEFAULT_CATEGORY = "内容创作";
 
 const stripQuotes = (value: string) => {
   const trimmed = value.trim();
@@ -72,6 +73,16 @@ const slugify = (value: string) => {
   return `skill-${digest}`;
 };
 
+const normalizeCategory = (value: string) => {
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  return normalized && normalized !== "." && normalized !== ".." ? normalized : DEFAULT_CATEGORY;
+};
+
 const yamlValue = (value: string) => JSON.stringify(value);
 
 const booleanValue = (value: unknown) => {
@@ -80,20 +91,39 @@ const booleanValue = (value: unknown) => {
   return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
 };
 
+const fileExists = async (target: string) => {
+  try {
+    return (await fs.stat(target)).isFile();
+  } catch {
+    return false;
+  }
+};
+
+const userSkillIdExists = async (root: string, id: string) => {
+  if (await fileExists(path.join(root, id, "SKILL.md"))) return true;
+  let categories: Awaited<ReturnType<typeof fs.readdir>>;
+  try {
+    categories = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const category of categories) {
+    if (!category.isDirectory()) continue;
+    if (await fileExists(path.join(root, category.name, id, "SKILL.md"))) return true;
+  }
+  return false;
+};
+
 const resolveAvailableSkillId = async (requested: string) => {
   const root = resolveUserSkillsRoot();
   const base = RESERVED_SKILL_IDS.has(requested) ? `user-${requested}` : requested;
   let candidate = base;
   let suffix = 2;
-  while (true) {
-    try {
-      await fs.access(path.join(root, candidate));
-      candidate = `${base}-${suffix}`;
-      suffix += 1;
-    } catch {
-      return candidate;
-    }
+  while (await userSkillIdExists(root, candidate)) {
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
   }
+  return candidate;
 };
 
 const isPathWithin = (root: string, target: string) => {
@@ -130,6 +160,7 @@ const buildSkillMarkdown = (input: {
     `version: ${yamlValue(input.version)}`,
     `source: ${yamlValue(input.source)}`,
     `category: ${yamlValue(input.category)}`,
+    "visibility: public",
     ...(input.featured ? ["featured: true"] : []),
     ...(input.preservedMetadata ?? []).map(([key, value]) => `${key}: ${yamlValue(value)}`),
     "---",
@@ -178,7 +209,7 @@ export const importMarkdownSkill = async (input: {
   const id = await resolveAvailableSkillId(requestedId);
   const version = String(parsed.metadata.version || "1.0.0").trim();
   const source = String(parsed.metadata.source || "用户导入").trim();
-  const category = String(parsed.metadata.category || "内容创作").trim();
+  const category = normalizeCategory(String(parsed.metadata.category || DEFAULT_CATEGORY));
   const description = String(
     parsed.metadata.description || deriveDescription(parsed.body, name),
   ).trim();
@@ -195,6 +226,7 @@ export const importMarkdownSkill = async (input: {
         "source",
         "category",
         "description",
+        "visibility",
         "featured",
       ].includes(key),
   );
@@ -211,7 +243,7 @@ export const importMarkdownSkill = async (input: {
   });
 
   const root = resolveUserSkillsRoot();
-  const skillDir = path.join(root, id);
+  const skillDir = path.join(root, category, id);
   await fs.mkdir(skillDir, { recursive: true });
   const entry = path.join(skillDir, "SKILL.md");
   await fs.writeFile(entry, content, "utf8");
@@ -231,7 +263,9 @@ export const updateUserSkill = async (
   const name = input.name?.trim() || currentName;
   const version = input.version?.trim() || String(parsed.metadata.version || "1.0.0").trim();
   const source = input.source?.trim() || String(parsed.metadata.source || "用户导入").trim();
-  const category = input.category?.trim() || String(parsed.metadata.category || "内容创作").trim();
+  const category = normalizeCategory(
+    input.category?.trim() || String(parsed.metadata.category || DEFAULT_CATEGORY),
+  );
   const description = input.description?.trim() || String(
     parsed.metadata.description || deriveDescription(parsed.body, name),
   ).trim();
@@ -247,6 +281,7 @@ export const updateUserSkill = async (
         "source",
         "category",
         "description",
+        "visibility",
         "featured",
       ].includes(key),
   );
@@ -261,7 +296,22 @@ export const updateUserSkill = async (
     body: parsed.body,
     preservedMetadata,
   });
-  await fs.writeFile(resolvedEntry, content, "utf8");
+
+  const root = resolveUserSkillsRoot();
+  const currentSkillDir = path.dirname(resolvedEntry);
+  const targetSkillDir = path.join(root, category, id);
+  let targetEntry = resolvedEntry;
+
+  if (path.resolve(currentSkillDir) !== path.resolve(targetSkillDir)) {
+    if (await fileExists(path.join(targetSkillDir, "SKILL.md"))) {
+      throw new Error(`A Skill package already exists at category ${category}: ${id}`);
+    }
+    await fs.mkdir(path.dirname(targetSkillDir), { recursive: true });
+    await fs.rename(currentSkillDir, targetSkillDir);
+    targetEntry = path.join(targetSkillDir, "SKILL.md");
+  }
+
+  await fs.writeFile(targetEntry, content, "utf8");
   return {
     id,
     name,
@@ -269,7 +319,7 @@ export const updateUserSkill = async (
     source,
     category,
     description,
-    entry: resolvedEntry,
+    entry: targetEntry,
     content,
     featured,
   };
