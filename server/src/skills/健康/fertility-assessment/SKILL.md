@@ -39,6 +39,7 @@ visibility: public
 → 一次最终确认
 → 完成评估状态
 → 固定规则量化评分
+→ 应用已启用的服务 / 评分 Source Profile
 → 从同一状态生成专属报告
 → 行内交付，并在可用时提供 PDF
 ```
@@ -57,8 +58,9 @@ visibility: public
 8. **最终确认只做一次。** 确认是否还有重要遗漏；没有补充也允许明确结束收集。
 9. **报告评分由固定规则完成。** TaskModel 只归类已提供证据，不直接决定最终分数；确定性评分引擎计算 0~10 分、置信度和资料完整度。
 10. **信息不足仍形成结果。** 最终报告不得因为资料不足输出空白维度或 `score=null`；应输出向中性基准收缩的低置信度参考分，并列明缺失依据。
-11. **报告属于同一 Skill 的交付阶段。** 访谈完成后继续基于同一 assessment state 生成报告，不重新从聊天历史拼装第二份事实源。
-12. **同源渲染。** 报告内容、雷达图、评分条、行内 HTML 与 PDF 必须来自同一份结构化状态 / Report ViewModel，避免结论漂移。
+11. **Source Profile 在报告交付阶段应用。** 品牌身份、配色和经批准的评分校准只改变交付表现或已明确配置的维度，不重新解释用户事实。
+12. **报告属于同一 Skill 的交付阶段。** 访谈完成后继续基于同一 assessment state 生成报告，不重新从聊天历史拼装第二份事实源。
+13. **同源渲染。** 报告内容、雷达图、评分条、行内 HTML 与 PDF 必须来自同一份结构化状态 / Report ViewModel，避免结论漂移。
 
 ## Scoring contract
 
@@ -68,7 +70,8 @@ visibility: public
 - 分数只用于形成当前画像和排序，不代表自然受孕率、临床妊娠率或活产率。
 - AMH/AFC 不直接用于卵子质量评分；单一精液参数不构成男性不育诊断。
 - 无指征时，免疫、凝血、DFI、NK、封闭抗体等未检测不扣分，也不应列为人人必查。
-- 评分规则和医学边界以 `scoring-rules.yaml` 为 Skill source；运行时规则版本必须显示在报告中。
+- 内置医学规则以 `scoring-rules.yaml` 记录；运行时可启用 `scoring-profiles.json` 对已列出的维度做受限校准。
+- 默认 `clinical-default` 必须保持 `preserve_builtin`；只有经过专业审阅的 profile 才可启用重新计算模式。
 
 ## Service delivery contract
 
@@ -77,7 +80,15 @@ visibility: public
 - 用户只提供个人信息时，不得在报告中生成另一性别的空白十维页面。
 - 报告先展示十维雷达图和评分条，再进入“核心判断 / 已有依据 / 当前关注 / 建议补充 / 下一步计划”。
 - 图表必须由最终数值状态直接生成静态 SVG / HTML，不依赖打印时临时脚本执行。
-- 页眉、页脚、品牌色、服务团队名称等由 source 配置管理，不应散落在提示词中。
+- 页眉、页脚、品牌色、服务团队名称由 `report-profiles.json` 的 active profile 管理；修改后由 Runtime 按文件更新时间重新读取。
+
+## Source runtime contract
+
+- `report-profiles.json` 可以保存多个客户模板，通过 `activeProfileId` 选择当前服务品牌。
+- `scoring-profiles.json` 可以保存多个专业评分校准方案，通过 `activeProfileId` 选择当前方案。
+- Source 文件解析失败、字段越界或文件缺失时必须安全降级到内置默认值，并写入结构化日志；不得使整份报告失败。
+- Runtime 按文件修改时间缓存 Source；技能修改页保存文件后，下一份新报告应读取新配置，不要求修改 TypeScript。
+- Source Profile 不得改变 Conversation Flow、轮次上限、最终确认、assessment state 或内部 report handoff。
 
 ## Conversation Runtime contract
 
@@ -98,10 +109,14 @@ visibility: public
   - 信息域、结构化评估原则、数据来源语义、医学安全边界。
 - `skill://fertility-assessment/references/report-contract.md`
   - 报告字段、章节、单一事实源渲染、HTML/PDF 交付与失败降级规则。
-- `skill://fertility-assessment/references/service-report-source.yaml`
-  - 服务团队、品牌色、页眉页脚、报告封面和入口建档字段；用于技能修改页面的 source 配置。
+- `skill://fertility-assessment/references/report-profiles.json`
+  - 多客户服务身份、品牌色、页眉页脚和交付文案；这是运行时生效的报告 Profile Source。
 - `skill://fertility-assessment/references/scoring-rules.yaml`
-  - 十维评分方法、分数区间、置信度、证据字段、医学边界和依据来源；用于技能修改页面的评分 source。
+  - 十维内置评分方法、证据字段、医学边界和依据来源。
+- `skill://fertility-assessment/references/scoring-profiles.json`
+  - 医生 / 顾问可审阅的评分校准 Profile；默认不覆盖内置规则。
+- `skill://fertility-assessment/references/service-report-source.yaml`
+  - 第一、二轮设计期兼容说明；运行时配置以 JSON Profile Source 为准。
 
 只在当前阶段确实需要细节时读取对应 reference。
 
@@ -122,6 +137,7 @@ visibility: public
 服务档案已确认
 + assessment state 已完成或明确标注剩余不确定项
 + 所选全部维度已得到数值分与置信度
++ 当前 Source Profile 已应用或安全降级
 + 报告已从该 state 生成
 + 用户已获得可读的行内报告
 + PDF 可用则一并交付；不可用则明确降级，但不能丢失行内报告
