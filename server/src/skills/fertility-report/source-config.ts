@@ -52,6 +52,11 @@ export type FertilitySourceBundle = {
   diagnostics: string[];
 };
 
+export type FertilitySourceBundleRequest = {
+  reportProfileId?: string;
+  scoringProfileId?: string;
+};
+
 const DEFAULT_REPORT_PROFILE: FertilityReportProfile = {
   id: "yuanjie",
   brandName: "圆姐聊女性全周期服务",
@@ -97,6 +102,11 @@ const cleanText = (value: unknown, fallback: string, limit = 300) =>
 const cleanId = (value: unknown, fallback: string) => {
   const candidate = typeof value === "string" ? value.trim() : "";
   return /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(candidate) ? candidate : fallback;
+};
+
+const optionalId = (value: unknown) => {
+  const candidate = typeof value === "string" ? value.trim() : "";
+  return /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(candidate) ? candidate : undefined;
 };
 
 const cleanNumber = (
@@ -173,17 +183,51 @@ const readJsonSource = (filename: string, diagnostics: string[]) => {
   }
 };
 
+const selectProfile = (input: {
+  value: Record<string, unknown>;
+  requestedProfileId?: string;
+  defaultProfileId: string;
+  diagnostics?: string[];
+  sourceName: string;
+}) => {
+  const profiles = isRecord(input.value.profiles) ? input.value.profiles : {};
+  const requested = optionalId(input.requestedProfileId);
+  if (requested && isRecord(profiles[requested])) {
+    return { id: requested, selected: profiles[requested] as Record<string, unknown> };
+  }
+  if (requested) {
+    input.diagnostics?.push(
+      `${input.sourceName} 中不存在请求的 Profile“${requested}”，已回退到 activeProfileId。`,
+    );
+  }
+
+  const activeId = cleanId(input.value.activeProfileId, input.defaultProfileId);
+  if (isRecord(profiles[activeId])) {
+    return { id: activeId, selected: profiles[activeId] as Record<string, unknown> };
+  }
+  input.diagnostics?.push(
+    `${input.sourceName} 的 activeProfileId“${activeId}”无有效配置，已使用内置默认值。`,
+  );
+  return { id: input.defaultProfileId, selected: {} };
+};
+
 export const parseFertilityReportProfileSource = (
   value: unknown,
+  requestedProfileId?: string,
+  diagnostics?: string[],
 ): FertilityReportProfile => {
   if (!isRecord(value)) return DEFAULT_REPORT_PROFILE;
-  const profiles = isRecord(value.profiles) ? value.profiles : {};
-  const activeId = cleanId(value.activeProfileId, DEFAULT_REPORT_PROFILE.id);
-  const selected = isRecord(profiles[activeId]) ? profiles[activeId] : {};
-  const service = isRecord(selected.service) ? selected.service : {};
-  const theme = isRecord(selected.theme) ? selected.theme : {};
+  const resolved = selectProfile({
+    value,
+    requestedProfileId,
+    defaultProfileId: DEFAULT_REPORT_PROFILE.id,
+    diagnostics,
+    sourceName: "report-profiles.json",
+  });
+  const service = isRecord(resolved.selected.service) ? resolved.selected.service : {};
+  const theme = isRecord(resolved.selected.theme) ? resolved.selected.theme : {};
   return {
-    id: activeId,
+    id: resolved.id,
     brandName: cleanText(service.brandName, DEFAULT_REPORT_PROFILE.brandName, 120),
     teamName: cleanText(service.teamName, DEFAULT_REPORT_PROFILE.teamName, 120),
     serviceLine: cleanText(
@@ -229,11 +273,18 @@ export const parseFertilityReportProfileSource = (
 
 export const parseFertilityScoringProfileSource = (
   value: unknown,
+  requestedProfileId?: string,
+  diagnostics?: string[],
 ): FertilityScoringProfile => {
   if (!isRecord(value)) return DEFAULT_SCORING_PROFILE;
-  const profiles = isRecord(value.profiles) ? value.profiles : {};
-  const activeId = cleanId(value.activeProfileId, DEFAULT_SCORING_PROFILE.id);
-  const selected = isRecord(profiles[activeId]) ? profiles[activeId] : {};
+  const resolved = selectProfile({
+    value,
+    requestedProfileId,
+    defaultProfileId: DEFAULT_SCORING_PROFILE.id,
+    diagnostics,
+    sourceName: "scoring-profiles.json",
+  });
+  const selected = resolved.selected;
   const statusEffect = isRecord(selected.statusEffect) ? selected.statusEffect : {};
   const dimensionsRaw = isRecord(selected.dimensions) ? selected.dimensions : {};
   const dimensions: Record<string, FertilityDimensionCalibration> = {};
@@ -271,7 +322,7 @@ export const parseFertilityScoringProfileSource = (
       : "preserve_builtin";
 
   return {
-    id: activeId,
+    id: resolved.id,
     version: cleanText(
       selected.version,
       DEFAULT_SCORING_PROFILE.version,
@@ -326,13 +377,19 @@ export const parseFertilityScoringProfileSource = (
   };
 };
 
-export const loadFertilitySourceBundle = (): FertilitySourceBundle => {
+export const loadFertilitySourceBundle = (
+  request: FertilitySourceBundleRequest = {},
+): FertilitySourceBundle => {
   const diagnostics: string[] = [];
   const reportProfile = parseFertilityReportProfileSource(
     readJsonSource("report-profiles.json", diagnostics),
+    request.reportProfileId,
+    diagnostics,
   );
   const scoringProfile = parseFertilityScoringProfileSource(
     readJsonSource("scoring-profiles.json", diagnostics),
+    request.scoringProfileId,
+    diagnostics,
   );
   return { reportProfile, scoringProfile, diagnostics };
 };
