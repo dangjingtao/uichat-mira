@@ -1,4 +1,4 @@
-import { get, post, put } from "../lib/request";
+import { ApiError, ErrorCodes, get, post, put } from "../lib/request";
 
 export type GitHubConnectionStatus =
   | "unconfigured"
@@ -90,11 +90,27 @@ export function startGitHubDeviceFlow() {
   return post<GitHubDeviceFlow>("/microapps/github/device-flow", {});
 }
 
-export function pollGitHubDeviceFlow(flowId: string) {
-  return post<GitHubDeviceFlowPoll>(
-    `/microapps/github/device-flow/${encodeURIComponent(flowId)}/poll`,
-    {},
-  );
+export async function pollGitHubDeviceFlow(flowId: string) {
+  try {
+    return await post<GitHubDeviceFlowPoll>(
+      `/microapps/github/device-flow/${encodeURIComponent(flowId)}/poll`,
+      {},
+    );
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.code !== undefined &&
+      error.code !== ErrorCodes.INTERNAL_ERROR
+    ) {
+      return {
+        status: "error" as const,
+        retryable: false,
+        errorCode: String(error.code),
+        errorMessage: error.message,
+      };
+    }
+    throw error;
+  }
 }
 
 export function validateGitHubConnection() {
