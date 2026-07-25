@@ -9,6 +9,7 @@ import {
 } from "./tool-adapters.js";
 import type {
   SkillAgentApprovedInvocation,
+  SkillAgentCheckpoint,
   SkillAgentExecutionInput,
   SkillAgentExecutionResult,
   SkillAgentToolBinding,
@@ -59,6 +60,7 @@ export const prepareWenShuPiSkillAgentPilot = (input: {
   threadId?: string;
   turnId?: string;
   approvedInvocations?: SkillAgentApprovedInvocation[];
+  checkpoint?: SkillAgentCheckpoint;
 }) => {
   const skillId = input.skillContext.primary?.id;
   if (!skillId) {
@@ -83,6 +85,7 @@ export const prepareWenShuPiSkillAgentPilot = (input: {
     threadId: input.threadId,
     turnId: input.turnId,
     approvedInvocations: input.approvedInvocations,
+    checkpoint: input.checkpoint,
   };
 
   const tools: SkillAgentToolBinding[] = [createSkillResourceTool(skillId)];
@@ -114,6 +117,7 @@ export const runWenShuPiSkillAgentPilot = async (input: {
   threadId?: string;
   turnId?: string;
   approvedInvocations?: SkillAgentApprovedInvocation[];
+  checkpoint?: SkillAgentCheckpoint;
 }): Promise<SkillAgentExecutionResult> => {
   const prepared = prepareWenShuPiSkillAgentPilot(input);
   const result = await runPiSkillAgent({
