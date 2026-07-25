@@ -49,23 +49,25 @@ export const applyFertilityScoringProfile = (input: {
       return typeof calibration.criterionWeights[criterionId] === "number";
     });
 
-    const minScore = calibration.minScore ?? 0;
-    const maxScore = calibration.maxScore ?? 10;
+    const configuredMin = calibration.minScore ?? 0;
+    const configuredMax = calibration.maxScore ?? 10;
+    const minScore = Math.min(configuredMin, configuredMax);
+    const maxScore = Math.max(configuredMin, configuredMax);
     const offset = calibration.scoreOffset ?? 0;
     let score: number;
 
     if (configuredSignals.length === 0) {
       const current =
-        typeof dimension.score === "number"
-          ? dimension.score
-          : input.profile.noEvidenceReferenceScore;
+        evidenceSignals.length === 0
+          ? input.profile.noEvidenceReferenceScore
+          : typeof dimension.score === "number"
+            ? dimension.score
+            : input.profile.noEvidenceReferenceScore;
       score = current + offset;
     } else {
-      const baseScore =
-        calibration.baseScore ??
-        (typeof dimension.score === "number"
-          ? dimension.score
-          : input.profile.noEvidenceReferenceScore);
+      // A configurable profile recalculates from its own explicit baseline. Using the
+      // already-scored built-in dimension as a baseline would count the same evidence twice.
+      const baseScore = calibration.baseScore ?? input.profile.noEvidenceReferenceScore;
       const rawEffect = configuredSignals.reduce((sum, item) => {
         const criterionId = String(item.criterionId);
         return (
