@@ -1,0 +1,163 @@
+version: fertility-rubric-v2.0.0
+purpose: 用于专属生育力十维报告的量化画像；不是怀孕概率、诊断或治疗决策。
+
+method:
+  modelRole: TaskModel 只按已发布 criterionId 归类事实与证据方向，不直接输出分数。
+  engineRole: 确定性引擎依据基础分、证据权重、方向、直接性和资料完整度计算 0-10 分。
+  noEvidenceFallback:
+    score: 5.0
+    confidence: low
+    meaning: 中性基准附近的低置信度参考值；补充资料后重新计算。
+  reliability: 资料越少，分数越向 5.0 收缩；明确的直接高关注证据保留较高影响。
+
+bands:
+  - { min: 8.0, label: 优势维持 }
+  - { min: 6.5, label: 总体稳定 }
+  - { min: 5.0, label: 建议优化 }
+  - { min: 3.0, label: 需要关注 }
+  - { min: 0.0, label: 优先评估 }
+
+confidence:
+  high: 加权资料完整度 >= 72%，关键证据覆盖 >= 60%，且至少 2 项直接证据。
+  medium: 加权资料完整度 >= 38%，至少覆盖一项关键证据，且至少 1 项直接证据。
+  low: 未达到以上条件；仍输出参考分并显式展示缺失证据。
+
+globalGuardrails:
+  - 分数不代表自然受孕率、临床妊娠率或活产率。
+  - 用户口述检查结果必须标为 user_reported；没有原始报告不得伪装成已核验。
+  - AMH/AFC 主要反映卵巢储备和促排反应，不直接衡量卵子质量或自然受孕概率。
+  - 单一精液参数不是男性不育诊断；WHO 下限用于实验室解释，不是个人诊断分界。
+  - 无临床指征时，不因未做免疫、凝血、DFI、NK、封闭抗体等检查而扣分。
+  - TSH 采用实验室参考区间和临床情境；备孕阶段 2.5-4.0 mIU/L 不自动扣分。
+  - 不输出处方、个体化药物或保健品剂量。
+
+dimensions:
+  female_endometrium:
+    label: 子宫内膜与宫腔环境
+    baseScore: 6.2
+    keyEvidence: [cavity_findings, cycle_appropriate_endometrium]
+    supportingEvidence: [bleeding_pattern, uterine_history]
+  female_hormonal_balance:
+    label: 激素平衡与排卵节律
+    baseScore: 6.2
+    keyEvidence: [ovulatory_pattern]
+    supportingEvidence: [thyroid_context, prolactin_androgen, art_hormonal_response]
+  female_oocyte_context:
+    label: 卵子潜力与年龄背景
+    baseScore: 6.5
+    keyEvidence: [age_context, oocyte_embryo_outcomes]
+    supportingEvidence: [pregnancy_loss_context, oxidative_context]
+    guardrail: 不以 AMH/AFC 直接评分卵子质量。
+  female_ovarian_reserve:
+    label: 卵巢储备与促排反应
+    baseScore: 6.2
+    keyEvidence: [amh, afc, stimulation_response]
+    supportingEvidence: [basal_fsh_e2]
+    guardrail: 储备指标主要预测可募集卵泡与取卵数量，不直接预测自然受孕或活产。
+  female_metabolic_health:
+    label: 代谢健康与体重管理
+    baseScore: 6.2
+    keyEvidence: [glycemic_context]
+    supportingEvidence: [weight_context, cardiometabolic_history, activity_context]
+  female_immune_context:
+    label: 免疫与凝血相关背景
+    baseScore: 6.0
+    keyEvidence: [autoimmune_diagnosis, aps_thrombosis]
+    supportingEvidence: [rpl_indication, nonspecific_testing]
+    guardrail: 无适应证时，未做广泛免疫或凝血筛查不扣分。
+  female_pelvic_environment:
+    label: 输卵管与盆腔环境
+    baseScore: 6.3
+    keyEvidence: [tubal_patency, endometriosis]
+    supportingEvidence: [pelvic_adhesion_surgery, pelvic_infection]
+  female_nutrition:
+    label: 营养储备与关键微量营养
+    baseScore: 6.2
+    keyEvidence: [iron_status]
+    supportingEvidence: [folate_b12, vitamin_d, diet_quality]
+  female_lifestyle:
+    label: 生活方式与环境暴露
+    baseScore: 6.5
+    keyEvidence: [nicotine]
+    supportingEvidence: [alcohol_drugs, exercise, environmental_exposure]
+  female_sleep_stress:
+    label: 心理情绪、压力与睡眠
+    baseScore: 6.3
+    keyEvidence: [sleep_quality, distress_impact]
+    supportingEvidence: [support_system, shift_work]
+
+  male_dna_integrity:
+    label: 精子 DNA 完整性与氧化应激
+    baseScore: 6.2
+    keyEvidence: [dfi_result]
+    supportingEvidence: [oxidative_risk, varicocele_context, art_rpl_context]
+    guardrail: DFI 不是所有人的常规必查项，未检测不扣分。
+  male_morphology:
+    label: 精子形态与结构质量
+    baseScore: 6.3
+    keyEvidence: [normal_forms, repeat_consistency]
+    supportingEvidence: [sample_quality, structural_history]
+  male_motility:
+    label: 精子活力与前向运动
+    baseScore: 6.3
+    keyEvidence: [progressive_motility, total_motility]
+    supportingEvidence: [repeat_sample_context, reversible_factors]
+  male_concentration:
+    label: 精子浓度与总数
+    baseScore: 6.3
+    keyEvidence: [concentration, total_sperm_number, repeat_consistency]
+    supportingEvidence: [testicular_history]
+  male_semen_volume:
+    label: 精液量与基础参数
+    baseScore: 6.3
+    keyEvidence: [semen_volume, collection_context]
+    supportingEvidence: [basic_parameters, ejaculatory_history]
+  male_hormonal_balance:
+    label: 男性激素与生精背景
+    baseScore: 6.2
+    keyEvidence: [clinical_signs, exogenous_androgen]
+    supportingEvidence: [testosterone, fsh_lh]
+  male_inflammation:
+    label: 泌尿生殖炎症相关背景
+    baseScore: 6.2
+    keyEvidence: [semen_inflammation, sti_prostatitis]
+    supportingEvidence: [urogenital_symptoms, systemic_markers]
+    guardrail: 单独外周血白细胞或 CRP 异常不得推断生殖道炎症。
+  male_nutrition:
+    label: 营养储备与抗氧化支持
+    baseScore: 6.2
+    keyEvidence: [weight_diet, documented_deficiency]
+    supportingEvidence: [supplement_safety, metabolic_context]
+  male_lifestyle:
+    label: 生活方式与生殖环境暴露
+    baseScore: 6.5
+    keyEvidence: [nicotine, heat_exposure, alcohol_drugs_androgens]
+    supportingEvidence: [exercise_occupation]
+  male_sleep_stress:
+    label: 心理情绪、压力与睡眠
+    baseScore: 6.3
+    keyEvidence: [sleep_quality, distress_impact]
+    supportingEvidence: [support_system, shift_work]
+
+evidenceBasis:
+  - id: WHO_SEMEN_2021
+    title: WHO laboratory manual for the examination and processing of human semen, 6th ed.
+    url: https://www.who.int/publications/i/item/9789240030787
+  - id: ASRM_OVARIAN_RESERVE_2020
+    title: Testing and interpreting measures of ovarian reserve: a committee opinion.
+    url: https://www.asrm.org/practice-guidance/practice-committee-documents/testing-and-interpreting-measures-of-ovarian-reserve-a-committee-opinion-2020/
+  - id: ASRM_FEMALE_EVALUATION_2021
+    title: Fertility evaluation of infertile women: a committee opinion.
+    url: https://www.asrm.org/practice-guidance/practice-committee-documents/fertility-evaluation-of-infertile-women-a-committee-opinion-2021/
+  - id: AUA_ASRM_MALE_2020
+    title: Diagnosis and treatment of infertility in men: AUA/ASRM guideline part I.
+    url: https://www.asrm.org/practice-guidance/practice-committee-documents/diagnosis-and-treatment-of-infertility-in-men-auaasrm-guideline-part-i-2020/
+  - id: ASRM_THYROID_2024
+    title: Subclinical hypothyroidism in the infertile female population: a guideline.
+    url: https://www.asrm.org/practice-guidance/practice-committee-documents/subclinical-hypothyroidism-in-the-infertile-female-population-a-guideline/
+  - id: ACOG_PREPREGNANCY_2019
+    title: Prepregnancy Counseling.
+    url: https://www.acog.org/clinical/clinical-guidance/committee-opinion/articles/2019/01/prepregnancy-counseling
+  - id: ACOG_OVARIAN_AGING_2025
+    title: Anticipatory Counseling Regarding Ovarian-Factor Fertility Decline.
+    url: https://www.acog.org/clinical/clinical-guidance/committee-statement/articles/2025/11/anticipatory-counseling-regarding-ovarian-factor-fertility-decline
