@@ -31,6 +31,13 @@ const DOMAIN_METADATA: Record<string, WorkbenchPresentation> = {
     groupOrder: 40,
     icon: "terminal",
   },
+  github: {
+    groupLabel: "GitHub",
+    groupDescription:
+      "读取已通过 GitHub 官方 installation 授权的仓库、Issue、Pull Request 与 Actions。",
+    groupOrder: 50,
+    icon: "github",
+  },
 };
 
 const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
@@ -46,6 +53,35 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
   move_path: { path: "", destinationPath: "" },
   web_search: { query: "" },
   news_search: { query: "" },
+  github_repo_read: {
+    repository: "owner/repository",
+    includeReadme: true,
+    includeLanguages: false,
+    includeBranches: false,
+    branchLimit: 20,
+    commitLimit: 5,
+  },
+  github_issue_read: {
+    repository: "owner/repository",
+    state: "open",
+    sort: "updated",
+    direction: "desc",
+    limit: 20,
+    page: 1,
+  },
+  github_pr_read: {
+    repository: "owner/repository",
+    state: "open",
+    sort: "updated",
+    direction: "desc",
+    limit: 20,
+    page: 1,
+  },
+  github_actions_status: {
+    repository: "owner/repository",
+    limit: 20,
+    page: 1,
+  },
   terminal_session: { command: "" },
 };
 
