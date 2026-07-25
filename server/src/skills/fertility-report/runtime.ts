@@ -103,6 +103,7 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       html: rawHtml,
       markdown: rawMarkdown,
       profile: sourceBundle.reportProfile,
+      scoringVersion: sourceBundle.scoringProfile.version,
     });
     const html = profiledReport.html;
     const report = {
