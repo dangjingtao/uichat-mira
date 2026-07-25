@@ -4,15 +4,13 @@ import path from "node:path";
 import { afterAll, beforeEach, test, vi } from "vitest";
 import { initializeModelConfigDatabase } from "@/db/model-config.db.js";
 import { resetDatabaseClients } from "@/db/index.js";
-import { modelConfigRepository } from "@/db/repositories/model-config.repository.js";
-import { providerConnectionRepository } from "@/db/repositories/provider-settings.repository.js";
+import { microAppProviderConfigsRepository } from "@/db/repositories/micro-app-provider-configs.repository.js";
 import { ttsProviderConfigsRepository } from "@/db/repositories/tts-provider-configs.repository.js";
 import { ttsSynthesisJobsRepository } from "@/db/repositories/tts-synthesis-jobs.repository.js";
 import { ttsRefAudiosRepository } from "@/db/repositories/tts-ref-audios.repository.js";
 import { ttsRefAudioBindingsRepository } from "@/db/repositories/tts-ref-audio-bindings.repository.js";
 import { llmService } from "@/services/llm.service.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
-import { encryptSecret } from "@/utils/crypto.js";
 
 const synthesizeWithGptSovitsMock = vi.fn();
 const llmGenerateTextMock = vi.fn();
@@ -44,6 +42,13 @@ const refAudioPath = createTimestampedTestArtifactPath(
   ".wav",
 );
 const remoteSpeechResponse = Buffer.from("remote-speech-audio");
+
+const configureApiProvider = (input: {
+  kind: "volcengine" | "openai-compatible";
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+}) => microAppProviderConfigsRepository.upsert("tts", input);
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
 
@@ -490,18 +495,12 @@ test("synthesizeGptSovits falls back to source text when task model request fail
   assert.equal(job.requestConfig.promptText, "这样说才对");
 });
 
-test("synthesize uses current voice provider model for API provider tab", async () => {
-  providerConnectionRepository.update("openai", {
+test("synthesize uses the configured microapp provider for API provider tab", async () => {
+  configureApiProvider({
+    kind: "openai-compatible",
     baseUrl: "https://api.openai.com/v1",
-    apiKeyEncrypted: encryptSecret("test-openai-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "gpt-4o-mini-tts",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "openai",
-    remoteModelId: "gpt-4o-mini-tts",
+    apiKey: "test-openai-key",
+    modelId: "gpt-4o-mini-tts",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -559,17 +558,11 @@ test("synthesize routes volcengine voice model through unidirectional ark endpoi
     }),
   );
 
-  providerConnectionRepository.update("volcengine", {
+  configureApiProvider({
+    kind: "volcengine",
     baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "doubao-seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "volcengine",
-    remoteModelId: "doubao-seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "doubao-seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -630,17 +623,11 @@ test("synthesize surfaces actionable volcengine auth guidance on 401", async () 
     }),
   );
 
-  providerConnectionRepository.update("volcengine", {
+  configureApiProvider({
+    kind: "volcengine",
     baseUrl: "https://ark.cn-beijing.volces.com/api/plan",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "doubao-seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "volcengine",
-    remoteModelId: "doubao-seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "doubao-seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -683,17 +670,11 @@ test("synthesize fails when volcengine returns 200 with json error payload", asy
     }),
   );
 
-  providerConnectionRepository.update("volcengine", {
+  configureApiProvider({
+    kind: "volcengine",
     baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "volcengine",
-    remoteModelId: "seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -735,17 +716,11 @@ test("synthesize decodes volcengine chunked audio payload into playable bytes", 
     }),
   );
 
-  providerConnectionRepository.update("volcengine", {
+  configureApiProvider({
+    kind: "volcengine",
     baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "volcengine",
-    remoteModelId: "seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -786,17 +761,11 @@ test("synthesize detects volcengine speech protocol from openspeech base url eve
     }),
   );
 
-  providerConnectionRepository.update("openai", {
+  configureApiProvider({
+    kind: "openai-compatible",
     baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "openai",
-    remoteModelId: "seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -849,17 +818,11 @@ test("synthesize accepts volcengine successful terminal status after audio chunk
     }),
   );
 
-  providerConnectionRepository.update("volcengine", {
+  configureApiProvider({
+    kind: "volcengine",
     baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "volcengine",
-    remoteModelId: "seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
@@ -898,17 +861,11 @@ test("synthesize surfaces clear guidance when volcengine returns success without
     }),
   );
 
-  providerConnectionRepository.update("volcengine", {
+  configureApiProvider({
+    kind: "volcengine",
     baseUrl: "https://openspeech.bytedance.com/api/v3/plan/tts/unidirectional",
-    apiKeyEncrypted: encryptSecret("test-volcengine-key"),
-    isEnabled: true,
-  });
-  modelConfigRepository.upsertDefault({
-    type: "voice",
-    name: "seed-tts-2.0",
-    params: JSON.stringify({ enabled: true }),
-    providerConnectionId: "volcengine",
-    remoteModelId: "seed-tts-2.0",
+    apiKey: "test-volcengine-key",
+    modelId: "seed-tts-2.0",
   });
   ttsProviderConfigsRepository.upsert("api_provider", {
     enabled: true,
