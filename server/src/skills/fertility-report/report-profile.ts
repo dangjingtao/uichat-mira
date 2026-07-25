@@ -65,15 +65,26 @@ export const applyFertilityReportProfile = (input: {
 
   let html = input.html;
   let markdown = input.markdown;
-  for (const [from, to] of replacements) {
-    html = replaceAllLiteral(html, escapeHtml(from), escapeHtml(to));
-    html = replaceAllLiteral(html, from, to);
-    markdown = replaceAllLiteral(markdown, from, to);
-  }
+  const placeholders = replacements.map((_, index) =>
+    `__MIRA_FERTILITY_PROFILE_TOKEN_${index}__`,
+  );
+
+  replacements.forEach(([from], index) => {
+    const placeholder = placeholders[index];
+    html = replaceAllLiteral(html, escapeHtml(from), placeholder);
+    html = replaceAllLiteral(html, from, placeholder);
+    markdown = replaceAllLiteral(markdown, from, placeholder);
+  });
+
+  replacements.forEach(([, to], index) => {
+    const placeholder = placeholders[index];
+    html = replaceAllLiteral(html, placeholder, escapeHtml(to));
+    markdown = replaceAllLiteral(markdown, placeholder, to);
+  });
 
   html = html.replace(
     '<main class="report"',
-    `<main class="report" data-report-profile-id="${escapeHtml(input.profile.id)}"`,
+    `<main class="report" data-report-profile-id="${escapeHtml(input.profile.id)}" data-scoring-profile-version="${escapeHtml(input.scoringVersion?.trim() || DEFAULT_TOKENS.scoringVersion)}"`,
   );
 
   return { html, markdown };
