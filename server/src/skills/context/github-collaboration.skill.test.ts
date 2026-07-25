@@ -18,8 +18,8 @@ describe("GitHub collaboration Skill package", () => {
       id: "github-collaboration",
       name: "GitHub 协作",
       version: "0.1.0",
-      category: "development",
-      source: "Mira",
+      category: "工程研发",
+      source: "Mira Lab",
     });
 
     const resources = await new SkillLoader().listResources(manifest!);
