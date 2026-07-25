@@ -38,6 +38,25 @@ const RECOMMENDATION_PREFIXES = [
   "确认",
 ] as const;
 
+const CLINICAL_ACTION_VERBS = [
+  "建议",
+  "考虑",
+  "讨论",
+  "制定",
+  "采用",
+  "尝试",
+  "补充",
+  "调整",
+  "实施",
+  "进行",
+  "选择",
+  "需要与医生",
+  "应与医生",
+] as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 const normalizeComparableText = (value: string) =>
   value
     .normalize("NFKC")
@@ -91,6 +110,9 @@ const uniqueMeaningful = (
 const containsClinicalDecision = (value: string) =>
   CLINICAL_DECISION_TERMS.some((term) => value.toLowerCase().includes(term.toLowerCase()));
 
+const containsClinicalAction = (value: string) =>
+  CLINICAL_ACTION_VERBS.some((verb) => value.includes(verb));
+
 const firstClause = (value: string) =>
   value
     .split(/[，。；;！!？?]/u)[0]
@@ -137,7 +159,9 @@ const removePrescriptiveSentences = (value: string) => {
     const startsAsRecommendation = RECOMMENDATION_PREFIXES.some((prefix) =>
       trimmed.startsWith(prefix),
     );
-    return !(startsAsRecommendation && containsClinicalDecision(trimmed));
+    const containsTreatmentDirection =
+      containsClinicalDecision(trimmed) && containsClinicalAction(trimmed);
+    return !startsAsRecommendation && !containsTreatmentDirection;
   });
   return softenOutcomeClaims(retained.join("").trim());
 };
@@ -145,9 +169,7 @@ const removePrescriptiveSentences = (value: string) => {
 const evidenceFacts = (dimension: FertilityDimension) =>
   dimension.evidence
     .map((item) =>
-      item && typeof item === "object" && typeof item.fact === "string"
-        ? item.fact.trim()
-        : "",
+      isRecord(item) && typeof item.fact === "string" ? item.fact.trim() : "",
     )
     .filter(Boolean);
 
