@@ -6,7 +6,7 @@ import {
 } from "@/db/repositories/general-settings.repository.js";
 
 const GITHUB_PROXY_HOSTS = new Set(["github.com", "api.github.com"]);
-const INSTALL_MARKER = Symbol.for("uichat-mira.github-proxy-fetch-installed");
+const INSTALL_MARKER = "__UI_CHAT_MIRA_GITHUB_PROXY_FETCH_INSTALLED__" as const;
 
 type GlobalWithInstallMarker = typeof globalThis & {
   [INSTALL_MARKER]?: boolean;
