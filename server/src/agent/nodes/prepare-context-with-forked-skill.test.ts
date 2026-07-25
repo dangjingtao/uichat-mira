@@ -78,6 +78,38 @@ describe("prepareContextWithForkedSkillAgentNode", () => {
     expect(result.errorMessage).toBeUndefined();
   });
 
+  it("narrows Parent recovery to the Skill profile read surface", async () => {
+    mocks.basePrepare.mockResolvedValue({
+      toolExposure: {
+        exposedTools: [
+          "read_open",
+          "read_extract",
+          "terminal_session",
+          "codebase_explore",
+          "edit_file",
+        ],
+        toolMeta: [
+          { toolId: "read_open", title: "Read Open", description: "read" },
+          { toolId: "read_extract", title: "Read Extract", description: "read" },
+          { toolId: "terminal_session", title: "Terminal", description: "run" },
+          { toolId: "codebase_explore", title: "Explore", description: "explore" },
+          { toolId: "edit_file", title: "Edit", description: "edit" },
+        ],
+      },
+    });
+    mocks.forkedSkill.mockResolvedValue({
+      pendingEvidenceObservation: observation("failed"),
+    });
+
+    const result = await prepareContextWithForkedSkillAgentNode(state);
+
+    expect(result.toolExposure?.exposedTools).toEqual(["read_open", "read_extract"]);
+    expect(result.toolExposure?.toolMeta.map((tool) => tool.toolId)).toEqual([
+      "read_open",
+      "read_extract",
+    ]);
+  });
+
   it("routes terminal Skill failure into the existing error contract", async () => {
     mocks.forkedSkill.mockResolvedValue({
       pendingEvidenceObservation: {
