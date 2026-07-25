@@ -27,9 +27,9 @@ Harness 当前注册四个独立工具，每个工具有自己的参数 Schema�
 | `github_pr_read` | 列出或读取 Pull Request；单条模式可读取文件、评论和 Reviews | `repository`、`number`、`state`、`base`、`head`、`includeFiles`、`includeComments`、`includeReviews`、`detailLimit`、`limit`、`page` |
 | `github_actions_status` | 列出或读取 workflow run；单条模式可读取 Jobs 与 Steps | `repository`、`runId`、`workflow`、`branch`、`event`、`status`、`actor`、`includeJobs`、`jobLimit`、`limit`、`page` |
 
-四个工具执行前都会使用当前 GitHub 用户令牌读取 installation 的真实仓库列表，并再次验证目标 `owner/repository` 是否已经授权。模型传入仓库名不能绕过 installation 边界。
+四个工具执行前都会使用当前 GitHub 用户令牌读取 installation 的真实仓库列表，并再次验证目标 `owner/repository` 是否已经授权。模型传入仓库名不能绕过 installation 边界；Issue 自由搜索文本也会被限制为标题/正文搜索，不能注入额外 `repo:` 限定符。
 
-四个工具在 Tools 工作台中归入同一个 `github_read` 工具包，但仍然是四个独立执行单元。它们均为网络只读能力：
+四个工具在 Tools 工作台中归入同一个 **GitHub** 工具包（`groupId = github`），但仍然是四个独立执行单元。它们均为网络只读能力：
 
 ```text
 sideEffect = network
