@@ -1,5 +1,7 @@
 export type BuiltInSkillPackageId = "docx" | "pdf" | "xlsx" | "pptx";
 
+export const MIRA_LAB_SKILL_SOURCE = "Mira Lab";
+
 export type BuiltInSkillPackageDefinition = {
   id: BuiltInSkillPackageId;
   version: string;
@@ -72,7 +74,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     id: "docx",
     version: "1.0.0",
     name: "Word 文档处理",
-    source: "Mira WenShu",
+    source: MIRA_LAB_SKILL_SOURCE,
     category: "办公效率",
     description:
       "创建和审阅 Word DOCX：结构化文档生成、非破坏性副本、原生批注与 Track Changes 修订，并保留复杂文档的安全编辑边界。",
@@ -95,7 +97,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     id: "xlsx",
     version: "1.0.0",
     name: "Excel 处理",
-    source: "Kimi / WenShu",
+    source: MIRA_LAB_SKILL_SOURCE,
     category: "办公效率",
     description:
       "电子表格高级处理工具，支持公式驱动模型、格式、图表、校验，以及三表模型、DCF 和可比公司分析等财务建模方法。",
@@ -119,7 +121,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     id: "pdf",
     version: "1.0.0",
     name: "PDF 文档处理",
-    source: "Kimi / WenShu",
+    source: MIRA_LAB_SKILL_SOURCE,
     category: "办公效率",
     description:
       "专业 PDF 创建与处理：结构化报告、目录、图表、公式、引用，以及提取、表单、合并拆分、旋转裁切和元数据操作。",
@@ -138,7 +140,7 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
     id: "pptx",
     version: "1.0.0",
     name: "PowerPoint 处理",
-    source: "Kimi / WenShu",
+    source: MIRA_LAB_SKILL_SOURCE,
     category: "办公效率",
     description:
       "结构化生成可编辑 PowerPoint，支持主题、文本、形状、图片、表格和图表，并在生成前执行布局校验。",
