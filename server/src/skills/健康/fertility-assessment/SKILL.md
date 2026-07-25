@@ -80,12 +80,14 @@ visibility: public
 - 用户只提供个人信息时，不得在报告中生成另一性别的空白十维页面。
 - 报告先展示十维雷达图和评分条，再进入“核心判断 / 已有依据 / 当前关注 / 建议补充 / 下一步计划”。
 - 图表必须由最终数值状态直接生成静态 SVG / HTML，不依赖打印时临时脚本执行。
-- 页眉、页脚、品牌色、服务团队名称由 `report-profiles.json` 的 active profile 管理；修改后由 Runtime 按文件更新时间重新读取。
+- 页眉、页脚、品牌色、服务团队名称由 `report-profiles.json` 管理；`activeProfileId` 是默认模板，服务档案中的 `reportProfileId` 可以为单个客户选择另一个已发布模板。
 
 ## Source runtime contract
 
-- `report-profiles.json` 可以保存多个客户模板，通过 `activeProfileId` 选择当前服务品牌。
-- `scoring-profiles.json` 可以保存多个专业评分校准方案，通过 `activeProfileId` 选择当前方案。
+- `report-profiles.json` 可以保存多个客户模板；`activeProfileId` 选择默认模板，`facts.serviceProfile.reportProfileId` 可在不复制 Skill 的情况下为单个服务档案选择模板。
+- `scoring-profiles.json` 可以保存多个专业评分校准方案；`activeProfileId` 选择默认方案，`facts.serviceProfile.scoringProfileId` 可为经过授权的服务档案选择已审阅方案。
+- Source Profile ID 属于服务端 / 顾问配置，不应在普通客户访谈中追问，也不消耗额外对话轮次。
+- 请求的 Profile 不存在时回退到全局 active profile，并记录结构化诊断；不得让报告失败。
 - Source 文件解析失败、字段越界或文件缺失时必须安全降级到内置默认值，并写入结构化日志；不得使整份报告失败。
 - Runtime 按文件修改时间缓存 Source；技能修改页保存文件后，下一份新报告应读取新配置，不要求修改 TypeScript。
 - Source Profile 不得改变 Conversation Flow、轮次上限、最终确认、assessment state 或内部 report handoff。
