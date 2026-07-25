@@ -8,6 +8,7 @@ import { knowledgeBaseService } from "@/services/knowledge-base.service.js";
 import { previewNotionResource } from "@/microapps/notion/preview.js";
 import { badRequest, notFound, routeHandler } from "@/utils/route-errors.js";
 import { success } from "@/utils/index.js";
+import githubRoute from "./github.js";
 
 type NotionValidation = { workspaceId: string | null; workspaceName: string | null };
 
@@ -60,6 +61,10 @@ const publicConnection = (connection: NotionConnectionRecord | null) => {
 
 const notionRoute: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requireAuth);
+
+  // GitHub and Notion are account-scoped micro-apps. They currently share this
+  // authenticated composition plugin while keeping their routes and storage isolated.
+  await app.register(githubRoute);
 
   app.get("/microapps/notion", routeHandler("Failed to load Notion connection", async () => success(publicConnection(notionConnectionRepository.get()))));
   app.get<{ Querystring: { limit?: string } }>("/microapps/notion/activities", routeHandler("Failed to list Notion activities", async (request) => {
