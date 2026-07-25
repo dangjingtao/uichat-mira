@@ -4,19 +4,20 @@ import type {
   SkillDirectiveHandoffRuntime,
 } from "../../flow/types.js";
 
-const PUBLIC_SKILL_ID = "fertility-assessment";
+export const FERTILITY_ASSESSMENT_PUBLIC_SKILL_ID = "fertility-assessment";
+export const FERTILITY_REPORT_INTERNAL_HANDOFF_ID = "fertility-report";
 
 const normalizeDirectiveToAssessmentSkill = (
   directive: SkillDirective,
 ): SkillDirective => ({
   ...directive,
-  skillId: PUBLIC_SKILL_ID,
+  skillId: FERTILITY_ASSESSMENT_PUBLIC_SKILL_ID,
   ...(directive.next
     ? {
         next: {
           ...directive.next,
           ...(directive.next.targetSkillId
-            ? { targetSkillId: PUBLIC_SKILL_ID }
+            ? { targetSkillId: FERTILITY_ASSESSMENT_PUBLIC_SKILL_ID }
             : {}),
         },
       }
@@ -26,12 +27,14 @@ const normalizeDirectiveToAssessmentSkill = (
 /**
  * Report generation is an internal execution stage of fertility-assessment.
  *
- * The legacy renderer remains isolated in ../fertility-report/runtime.ts for now,
- * but it is no longer a discoverable Skill package. This adapter keeps runtime
- * output and trace ownership on the single public fertility-assessment Skill ID.
+ * `fertility-report` is retained only as the existing internal handoff lookup
+ * key. It is not a second public Skill, does not start another conversation
+ * flow, and must not change the assessment -> final confirmation -> report
+ * delivery sequence. Runtime output and trace ownership remain on the single
+ * public fertility-assessment Skill ID.
  */
 export const fertilityAssessmentReportRuntime: SkillDirectiveHandoffRuntime = {
-  skillId: PUBLIC_SKILL_ID,
+  skillId: FERTILITY_ASSESSMENT_PUBLIC_SKILL_ID,
   version: "1.0.0",
 
   async execute(input) {
@@ -42,7 +45,7 @@ export const fertilityAssessmentReportRuntime: SkillDirectiveHandoffRuntime = {
       ...result,
       session: {
         ...result.session,
-        skillId: PUBLIC_SKILL_ID,
+        skillId: FERTILITY_ASSESSMENT_PUBLIC_SKILL_ID,
         lastDirective: directive,
       },
       directive,
