@@ -6,6 +6,10 @@ import {
 } from "@/db/repositories/github-connection.repository.js";
 import { badRequest, routeHandler } from "@/utils/route-errors.js";
 import { success } from "@/utils/index.js";
+import {
+  isRetryableGitHubNetworkError,
+  nextGitHubDeviceFlowRetrySeconds,
+} from "./github-device-flow-retry.js";
 
 const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_API_ROOT = "https://api.github.com";
@@ -20,6 +24,10 @@ type DeviceFlowRecord = {
   verificationUri: string;
   expiresAt: number;
   intervalSeconds: number;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: string | null;
+  refreshTokenExpiresAt?: string | null;
 };
 
 type DeviceCodeResponse = {
@@ -80,6 +88,17 @@ type GitHubRepository = {
 };
 
 const deviceFlows = new Map<string, DeviceFlowRecord>();
+
+const retryDeviceFlowAfterNetworkError = (flow: DeviceFlowRecord) => {
+  flow.intervalSeconds = nextGitHubDeviceFlowRetrySeconds(flow.intervalSeconds);
+  return success({
+    status: "pending" as const,
+    retryable: true,
+    intervalSeconds: flow.intervalSeconds,
+    errorCode: "github_network_unavailable",
+    errorMessage: "GitHub 网络暂时不可用，Mira 将继续确认授权",
+  });
+};
 
 const githubHeaders = (token?: string) => ({
   Accept: "application/vnd.github+json",
@@ -307,7 +326,7 @@ const githubRoute: FastifyPluginAsync = async (app) => {
 
   app.post(
     "/microapps/github/device-flow",
-    routeHandler("Failed to start GitHub device flow", async () => {
+    routeHandler("Failed to start GitHub device flow", async (request) => {
       const connection = githubConnectionRepository.get();
       if (!connection?.clientId) {
         throw badRequest("请先保存 GitHub App Client ID");
@@ -316,10 +335,22 @@ const githubRoute: FastifyPluginAsync = async (app) => {
         throw badRequest("GitHub 微应用已停用");
       }
 
-      const payload = await postForm<DeviceCodeResponse>(
-        GITHUB_DEVICE_CODE_URL,
-        new URLSearchParams({ client_id: connection.clientId }),
-      );
+      let payload: DeviceCodeResponse;
+      try {
+        payload = await postForm<DeviceCodeResponse>(
+          GITHUB_DEVICE_CODE_URL,
+          new URLSearchParams({ client_id: connection.clientId }),
+        );
+      } catch (error) {
+        if (isRetryableGitHubNetworkError(error)) {
+          request.log.warn(
+            { err: error },
+            "GitHub device flow start temporarily could not reach GitHub",
+          );
+          throw badRequest("暂时无法连接 GitHub，请检查网络后重试");
+        }
+        throw error;
+      }
       if (
         payload.error ||
         !payload.device_code ||
@@ -373,60 +404,92 @@ const githubRoute: FastifyPluginAsync = async (app) => {
         return success({ status: "expired" as const });
       }
 
-      const payload = await postForm<DeviceTokenResponse>(
-        GITHUB_ACCESS_TOKEN_URL,
-        new URLSearchParams({
-          client_id: flow.clientId,
-          device_code: flow.deviceCode,
-          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        }),
-      );
+      if (!flow.accessToken) {
+        let payload: DeviceTokenResponse;
+        try {
+          payload = await postForm<DeviceTokenResponse>(
+            GITHUB_ACCESS_TOKEN_URL,
+            new URLSearchParams({
+              client_id: flow.clientId,
+              device_code: flow.deviceCode,
+              grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+            }),
+          );
+        } catch (error) {
+          if (isRetryableGitHubNetworkError(error)) {
+            request.log.warn(
+              { err: error, flowId },
+              "GitHub device flow token poll failed temporarily; retrying",
+            );
+            return retryDeviceFlowAfterNetworkError(flow);
+          }
+          throw error;
+        }
 
-      if (payload.error === "authorization_pending") {
-        return success({
-          status: "pending" as const,
-          intervalSeconds: flow.intervalSeconds,
-        });
-      }
-      if (payload.error === "slow_down") {
-        flow.intervalSeconds = Math.max(
-          payload.interval ?? flow.intervalSeconds + 5,
-          flow.intervalSeconds + 5,
-        );
-        return success({
-          status: "pending" as const,
-          intervalSeconds: flow.intervalSeconds,
-        });
-      }
-      if (payload.error) {
-        deviceFlows.delete(flowId);
-        githubConnectionRepository.upsert({
-          status: "error",
-          lastErrorCode: payload.error,
-          lastErrorMessage:
-            payload.error_description || "GitHub 设备授权失败",
-        });
-        return success({
-          status:
-            payload.error === "expired_token"
-              ? ("expired" as const)
-              : payload.error === "access_denied"
-                ? ("denied" as const)
-                : ("error" as const),
-          errorCode: payload.error,
-          errorMessage: payload.error_description ?? null,
-        });
-      }
-      if (!payload.access_token) {
-        throw badRequest("GitHub 未返回访问令牌");
+        if (payload.error === "authorization_pending") {
+          return success({
+            status: "pending" as const,
+            intervalSeconds: flow.intervalSeconds,
+          });
+        }
+        if (payload.error === "slow_down") {
+          flow.intervalSeconds = Math.max(
+            payload.interval ?? flow.intervalSeconds + 5,
+            flow.intervalSeconds + 5,
+          );
+          return success({
+            status: "pending" as const,
+            intervalSeconds: flow.intervalSeconds,
+          });
+        }
+        if (payload.error) {
+          deviceFlows.delete(flowId);
+          githubConnectionRepository.upsert({
+            status: "error",
+            lastErrorCode: payload.error,
+            lastErrorMessage:
+              payload.error_description || "GitHub 设备授权失败",
+          });
+          return success({
+            status:
+              payload.error === "expired_token"
+                ? ("expired" as const)
+                : payload.error === "access_denied"
+                  ? ("denied" as const)
+                  : ("error" as const),
+            errorCode: payload.error,
+            errorMessage: payload.error_description ?? null,
+          });
+        }
+        if (!payload.access_token) {
+          throw badRequest("GitHub 未返回访问令牌");
+        }
+
+        flow.accessToken = payload.access_token;
+        flow.refreshToken = payload.refresh_token ?? "";
+        flow.tokenExpiresAt = expiresAt(payload.expires_in);
+        flow.refreshTokenExpiresAt = expiresAt(payload.refresh_token_expires_in);
       }
 
-      const user = await readGitHubUser(payload.access_token);
+      let user: GitHubUser;
+      try {
+        user = await readGitHubUser(flow.accessToken);
+      } catch (error) {
+        if (isRetryableGitHubNetworkError(error)) {
+          request.log.warn(
+            { err: error, flowId },
+            "GitHub device flow user lookup failed temporarily; retrying",
+          );
+          return retryDeviceFlowAfterNetworkError(flow);
+        }
+        throw error;
+      }
+
       const saved = githubConnectionRepository.upsert({
-        accessToken: payload.access_token,
-        refreshToken: payload.refresh_token ?? "",
-        tokenExpiresAt: expiresAt(payload.expires_in),
-        refreshTokenExpiresAt: expiresAt(payload.refresh_token_expires_in),
+        accessToken: flow.accessToken,
+        refreshToken: flow.refreshToken ?? "",
+        tokenExpiresAt: flow.tokenExpiresAt ?? null,
+        refreshTokenExpiresAt: flow.refreshTokenExpiresAt ?? null,
         userId: String(user.id),
         login: user.login,
         avatarUrl: user.avatar_url,
