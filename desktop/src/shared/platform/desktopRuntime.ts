@@ -109,8 +109,19 @@ export async function openExternalUrl(url: string) {
   const trimmedUrl = url.trim();
   const runtime = getDesktopRuntime();
 
-  if (!/^https?:\/\//i.test(trimmedUrl)) {
-    throw new Error("仅支持打开 http(s) 外部链接");
+  if (/[\r\n]/.test(trimmedUrl)) {
+    throw new Error("仅支持打开 http(s) 或 mailto 外部链接");
+  }
+
+  let protocol = "";
+  try {
+    protocol = new URL(trimmedUrl).protocol.toLowerCase();
+  } catch {
+    throw new Error("仅支持打开 http(s) 或 mailto 外部链接");
+  }
+
+  if (protocol !== "http:" && protocol !== "https:" && protocol !== "mailto:") {
+    throw new Error("仅支持打开 http(s) 或 mailto 外部链接");
   }
 
   if (runtime.hostKind === "electron" && globalThis.window?.electronAPI?.invoke) {

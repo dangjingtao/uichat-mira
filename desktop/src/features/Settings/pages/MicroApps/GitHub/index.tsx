@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import Github from "../GithubIcon";
 import {
   Copy,
   ExternalLink,
-  Github,
   KeyRound,
   LoaderCircle,
   RefreshCcw,
@@ -249,7 +249,8 @@ export default function GitHubMicroAppPage() {
       miniTitle="Micro Apps"
       title="GitHub"
       description="连接 GitHub，选择 Mira 可以使用的项目。仓库权限由 GitHub 官方授权管理。"
-      contentClassName="space-y-5 pt-5"
+      contentClassName="flex h-full min-h-0 flex-col gap-5 pt-5"
+      scrollBody={false}
       slot={
         <div className="flex flex-wrap items-center justify-end gap-2">
           {connected ? (
@@ -272,7 +273,10 @@ export default function GitHubMicroAppPage() {
         </div>
       }
     >
-      <Card className="border-primary/20 bg-primary/5 p-5">
+      <Card
+        data-testid="github-connection-summary"
+        className="shrink-0 border-primary/20 bg-primary/5 p-5"
+      >
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-ui-panel bg-surface-primary text-text-primary shadow-shadow-sm">
             {connection?.connection.avatarUrl ? (
@@ -298,6 +302,39 @@ export default function GitHubMicroAppPage() {
               你可以在 GitHub 中选择个人账号或组织，并随时调整 Mira 能访问的项目。
             </p>
           </div>
+          {connected && (connection?.installUrl || installations.length > 0) ? (
+            <div
+              data-testid="github-project-actions"
+              className="flex shrink-0 flex-wrap items-center gap-2"
+            >
+              {connection?.installUrl ? (
+                <a
+                  href={connection.installUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="github-select-project"
+                  className="inline-flex h-9 items-center gap-2 rounded-ui-control border border-primary/20 px-3 text-sm font-medium text-primary hover:bg-primary/10"
+                >
+                  选择项目 <ExternalLink className="h-4 w-4" />
+                </a>
+              ) : null}
+              {installations.map((installation) => (
+                <a
+                  key={installation.id}
+                  href={installation.manageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid={`github-manage-project-${installation.id}`}
+                  className="inline-flex h-9 items-center gap-2 rounded-ui-control px-3 text-sm font-medium text-primary hover:bg-primary/10"
+                >
+                  {installations.length === 1
+                    ? "调整项目"
+                    : `调整 ${installation.account.login}`}
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              ))}
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-5 border-t border-border pt-4 text-left md:border-l md:border-t-0 md:pl-5 md:pt-0">
             <Metric label="账号 / 组织" value={String(installations.length)} />
             <Metric label="已授权项目" value={String(repositoryCount)} />
@@ -306,10 +343,15 @@ export default function GitHubMicroAppPage() {
       </Card>
 
       {loading ? (
-        <Card className="p-6 text-sm text-text-secondary">正在加载 GitHub 微应用...</Card>
+        <Card className="min-h-0 flex-1 p-6 text-sm text-text-secondary">
+          正在加载 GitHub 微应用...
+        </Card>
       ) : (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="min-w-0 space-y-5">
+        <div
+          data-testid="github-project-content"
+          className="min-h-0 min-w-0 flex-1"
+        >
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
             {!connected ? (
               <Card className="p-5">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
@@ -364,8 +406,12 @@ export default function GitHubMicroAppPage() {
                 ) : null}
               </Card>
             ) : (
-              <Card padding="none">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
+              <Card
+                padding="none"
+                data-testid="github-authorized-projects-card"
+                className="flex h-full min-h-0 flex-col overflow-hidden"
+              >
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border p-5">
                   <div>
                     <h3 className="font-semibold text-text-primary">已授权项目</h3>
                     <p className="mt-1 text-sm leading-6 text-text-secondary">
@@ -373,16 +419,6 @@ export default function GitHubMicroAppPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {connection?.installUrl ? (
-                      <a
-                        href={connection.installUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-9 items-center gap-2 rounded-ui-control border border-primary/20 px-3 text-sm font-medium text-primary hover:bg-primary/10"
-                      >
-                        选择项目 <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : null}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -395,46 +431,30 @@ export default function GitHubMicroAppPage() {
                   </div>
                 </div>
 
-                {installations.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <ShieldCheck className="mx-auto h-8 w-8 text-icon-secondary" />
-                    <div className="mt-3 font-medium text-text-primary">还没有授权项目</div>
-                    <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary">
-                      点击“选择项目”，在 GitHub 中选择个人账号或组织，再勾选允许 Mira 使用的仓库。
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {installations.map((installation) => (
-                      <InstallationCard key={installation.id} installation={installation} />
-                    ))}
-                  </div>
-                )}
+                <div
+                  data-testid="github-authorized-projects-scroll"
+                  className="stable-scrollbar min-h-0 flex-1 overflow-y-auto"
+                >
+                  {installations.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <ShieldCheck className="mx-auto h-8 w-8 text-icon-secondary" />
+                      <div className="mt-3 font-medium text-text-primary">还没有授权项目</div>
+                      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary">
+                        点击“选择项目”，在 GitHub 中选择个人账号或组织，再勾选允许 Mira 使用的仓库。
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {installations.map((installation) => (
+                        <InstallationCard key={installation.id} installation={installation} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Card>
             )}
           </div>
 
-          <div className="space-y-5">
-            <Card className="p-5">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 text-icon-secondary" />
-                <div>
-                  <h3 className="font-semibold text-text-primary">项目由你决定</h3>
-                  <div className="mt-3 space-y-3 text-sm leading-6 text-text-secondary">
-                    <p>GitHub 负责执行项目权限边界。你移除某个项目后，Mira 将不再能访问它。</p>
-                    <p>组织项目可能需要组织管理员批准，这是 GitHub 的安全策略。</p>
-                  </div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-5">
-              <h3 className="font-semibold text-text-primary">连接后可以做什么</h3>
-              <div className="mt-3 space-y-2 text-sm leading-6 text-text-secondary">
-                <p>查看仓库、Issue、Pull Request 与 Actions 状态。</p>
-                <p>涉及创建、修改或执行的操作，仍会遵循 Mira 的权限和确认策略。</p>
-              </div>
-            </Card>
-          </div>
         </div>
       )}
     </MicroAppPageLayout>
@@ -443,43 +463,8 @@ export default function GitHubMicroAppPage() {
 
 function InstallationCard({ installation }: { installation: GitHubInstallation }) {
   return (
-    <section className="p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          {installation.account.avatarUrl ? (
-            <img
-              src={installation.account.avatarUrl}
-              alt=""
-              className="h-10 w-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
-              <Github className="h-5 w-5" />
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="font-medium text-text-primary">{installation.account.login}</div>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Badge variant="muted">
-                {installation.repositorySelection === "selected" ? "指定项目" : "全部项目"}
-              </Badge>
-              <span className="text-xs text-text-secondary">
-                {installation.repositories.length} 个仓库
-              </span>
-            </div>
-          </div>
-        </div>
-        <a
-          href={installation.manageUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-        >
-          调整项目 <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </div>
-
-      <div className="mt-4 grid gap-2 md:grid-cols-2">
+    <section data-testid={`github-installation-${installation.id}`} className="p-5">
+      <div className="grid gap-2 md:grid-cols-2">
         {installation.repositories.map((repository) => (
           <a
             key={repository.id}

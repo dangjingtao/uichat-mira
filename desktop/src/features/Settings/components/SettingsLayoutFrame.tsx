@@ -3,6 +3,7 @@ import Header from "./Header";
 export interface SettingsLayoutFrameProps {
   miniTitle: string;
   title: string;
+  titleMeta?: React.ReactNode;
   description?: string;
   slot?: React.ReactNode;
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export interface SettingsLayoutFrameProps {
 export default function SettingsLayoutFrame({
   miniTitle,
   title,
+  titleMeta,
   description,
   slot,
   children,
@@ -37,6 +39,7 @@ export default function SettingsLayoutFrame({
         <Header
           miniTitle={miniTitle}
           title={title}
+          titleMeta={titleMeta}
           description={description}
           slot={slot}
         />

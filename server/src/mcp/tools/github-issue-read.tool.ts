@@ -34,7 +34,7 @@ const normalizeSearchText = (value: unknown) => {
     throw mcpBadRequest("query must be a string");
   }
   const query = value
-    .replace(/[\\\":()]/gu, " ")
+    .replace(/[\\":()]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
   if (!query) return undefined;

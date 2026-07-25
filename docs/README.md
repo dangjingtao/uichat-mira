@@ -102,7 +102,7 @@ Related:
 - `build/local-model-packaging.md`
 - `platform/tauri.md`
 - `platform/tauri-setup.md`
-- `CHANGELOG.md`
+- `CHANGELOG.md`（历史归档；当前产品更新日志见根目录 `../CHANGELOG.md`）
 
 ### 开发支撑
 

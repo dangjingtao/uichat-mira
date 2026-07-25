@@ -1042,6 +1042,7 @@ const zhCN = {
         chooseModel: "选择模型",
         openEditor: "编辑参数",
         viewDetails: "查看详情",
+        moreActionsAriaLabel: "{{model}} 更多操作",
         editInDialogHint: "主页只展示摘要，点击按钮后在弹窗里调整参数。",
         viewInDialogHint: "主页只展示摘要，点击按钮后在弹窗里查看当前生效配置。",
       },

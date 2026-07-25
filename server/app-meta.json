@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/dangjingtao/uichat-mira.git"
   },
-  "homepage": "https://github.com/dangjingtao/uichat-mira",
+  "homepage": "https://tomz.io",
   "appMeta": {
     "displayName": "UIChat Mira",
     "links": [
@@ -22,9 +22,9 @@
         "href": "https://github.com/dangjingtao/uichat-mira"
       },
       {
-        "label": "项目主页",
-        "value": "https://github.com/dangjingtao/uichat-mira",
-        "href": "https://github.com/dangjingtao/uichat-mira"
+        "label": "官方文档",
+        "value": "https://tomz.io",
+        "href": "https://tomz.io"
       },
       {
         "label": "组件文档",
@@ -33,16 +33,16 @@
       }
     ],
     "git": {
-      "branch": "dev",
+      "branch": "codex/feature-20260725",
       "versions": [
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "5535a1d66efad24ed4ef4bee09ec0f05fd3221b4",
-            "shortHash": "5535a1d",
-            "message": "test(agent): smoke default Pi skill ownership path",
+            "hash": "2998861c13b5db76ef2e877cd9cd05ebf7948149",
+            "shortHash": "2998861",
+            "message": "test: cover SSE route error serialization",
             "author": "DangJingtao",
-            "date": "2026-07-24T16:43:18+08:00"
+            "date": "2026-07-26T03:12:41+08:00"
           }
         },
         {

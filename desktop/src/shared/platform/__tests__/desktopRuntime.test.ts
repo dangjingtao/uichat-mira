@@ -261,9 +261,30 @@ describe("desktopRuntime", () => {
     });
   });
 
-  it("openExternalUrl 拒绝非 http(s) 链接", async () => {
+  it("openExternalUrl electron 环境将 mailto 交给系统邮件客户端", async () => {
+    const invoke = vi.fn();
+    setWindow({
+      ...window,
+      desktopRuntime: {
+        hostKind: "electron",
+        platform: "win32",
+        isPackaged: true,
+        backendUrl: "",
+      },
+      electronAPI: { invoke },
+    } as unknown as typeof globalThis.window);
+
+    await openExternalUrl("mailto:dangjingtao@gmail.com?subject=UIChat%20Mira");
+
+    expect(invoke).toHaveBeenCalledWith(
+      "desktop:open-external",
+      "mailto:dangjingtao@gmail.com?subject=UIChat%20Mira",
+    );
+  });
+
+  it("openExternalUrl 拒绝非 http(s) 或 mailto 链接", async () => {
     await expect(openExternalUrl("ftp://example.com")).rejects.toThrow(
-      "仅支持打开 http(s) 外部链接",
+      "仅支持打开 http(s) 或 mailto 外部链接",
     );
   });
 });

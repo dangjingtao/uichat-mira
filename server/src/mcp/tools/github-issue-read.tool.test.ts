@@ -26,7 +26,7 @@ describe("constrained GitHub Issue reader", () => {
     await githubIssueReadTool.execute(
       createContext({
         repository: "dangjingtao/uichat-mira",
-        query: "crash repo:someone/private is:pr",
+        query: 'crash "quoted" \\path repo:someone/private is:pr',
         assignee: "octocat",
         creator: "dangjingtao",
         updatedSince: "2026-07-01",
@@ -37,7 +37,7 @@ describe("constrained GitHub Issue reader", () => {
       expect.objectContaining({
         args: expect.objectContaining({
           repository: "dangjingtao/uichat-mira",
-          query: "crash repo someone/private is pr in:title,body",
+          query: "crash quoted path repo someone/private is pr in:title,body",
           assignee: "octocat",
           creator: "dangjingtao",
           updatedSince: "2026-07-01",
@@ -47,22 +47,22 @@ describe("constrained GitHub Issue reader", () => {
   });
 
   it("rejects filters that could inject additional search qualifiers", async () => {
-    await expect(
+    expect(() =>
       githubIssueReadTool.execute(
         createContext({
           repository: "dangjingtao/uichat-mira",
           assignee: "octocat repo:someone/private",
         }),
       ),
-    ).rejects.toThrow("assignee must be a valid GitHub login");
+    ).toThrow("assignee must be a valid GitHub login");
 
-    await expect(
+    expect(() =>
       githubIssueReadTool.execute(
         createContext({
           repository: "dangjingtao/uichat-mira",
           updatedSince: "yesterday repo:someone/private",
         }),
       ),
-    ).rejects.toThrow("updatedSince must be a valid date");
+    ).toThrow("updatedSince must be a valid date");
   });
 });

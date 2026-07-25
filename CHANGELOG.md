@@ -1,4 +1,16 @@
-# Changelog
+# 更新日志
+
+> 当前产品更新日志的唯一真相源。`docs/CHANGELOG.md` 仅保留为历史归档，不再记录当前版本变化。
+
+## 0.99.0 - 2026-07-26
+
+- 新增 GitHub 微应用，支持设备授权、账号或组织安装范围管理，以及已授权仓库浏览。
+- 增加 GitHub 仓库、Issue、Pull Request 与 Actions 的只读工具包，并在执行前校验 installation 权限边界。
+- GitHub 网络请求接入 Mira 代理设置，授权轮询可处理短暂网络故障，并在终止错误发生时停止重试。
+
+## 0.98.0 - 2026-07-22
+
+- 桌面 CI 同时发布 Electron Setup、Electron blockmap、Tauri MSI 与 Tauri NSIS 安装产物。
 
 ## 0.7.1 - 2026-06-20
 

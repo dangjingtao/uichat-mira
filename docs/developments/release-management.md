@@ -11,13 +11,14 @@ Canonical: true
 Related:
   - README.md
   - ../platform/tauri.md
-  - ../CHANGELOG.md
+  - ../../CHANGELOG.md
 
 ## 当前规则
 
 本项目当前采用统一版本号。
 
 - 根目录 `package.json` 的 `version` 是唯一版本来源。
+- 根目录 `CHANGELOG.md` 是当前产品更新日志的唯一真相源；`docs/CHANGELOG.md` 仅作历史归档。
 - `electron/package.json`、`desktop/package.json`、`server/package.json`、`packages/core/package.json`、`tauri/tauri.conf.json` 和 `tauri/Cargo.toml` 都应与根版本保持一致。
 - Windows 打包产物目录会自动带上当前版本号和构建时间戳。
 - GitHub Actions 的桌面构建和发布规则以 `../build/README.md` 与 `.github/workflows/build-desktop.yml` 为准。

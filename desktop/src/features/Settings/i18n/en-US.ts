@@ -3,6 +3,7 @@ const settingsPending = {
     about: {
       linkCopied: "Link copied",
       linkCopyFailed: "Failed to copy link",
+      linkOpenFailed: "Failed to open link",
       miniTitle: "About",
       gitInfo: "Git Repository Info",
       currentBranch: "Current Branch",
@@ -59,6 +60,26 @@ const settingsPending = {
         refresh: "Refresh",
         save: "Save",
       },
+      capabilityTags: {
+        basic: "Basic",
+        mcp: "MCP",
+        skill: "Skill",
+        toolkit: "Toolkit",
+      },
+      filters: {
+        all: "All",
+        basic: "Basic",
+        mcp: "MCP",
+        skill: "Skill",
+        toolkit: "Toolkit",
+        unclassified: "Unclassified",
+      },
+      search: {
+        ariaLabel: "Search micro apps",
+        placeholder: "Search micro apps",
+        emptyTitle: "No matching micro apps",
+        emptyDescription: "Try another capability filter or search term",
+      },
       capabilityBinding: {
         capabilityNames: {
           imageGeneration: "Text-to-image",
@@ -74,7 +95,9 @@ const settingsPending = {
         title: "Configure {{capability}} capability",
         description: "Choose the provider for this micro app. Detailed settings remain in the existing workspace.",
         unconfigured: "Not configured",
+        configure: "Configure",
         configureAriaLabel: "Configure {{capability}} capability",
+        moreActionsAriaLabel: "More {{capability}} actions",
         selectProvider: "Select a provider",
         cancel: "Cancel",
         confirm: "Confirm",

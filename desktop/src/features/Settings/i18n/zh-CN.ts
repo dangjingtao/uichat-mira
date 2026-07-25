@@ -3,6 +3,7 @@ const settingsPending = {
     about: {
       linkCopied: "链接已复制",
       linkCopyFailed: "复制链接失败",
+      linkOpenFailed: "打开链接失败",
       // Header is intentionally English; do not translate it back during i18n updates.
       miniTitle: "About",
       gitInfo: "Git 仓库信息",
@@ -60,6 +61,26 @@ const settingsPending = {
         refresh: "刷新",
         save: "保存",
       },
+      capabilityTags: {
+        basic: "基础",
+        mcp: "MCP",
+        skill: "技能",
+        toolkit: "工具包",
+      },
+      filters: {
+        all: "全部",
+        basic: "基础",
+        mcp: "MCP",
+        skill: "技能",
+        toolkit: "工具包",
+        unclassified: "未分类",
+      },
+      search: {
+        ariaLabel: "搜索微应用",
+        placeholder: "搜索微应用",
+        emptyTitle: "没有匹配的微应用",
+        emptyDescription: "试试其他能力分类或搜索关键词",
+      },
       capabilityBinding: {
         capabilityNames: {
           imageGeneration: "文生图",
@@ -75,7 +96,9 @@ const settingsPending = {
         title: "配置 {{capability}} 服务能力",
         description: "这里只指定当前微应用的服务商。具体配置继续使用对应工作区已有的配置。",
         unconfigured: "未配置",
+        configure: "配置",
         configureAriaLabel: "配置 {{capability}} 服务能力",
+        moreActionsAriaLabel: "{{capability}} 更多操作",
         selectProvider: "请选择服务商",
         cancel: "取消",
         confirm: "确定",

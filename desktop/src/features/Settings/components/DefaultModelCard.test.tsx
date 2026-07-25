@@ -107,7 +107,9 @@ describe("DefaultModelCard", () => {
       </I18nextProvider>,
     );
 
-    expect(container.querySelector(".grid.grid-cols-2")).not.toBeNull();
+    const grid = container.querySelector(".grid.grid-cols-2");
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("xl:grid-cols-3");
     expect(screen.queryByText("Chat")).not.toBeInTheDocument();
     expect(screen.getByText("AgentTask Model")).toBeInTheDocument();
     expect(screen.getByText("AgentTask subtitle")).toBeInTheDocument();

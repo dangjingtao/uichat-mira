@@ -1,11 +1,32 @@
-import { ExternalLink, GitBranch, GitCommit } from "lucide-react";
+import {
+  ExternalLink,
+  GitBranch,
+  GitCommit,
+  History,
+  Mail,
+  MessageSquarePlus,
+  Scale,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAppMeta, type AppMetaData } from "@/shared/api/system";
-import { isDesktopShell } from "@/shared/platform/desktopRuntime";
+import {
+  isDesktopShell,
+  openExternalUrl,
+} from "@/shared/platform/desktopRuntime";
 import { message } from "@/shared/ui/Message";
+import { Modal } from "@/shared/ui/Modal";
+import MarkdownText from "@/shared/ui/MarkdownText";
 import Card from "@/shared/ui/Card";
 import { appPackageMeta } from "@/shared/appMeta";
+import licenseText from "../../../../../../../LICENSE?raw";
+import changelogText from "../../../../../../../CHANGELOG.md?raw";
+
+const MAX_VISIBLE_GIT_VERSIONS = 5;
+const FEEDBACK_ISSUE_URL =
+  "https://github.com/dangjingtao/uichat-mira/issues/new";
+const FEEDBACK_EMAIL_URL =
+  "mailto:dangjingtao@gmail.com?subject=UIChat%20Mira%20反馈";
 
 const getFallbackAppMeta = (): AppMetaData => ({
   name: appPackageMeta.name,
@@ -27,7 +48,7 @@ const getFallbackAppMeta = (): AppMetaData => ({
       href: appPackageMeta.repositoryUrl,
     },
     {
-      label: "项目主页",
+      label: "官方文档",
       value: appPackageMeta.homepageUrl,
       href: appPackageMeta.homepageUrl,
     },
@@ -53,15 +74,113 @@ export default function BaseInformationPanel() {
 
   const handleExternalLinkClick = useCallback(
     async (href: string) => {
+      const isExternalUrl = /^https?:\/\//i.test(href);
       try {
+        if (isExternalUrl) {
+          await openExternalUrl(href);
+          return;
+        }
+
         await navigator.clipboard.writeText(href);
         message.success(t("settings.about.linkCopied"));
       } catch {
-        message.error(t("settings.about.linkCopyFailed"));
+        message.error(
+          t(
+            isExternalUrl
+              ? "settings.about.linkOpenFailed"
+              : "settings.about.linkCopyFailed",
+          ),
+        );
       }
     },
     [t],
   );
+
+  const openLicenseModal = useCallback(() => {
+    Modal.show({
+      title: `${appPackageMeta.license || "MIT"} License`,
+      width: 720,
+      maxHeight: 640,
+      footer: null,
+      content: (
+        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-6 text-text-secondary">
+          {licenseText}
+        </pre>
+      ),
+    });
+  }, []);
+
+  const openChangelogModal = useCallback(() => {
+    Modal.show({
+      title: "更新日志",
+      width: 760,
+      maxHeight: 720,
+      footer: null,
+      content: (
+        <MarkdownText
+          features="basic"
+          className="[&_h1]:mt-0 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:mt-6 [&_h2]:text-base [&_h2]:font-semibold [&_li]:my-1"
+        >
+          {changelogText}
+        </MarkdownText>
+      ),
+    });
+  }, []);
+
+  const openFeedbackModal = useCallback(() => {
+    let modalKey = "";
+
+    const openFeedbackTarget = async (url: string) => {
+      try {
+        await openExternalUrl(url);
+        Modal.close(modalKey);
+      } catch {
+        message.error(t("settings.about.linkOpenFailed"));
+      }
+    };
+
+    modalKey = Modal.show({
+      title: "应用反馈",
+      width: 520,
+      footer: null,
+      content: (
+        <div className="overflow-hidden rounded-ui-panel border border-border/70 bg-surface-secondary/60">
+          <button
+            type="button"
+            onClick={() => void openFeedbackTarget(FEEDBACK_ISSUE_URL)}
+            className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-surface-secondary"
+          >
+            <MessageSquarePlus className="h-4 w-4 shrink-0 text-icon-secondary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-text-primary">
+                提交 GitHub Issue
+              </span>
+              <span className="mt-0.5 block text-xs leading-5 text-text-secondary">
+                功能建议与可公开的缺陷
+              </span>
+            </span>
+            <ExternalLink className="h-4 w-4 shrink-0 text-icon-secondary" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void openFeedbackTarget(FEEDBACK_EMAIL_URL)}
+            className="flex w-full items-center gap-3 border-t border-border/70 px-3.5 py-3 text-left transition-colors hover:bg-surface-secondary"
+          >
+            <Mail className="h-4 w-4 shrink-0 text-icon-secondary" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-text-primary">
+                发送邮件
+              </span>
+              <span className="mt-0.5 block text-xs leading-5 text-text-secondary">
+                隐私、日志或其他敏感问题
+              </span>
+            </span>
+            <ExternalLink className="h-4 w-4 shrink-0 text-icon-secondary" />
+          </button>
+        </div>
+      ),
+    });
+  }, [t]);
 
   useEffect(() => {
     if (!isDesktopShell()) {
@@ -100,8 +219,11 @@ export default function BaseInformationPanel() {
             {t("settings.about.gitInfo")}
           </h2>
         </div>
-        <div className="space-y-2">
-          <div className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2">
+        <div
+          data-testid="git-version-list"
+          className="overflow-hidden rounded-ui-panel border border-border/70 bg-surface-secondary/60"
+        >
+          <div className="px-3.5 py-3">
             <div className="text-xs text-text-tertiary">
               {t("settings.about.currentBranch")}
             </div>
@@ -110,11 +232,12 @@ export default function BaseInformationPanel() {
             </div>
           </div>
           {gitInfo?.versions?.length ? (
-            <div className="space-y-2">
-              {gitInfo.versions.map((item) => (
+            <div>
+              {gitInfo.versions.slice(0, MAX_VISIBLE_GIT_VERSIONS).map((item) => (
                 <div
                   key={item.version}
-                  className="rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2"
+                  data-testid={`git-version-${item.version}`}
+                  className="border-t border-border/70 px-3.5 py-3"
                 >
                   <div className="flex items-center gap-2">
                     <GitCommit className="h-3.5 w-3.5 text-icon-secondary" />
@@ -138,8 +261,11 @@ export default function BaseInformationPanel() {
       </Card>
 
       <Card className="space-y-3">
-        <div className="space-y-2">
-          {links.map((item) => (
+        <div
+          data-testid="base-information-links"
+          className="overflow-hidden rounded-ui-panel border border-border/70 bg-surface-secondary/60"
+        >
+          {links.map((item, index) => (
             <button
               key={`${item.label}:${item.value}`}
               type="button"
@@ -148,7 +274,9 @@ export default function BaseInformationPanel() {
                   handleExternalLinkClick(item.href);
                 }
               }}
-              className={`flex w-full items-center justify-between gap-3 rounded-lg border border-border/70 bg-surface-secondary/60 px-3 py-2 text-left transition-colors ${
+              className={`flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors ${
+                index > 0 ? "border-t border-border/70" : ""
+              } ${
                 item.href ? "hover:bg-surface-secondary" : ""
               }`}
             >
@@ -163,6 +291,47 @@ export default function BaseInformationPanel() {
               ) : null}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={openChangelogModal}
+            className={`flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-surface-secondary ${
+              links.length > 0 ? "border-t border-border/70" : ""
+            }`}
+          >
+            <div className="min-w-0">
+              <div className="text-xs text-text-tertiary">更新日志</div>
+              <div className="text-sm font-medium text-text-primary">
+                CHANGELOG.md
+              </div>
+            </div>
+            <History className="h-4 w-4 shrink-0 text-icon-secondary" />
+          </button>
+          <button
+            type="button"
+            onClick={openLicenseModal}
+            className="flex w-full items-center justify-between gap-3 border-t border-border/70 px-3.5 py-3 text-left transition-colors hover:bg-surface-secondary"
+          >
+            <div className="min-w-0">
+              <div className="text-xs text-text-tertiary">许可证</div>
+              <div className="text-sm font-medium text-text-primary">
+                {appPackageMeta.license || "MIT"} License
+              </div>
+            </div>
+            <Scale className="h-4 w-4 shrink-0 text-icon-secondary" />
+          </button>
+          <button
+            type="button"
+            onClick={openFeedbackModal}
+            className="flex w-full items-center justify-between gap-3 border-t border-border/70 px-3.5 py-3 text-left transition-colors hover:bg-surface-secondary"
+          >
+            <div className="min-w-0">
+              <div className="text-xs text-text-tertiary">应用反馈</div>
+              <div className="text-sm font-medium text-text-primary">
+                GitHub Issue 或邮件
+              </div>
+            </div>
+            <MessageSquarePlus className="h-4 w-4 shrink-0 text-icon-secondary" />
+          </button>
         </div>
       </Card>
     </div>

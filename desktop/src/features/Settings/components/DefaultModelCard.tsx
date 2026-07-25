@@ -72,7 +72,7 @@ const DefaultModelCard = forwardRef<DefaultModelCardRef, DefaultModelCardProps>(
 
     return (
       <div className="w-full space-y-3 pb-5">
-        <div className="grid w-full grid-cols-2 gap-2 xl:gap-4">
+        <div className="grid w-full grid-cols-2 gap-2 xl:grid-cols-3 xl:gap-4">
           <ModelConfig
             modelType="llm"
             config={configMap.llm}

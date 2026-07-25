@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import Card from "@/shared/ui/Card";
+import Badge from "@/shared/ui/Badge";
 import { getAppMeta, type AppMetaData } from "@/shared/api/system";
-import { isDesktopShell } from "@/shared/platform/desktopRuntime";
+import {
+  getDesktopRuntime,
+  isDesktopShell,
+} from "@/shared/platform/desktopRuntime";
 import { appPackageMeta } from "@/shared/appMeta";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 
@@ -17,14 +20,28 @@ const getFallbackAppMeta = (): AppMetaData => ({
   links: [],
 });
 
+const platformLabel = (platform: string) => {
+  if (platform === "win32") return "Windows";
+  if (platform === "darwin") return "macOS";
+  if (platform === "linux") return "Linux";
+  return platform;
+};
+
+const hostLabel = (hostKind: "browser" | "electron" | "tauri") => {
+  if (hostKind === "electron") return "Electron";
+  if (hostKind === "tauri") return "Tauri";
+  return "Browser Preview";
+};
+
 function About() {
   const { t } = useTranslation();
+  const [runtime] = useState(() => getDesktopRuntime());
   const [appMeta, setAppMeta] = useState<AppMetaData>(() =>
     getFallbackAppMeta(),
   );
 
   useEffect(() => {
-    if (!isDesktopShell()) {
+    if (!isDesktopShell(runtime)) {
       setAppMeta(getFallbackAppMeta());
       return;
     }
@@ -46,38 +63,58 @@ function About() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [runtime]);
 
   const brandStoryParagraphs = t("settings.about.brand.paragraphs", {
     appName: appPackageMeta.displayName,
     returnObjects: true,
   }) as string[];
+  const runtimeMeta =
+    runtime.hostKind === "browser"
+      ? hostLabel(runtime.hostKind)
+      : `${platformLabel(runtime.platform)} · ${hostLabel(runtime.hostKind)}`;
 
   return (
     <SettingsPageLayout
       miniTitle={t("settings.about.miniTitle")}
-      title={`${appMeta.displayName} ${appMeta.version}`}
+      title={appMeta.displayName}
+      titleMeta={
+        <Badge
+          variant="neutral"
+          size="sm"
+          outline
+          className="font-mono"
+        >
+          v{appMeta.version} · {runtimeMeta}
+        </Badge>
+      }
       description={t("settings.about.brand.description")}
-      contentClassName="space-y-4 pt-6"
+      contentClassName="pt-6"
     >
-      <Card className="overflow-hidden border-none bg-transparent shadow-none">
-        <div className="space-y-5">
-          <div className="max-w-3xl space-y-4 text-sm leading-7 text-text-secondary">
-            {brandStoryParagraphs.map((paragraph, index) => (
-              <p
-                key={`${index}:${paragraph.slice(0, 12)}`}
-                className={
-                  index === brandStoryParagraphs.length - 1
-                    ? "font-medium text-text-primary"
+      <article
+        data-testid="about-brand-story"
+        className="max-w-3xl space-y-4 text-sm leading-7 text-text-secondary"
+      >
+        {brandStoryParagraphs.map((paragraph, index) => {
+          const isFirst = index === 0;
+          const isLast = index === brandStoryParagraphs.length - 1;
+
+          return (
+            <p
+              key={`${index}:${paragraph.slice(0, 12)}`}
+              className={
+                isLast
+                  ? "pt-2 font-medium text-text-primary"
+                  : isFirst
+                    ? "text-text-primary"
                     : ""
-                }
-              >
-                {paragraph}
-              </p>
-            ))}
-          </div>
-        </div>
-      </Card>
+              }
+            >
+              {paragraph}
+            </p>
+          );
+        })}
+      </article>
     </SettingsPageLayout>
   );
 }

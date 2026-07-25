@@ -1092,6 +1092,7 @@ const enUS = {
         chooseModel: "Choose Model",
         openEditor: "Edit Params",
         viewDetails: "View Details",
+        moreActionsAriaLabel: "More actions for {{model}}",
         editInDialogHint:
           "The page shows a summary only. Open the dialog to adjust parameters.",
         viewInDialogHint:

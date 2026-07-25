@@ -1005,7 +1005,7 @@ const createIssueReadTool = (client: GitHubReadClient): McpToolImplementation =>
       `repo:${authorized.repository.fullName}`,
       "is:issue",
       ...(state === "all" ? [] : [`state:${state}`]),
-      ...labels.map((label) => `label:\"${label.replace(/\"/gu, "")}\"`),
+      ...labels.map((label) => `label:"${label.replace(/"/gu, "")}"`),
       ...(assignee ? [`assignee:${assignee}`] : []),
       ...(creator ? [`author:${creator}`] : []),
       ...(updatedSince ? [`updated:>=${updatedSince}`] : []),
