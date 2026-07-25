@@ -256,7 +256,6 @@ export default function GitHubMicroAppPage() {
               <Badge variant={statusVariant(connection?.connection.status ?? "unconfigured")}>
                 {statusText[connection?.connection.status ?? "unconfigured"]}
               </Badge>
-              {connected ? <Badge variant="muted">Device Flow</Badge> : null}
             </div>
             <p className="text-sm leading-6 text-text-secondary">
               你可以在 GitHub 中选择个人账号或组织，并随时调整 Mira 能访问的项目。
@@ -353,9 +352,7 @@ export default function GitHubMicroAppPage() {
                       onClick={() => void loadRepositories()}
                       disabled={refreshing}
                     >
-                      <RefreshCcw
-                        className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-                      />
+                      <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                       刷新
                     </Button>
                   </div>
