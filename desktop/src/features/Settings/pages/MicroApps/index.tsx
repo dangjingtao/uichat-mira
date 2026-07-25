@@ -85,7 +85,7 @@ const featuredStudioEntries = [
     route: "/settings/micro-apps/github",
     capability: undefined,
     title: "GitHub",
-    description: "通过 GitHub App 连接账号，并由 GitHub 原生安装页按项目授权仓库。",
+    description: "连接 GitHub，选择 Mira 可以使用的项目，并查看仓库协作与交付状态。",
     actionLabel: "进入 GitHub",
   },
 ] as const;
