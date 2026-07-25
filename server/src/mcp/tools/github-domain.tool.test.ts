@@ -288,8 +288,13 @@ describe("GitHub domain capability package", () => {
       "github.high_risk",
     );
 
-    const writeRequests = fetchImpl.mock.calls.filter(([, init]) =>
-      ["POST", "PUT", "PATCH", "DELETE"].includes(init?.method ?? "GET"),
+    const writeRequests = fetchImpl.mock.calls.filter(
+      (call: [string | URL | Request, RequestInit?]) => {
+        const [, init] = call;
+        return ["POST", "PUT", "PATCH", "DELETE"].includes(
+          init?.method ?? "GET",
+        );
+      },
     );
     expect(writeRequests).toHaveLength(0);
   });
@@ -368,11 +373,16 @@ describe("GitHub domain capability package", () => {
       dispatched: true,
     });
 
-    const writes = fetchImpl.mock.calls.map(([input, init]) => ({
-      path: new URL(String(input)).pathname,
-      method: init?.method ?? "GET",
-      body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
-    }));
+    const writes = fetchImpl.mock.calls.map(
+      (call: [string | URL | Request, RequestInit?]) => {
+        const [input, init] = call;
+        return {
+          path: new URL(String(input)).pathname,
+          method: init?.method ?? "GET",
+          body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+        };
+      },
+    );
     expect(writes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
