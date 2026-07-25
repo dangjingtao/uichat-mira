@@ -12,6 +12,8 @@ export type FertilityServiceProfile = {
   currentGoal: FertilityServiceGoal;
   femaleName?: string;
   maleName?: string;
+  reportProfileId?: string;
+  scoringProfileId?: string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -19,6 +21,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const cleanText = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : undefined;
+
+const cleanProfileId = (value: unknown) => {
+  const candidate = typeof value === "string" ? value.trim() : "";
+  return /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(candidate) ? candidate : undefined;
+};
 
 export const normalizeFertilityAssessmentScope = (
   value: unknown,
@@ -109,6 +116,15 @@ export const resolveFertilityServiceProfile = (
         ? femaleName ?? "女士"
         : maleName ?? "先生");
 
+  const reportProfileId =
+    cleanProfileId(serviceProfile.reportProfileId) ??
+    cleanProfileId(serviceProfile.reportTemplateId) ??
+    cleanProfileId(facts.reportProfileId) ??
+    cleanProfileId(facts.reportTemplateId);
+  const scoringProfileId =
+    cleanProfileId(serviceProfile.scoringProfileId) ??
+    cleanProfileId(facts.scoringProfileId);
+
   return {
     displayName,
     assessmentScope,
@@ -118,6 +134,8 @@ export const resolveFertilityServiceProfile = (
     ),
     ...(femaleName ? { femaleName } : {}),
     ...(maleName ? { maleName } : {}),
+    ...(reportProfileId ? { reportProfileId } : {}),
+    ...(scoringProfileId ? { scoringProfileId } : {}),
   };
 };
 
