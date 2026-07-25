@@ -166,15 +166,26 @@ const removePrescriptiveSentences = (value: string) => {
   return softenOutcomeClaims(retained.join("").trim());
 };
 
-const evidenceFacts = (dimension: FertilityDimension) =>
-  dimension.evidence
-    .map((item) =>
-      isRecord(item) && typeof item.fact === "string" ? item.fact.trim() : "",
-    )
-    .filter(Boolean);
+const evidenceFact = (value: unknown) =>
+  isRecord(value) && typeof value.fact === "string" ? value.fact.trim() : "";
+
+const uniqueEvidenceItems = (dimension: FertilityDimension) => {
+  const accepted: unknown[] = [];
+  const acceptedFacts: string[] = [];
+  for (const item of dimension.evidence) {
+    const fact = evidenceFact(item);
+    if (!fact) continue;
+    if (acceptedFacts.some((current) => isSemanticallyDuplicate(fact, current))) continue;
+    accepted.push(item);
+    acceptedFacts.push(fact);
+    if (accepted.length >= 8) break;
+  }
+  return accepted;
+};
 
 const applyDimensionPolicy = (dimension: FertilityDimension): FertilityDimension => {
-  const evidence = uniqueMeaningful(evidenceFacts(dimension), { limit: 8 });
+  const evidenceItems = uniqueEvidenceItems(dimension);
+  const evidence = evidenceItems.map(evidenceFact).filter(Boolean);
   const strengths = uniqueMeaningful(dimension.strengths, {
     blocked: evidence,
     limit: 5,
@@ -183,6 +194,7 @@ const applyDimensionPolicy = (dimension: FertilityDimension): FertilityDimension
   if (dimension.dataCompleteness <= 0 || evidence.length === 0) {
     return {
       ...dimension,
+      evidence: [],
       strengths: [],
       concerns: [],
       missingEvidence: uniqueMeaningful(dimension.missingEvidence, { limit: 4 }),
@@ -226,6 +238,7 @@ const applyDimensionPolicy = (dimension: FertilityDimension): FertilityDimension
 
   return {
     ...dimension,
+    evidence: evidenceItems,
     strengths,
     concerns,
     missingEvidence,
