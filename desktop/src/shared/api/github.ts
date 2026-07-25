@@ -37,6 +37,7 @@ export type GitHubDeviceFlow = {
 
 export type GitHubDeviceFlowPoll = {
   status: "pending" | "connected" | "expired" | "denied" | "error";
+  retryable?: boolean;
   intervalSeconds?: number;
   errorCode?: string;
   errorMessage?: string | null;
