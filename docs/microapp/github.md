@@ -57,6 +57,14 @@ GitHub App 必须开启 **Device Flow**。Repository permissions 至少需要 `M
 
 用户访问令牌与刷新令牌使用 Mira 现有 secret encryption 工具加密落库。Client Secret、GitHub App Private Key 和 Webhook Secret 不进入项目代码。
 
+## 网络与代理
+
+GitHub Device Flow、用户信息、installation 仓库读取以及四个 GitHub Read 工具都会复用 Mira **通用设置**中的 SOCKS5 配置。服务端仅对 `github.com` 与 `api.github.com` 使用该代理，其他网络请求保持原有出口。
+
+代理设置会在每次 GitHub 请求时读取，因此用户调整 SOCKS5 Host、Port、Username 或 Password 后，不需要为 GitHub 单独保存一份配置。没有配置 SOCKS5 时，GitHub 请求保持直接连接。
+
+Device Flow 遇到临时连接超时、DNS 抖动或连接重置时，不会立即终止授权；Mira 会在授权码有效期内退避重试，直到连接成功、GitHub 明确拒绝或授权码过期。
+
 ## API
 
 ```text
