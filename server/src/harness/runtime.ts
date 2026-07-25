@@ -10,12 +10,12 @@ import {
 } from "../mcp/tools/edit-actions.tool.js";
 import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
-import { githubIssueReadTool } from "../mcp/tools/github-issue-read.tool.js";
 import {
-  githubActionsStatusTool,
-  githubPrReadTool,
-  githubRepoReadTool,
-} from "../mcp/tools/github-read.tool.js";
+  githubActionsTool,
+  githubIssueTool,
+  githubPullRequestTool,
+  githubRepositoryTool,
+} from "../mcp/tools/github-domain.tool.js";
 import { newsSearchTool } from "../mcp/tools/news-search.tool.js";
 import { readExtractTool } from "../mcp/tools/read-extract.tool.js";
 import { readListTool } from "../mcp/tools/read-list.tool.js";
@@ -74,10 +74,14 @@ export const initializeHarnessRuntime = () => {
   registerCapability(webSearchTool);
   registerCapability(newsSearchTool);
   registerCapability(mailQueryTool);
-  registerCapability(githubRepoReadTool);
-  registerCapability(githubIssueReadTool);
-  registerCapability(githubPrReadTool);
-  registerCapability(githubActionsStatusTool);
+
+  // GitHub exposes exactly four stable domain tools. Legacy *_read implementations
+  // remain internal delegates but are intentionally not registered as capabilities.
+  registerCapability(githubRepositoryTool);
+  registerCapability(githubIssueTool);
+  registerCapability(githubPullRequestTool);
+  registerCapability(githubActionsTool);
+
   registerCapability(terminalSessionTool);
   for (const tool of createBrowserAttachedTools()) {
     registerCapability(tool);
