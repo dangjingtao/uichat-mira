@@ -49,6 +49,7 @@ import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
 import CodeGraphStudioPage from "@/features/Settings/pages/MicroApps/CodeGraph";
 import EvolvingKnowledgeStudioPage from "@/features/Settings/pages/MicroApps/EvolvingKnowledge";
 import NotionMicroAppPage from "@/features/Settings/pages/MicroApps/Notion";
+import GitHubMicroAppPage from "@/features/Settings/pages/MicroApps/GitHub";
 import JianXingPage from "@/features/Settings/pages/MicroApps/JianXing";
 import OfficeSuitePage from "@/features/Settings/pages/MicroApps/OfficeSuite";
 import SkillsSettings from "@/features/Settings/pages/Skills";
@@ -139,6 +140,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "notion",
         element: <NotionMicroAppPage />,
+      },
+      {
+        path: "github",
+        element: <GitHubMicroAppPage />,
       },
       {
         path: "office-suite",
