@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { prepareHtmlForVivliostyle } from "./html-to-pdf.js";
+import fs from "node:fs";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  prepareHtmlForVivliostyle,
+  resolveVivliostyleCliExecutable,
+  resolveVivliostyleSpawnInvocation,
+} from "./html-to-pdf.js";
 
 describe("prepareHtmlForVivliostyle", () => {
   it("uses named pages and margin boxes without retaining fixed header elements", () => {
@@ -30,5 +36,80 @@ describe("prepareHtmlForVivliostyle", () => {
     expect(result).not.toContain('class="print-header"');
     expect(result).not.toContain('class="print-footer"');
     expect(result).toContain("保留正文内容。");
+  });
+});
+
+describe("Vivliostyle Windows runtime", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("resolves the pinned .local-runtimes command before staged artifacts", () => {
+    const projectRoot = String.raw`C:\workspace with spaces\rag-demo`;
+    const localCli = path.win32.join(
+      projectRoot,
+      ".local-runtimes",
+      "vivliostyle",
+      "11.1.0",
+      "node_modules",
+      ".bin",
+      "vivliostyle.cmd",
+    );
+    const stagedCli = path.win32.join(
+      projectRoot,
+      ".artifacts",
+      "vivliostyle-runtime",
+      "node_modules",
+      ".bin",
+      "vivliostyle.cmd",
+    );
+
+    vi.stubEnv("MIRA_VIVLIOSTYLE_CLI_PATH", "");
+    vi.spyOn(process, "cwd").mockReturnValue(
+      path.win32.join(projectRoot, "server"),
+    );
+    vi.spyOn(fs, "existsSync").mockImplementation(
+      (candidate) => candidate === localCli || candidate === stagedCli,
+    );
+
+    const resolved = resolveVivliostyleCliExecutable();
+
+    expect(resolved).toBe(localCli);
+  });
+
+  it("passes paths with spaces as separate cmd.exe arguments without a shell", () => {
+    const cliPath = String.raw`C:\Program Files\UIChat Mira\vivliostyle.cmd`;
+    const browserPath = String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`;
+    const htmlPath = String.raw`C:\Temp Files\report source.html`;
+    const outputPath = String.raw`C:\Users\Tester\AppData\Local\UIChat Mira\report output.pdf`;
+    const args = [
+      "build",
+      htmlPath,
+      "--output",
+      outputPath,
+      "--executable-browser",
+      browserPath,
+      "--log-level",
+      "silent",
+      "--no-vite-config-file",
+    ];
+
+    const invocation = resolveVivliostyleSpawnInvocation({
+      cliPath,
+      args,
+      platform: "win32",
+      comSpec: String.raw`C:\Windows\System32\cmd.exe`,
+    });
+
+    expect(invocation).toEqual({
+      command: String.raw`C:\Windows\System32\cmd.exe`,
+      args: ["/d", "/c", "call", cliPath, ...args],
+      shell: false,
+    });
+    expect(invocation.args).toContain(browserPath);
+    expect(invocation.args).toContain(htmlPath);
+    expect(invocation.args).toContain(outputPath);
+    expect(invocation.args).not.toContain(args.join(" "));
   });
 });

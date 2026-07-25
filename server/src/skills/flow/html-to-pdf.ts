@@ -104,7 +104,7 @@ const ancestorPaths = (value: string, maxDepth = 5) => {
   return paths;
 };
 
-const resolveVivliostyleCliExecutable = () => {
+export const resolveVivliostyleCliExecutable = () => {
   const configured = existingPath(process.env.MIRA_VIVLIOSTYLE_CLI_PATH);
   if (configured) return configured;
 
@@ -151,6 +151,31 @@ const resolveVivliostyleCliExecutable = () => {
     }
   }
   return undefined;
+};
+
+export const resolveVivliostyleSpawnInvocation = (input: {
+  cliPath: string;
+  args: string[];
+  platform?: NodeJS.Platform;
+  comSpec?: string;
+}) => {
+  const platform = input.platform ?? process.platform;
+  if (platform === "win32") {
+    return {
+      command:
+        input.comSpec ??
+        process.env.ComSpec ??
+        process.env.COMSPEC ??
+        "cmd.exe",
+      args: ["/d", "/c", "call", input.cliPath, ...input.args],
+      shell: false as const,
+    };
+  }
+  return {
+    command: input.cliPath,
+    args: input.args,
+    shell: false as const,
+  };
 };
 
 const toCssString = (value: string) =>
@@ -361,7 +386,11 @@ const runVivliostyle = async (input: {
       "silent",
       "--no-vite-config-file",
     ];
-    const child = spawn(input.cliPath, args, {
+    const invocation = resolveVivliostyleSpawnInvocation({
+      cliPath: input.cliPath,
+      args,
+    });
+    const child = spawn(invocation.command, invocation.args, {
       cwd: input.cwd,
       env: {
         ...process.env,
@@ -370,12 +399,29 @@ const runVivliostyle = async (input: {
         PUPPETEER_SKIP_CHROME_DOWNLOAD: "true",
       },
       windowsHide: true,
-      shell: process.platform === "win32",
+      shell: invocation.shell,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
     let settled = false;
+
+    const logFailure = (details: {
+      exitCode: number | null;
+      signal: NodeJS.Signals | "timeout" | null;
+      stderr: string;
+    }) => {
+      writeStructuredLog("warn", {
+        scope: "skill-report-pdf",
+        event: "vivliostyle-cli-failed",
+        cliPath: input.cliPath,
+        browserPath: input.browserPath,
+        args,
+        exitCode: details.exitCode,
+        signal: details.signal,
+        stderr: details.stderr,
+      });
+    };
 
     const finish = (error?: Error) => {
       if (settled) return;
@@ -387,6 +433,7 @@ const runVivliostyle = async (input: {
 
     const timeout = setTimeout(() => {
       child.kill();
+      logFailure({ exitCode: null, signal: "timeout", stderr });
       finish(
         new Error(
           `Vivliostyle PDF rendering timed out after ${VIVLIOSTYLE_TIMEOUT_MS}ms.`,
@@ -398,14 +445,19 @@ const runVivliostyle = async (input: {
       stdout = appendCliOutput(stdout, chunk);
     });
     child.stderr?.on("data", (chunk) => {
-      stderr = appendCliOutput(stderr, chunk);
+      stderr += chunk.toString();
     });
-    child.on("error", (error) => finish(error));
+    child.on("error", (error) => {
+      logFailure({ exitCode: null, signal: null, stderr });
+      finish(error);
+    });
     child.on("close", (code, signal) => {
+      if (settled) return;
       if (code === 0) {
         finish();
         return;
       }
+      logFailure({ exitCode: code, signal, stderr });
       finish(
         new Error(
           [
