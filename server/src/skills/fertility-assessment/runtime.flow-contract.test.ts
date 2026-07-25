@@ -57,7 +57,9 @@ const analysisResult = (
     uncertainties: [],
     contradictions: [],
     dimensionUpdates: patch.dimensionUpdates ?? [],
-    readyForFinalConfirmation,
+    collectionDisposition:
+      patch.collectionDisposition ??
+      (readyForFinalConfirmation ? "ready_for_final_confirmation" : "continue"),
     nextRequirement: {
       id: "fertility-next-gap",
       description: "缺少下一项最高价值信息",
@@ -109,6 +111,50 @@ describe("fertility assessment conversation flow contract", () => {
       expect.objectContaining({ id: "fertility-final-confirmation" }),
     ]);
     expect(result.session.status).toBe("final_confirmation");
+  });
+
+  it("treats an explicit refusal to provide more information as a deterministic close signal", async () => {
+    mocks.collectTaskModelText.mockResolvedValue(
+      analysisResult(false, { collectionDisposition: "user_declined_more" }),
+    );
+    const result = await fertilityAssessmentRuntime.processTurn(
+      runtimeInput(
+        createSession({ round: 3 }),
+        "我不方便再提供更多资料了。",
+      ),
+    );
+
+    expect(result.directive.phase).toBe("final_confirmation");
+    expect(result.session.status).toBe("final_confirmation");
+    expect(result.directive.interruption?.requirements).toEqual([
+      expect.objectContaining({ id: "fertility-final-confirmation" }),
+    ]);
+    expect(result.directive.interruption?.requirements[0]?.description).not.toContain(
+      "缺少下一项最高价值信息",
+    );
+  });
+
+  it("uses an explicit generate-report request as the final confirmation itself", async () => {
+    mocks.collectTaskModelText.mockResolvedValue(
+      analysisResult(false, { collectionDisposition: "user_confirmed_report" }),
+    );
+    const result = await fertilityAssessmentRuntime.processTurn(
+      runtimeInput(
+        createSession({ round: 3 }),
+        "没有其他补充了，请直接生成报告。",
+      ),
+    );
+
+    expect(result.directive).toMatchObject({
+      phase: "ready",
+      flowCompleted: true,
+      next: {
+        intent: "generate_report",
+        targetSkillId: "fertility-report",
+      },
+    });
+    expect(result.session.status).toBe("ready");
+    expect(result.directive.interruption).toBeUndefined();
   });
 
   it("hands the same scoped assessment state to the internal report stage after confirmation", async () => {
@@ -183,7 +229,7 @@ describe("fertility assessment conversation flow contract", () => {
             actions: { selfCare: [], discussWithClinician: [], testsToConsider: [] },
           },
         ],
-        readyForFinalConfirmation: false,
+        collectionDisposition: "continue",
         nextRequirement: {
           id: "female-next-gap",
           description: "缺少女方AFC结果",
