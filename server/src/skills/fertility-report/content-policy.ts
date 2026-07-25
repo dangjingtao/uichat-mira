@@ -1,7 +1,4 @@
-import type {
-  FertilityAssessmentState,
-  FertilityDimension,
-} from "../fertility-assessment/runtime.js";
+import type { FertilityDimension } from "../fertility-assessment/runtime.js";
 import type { FertilityReportSummary } from "./dimension-analysis.js";
 
 const CLINICAL_DECISION_TERMS = [
@@ -275,11 +272,17 @@ const applySummaryPolicy = (summary: FertilityReportSummary): FertilityReportSum
   return { strengths, priorities, visitPrep, lifestyleFocus };
 };
 
+export type GovernedFertilityReportContent = {
+  dimensions: Record<string, FertilityDimension>;
+  summary: FertilityReportSummary;
+  closingMessage: string;
+};
+
 export const applyFertilityReportContentPolicy = (input: {
   dimensions: Record<string, FertilityDimension>;
   summary: FertilityReportSummary;
   closingMessage: string;
-}): Pick<FertilityAssessmentState, "dimensions" | "summary" | "closingMessage"> => ({
+}): GovernedFertilityReportContent => ({
   dimensions: Object.fromEntries(
     Object.entries(input.dimensions).map(([id, dimension]) => [
       id,
