@@ -34,6 +34,8 @@ const STATUS_EFFECT: Record<FertilitySignalStatus, number> = {
   unknown: 0,
 };
 
+const NO_EVIDENCE_REFERENCE_SCORE = 5;
+
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
@@ -110,7 +112,7 @@ export const scoreFertilityDimension = (
   if (!rule) {
     return {
       id: draft.id,
-      score: 5,
+      score: NO_EVIDENCE_REFERENCE_SCORE,
       confidence: "low",
       dataCompleteness: 0,
       evidence: [],
@@ -128,25 +130,10 @@ export const scoreFertilityDimension = (
     rule.criteria.some((criterion) => criterion.id === signal.criterionId),
   );
   const coverage = evidenceCompleteness(rule, validSignals);
-  const rawEffect = rule.criteria.reduce((sum, criterion) => {
-    const signal = coverage.byCriterion.get(criterion.id);
-    if (!signal) return sum;
-    return sum + criterion.weight * STATUS_EFFECT[signal.status];
-  }, 0);
-  const hasDirectHighConcern = validSignals.some(
-    (signal) => signal.direct && signal.status === "high_concern",
-  );
-  const reliability = Math.max(
-    hasDirectHighConcern ? 0.72 : 0,
-    0.35 + coverage.completeness * 0.65,
-  );
-  const rawScore = clamp(rule.baseScore + rawEffect, 0, 10);
-  const score = round1(clamp(5 + (rawScore - 5) * reliability, 0, 10));
-  const confidence = resolveConfidence(coverage);
   const observedSignals = validSignals.filter(
     (signal) => signal.status !== "unknown" && signal.summary.trim(),
   );
-
+  const confidence = resolveConfidence(coverage);
   const derivedStrengths = observedSignals
     .filter((signal) => signal.status === "favorable")
     .map((signal) => signal.summary);
@@ -159,11 +146,53 @@ export const scoreFertilityDimension = (
     .filter((criterion) => !coverage.byCriterion.has(criterion.id))
     .map((criterion) => criterion.label);
 
+  if (observedSignals.length === 0) {
+    return {
+      id: draft.id,
+      score: NO_EVIDENCE_REFERENCE_SCORE,
+      confidence: "low",
+      dataCompleteness: 0,
+      evidence: [],
+      strengths: uniqueStrings(draft.strengths, 8),
+      concerns: uniqueStrings(draft.concerns, 8),
+      missingEvidence: uniqueStrings(
+        [...draft.missingEvidence, ...missingFromRules],
+        8,
+      ),
+      interpretation:
+        draft.interpretation ||
+        defaultInterpretation(NO_EVIDENCE_REFERENCE_SCORE, "low", 0),
+      actions: draft.actions,
+    };
+  }
+
+  const rawEffect = rule.criteria.reduce((sum, criterion) => {
+    const signal = coverage.byCriterion.get(criterion.id);
+    if (!signal) return sum;
+    return sum + criterion.weight * STATUS_EFFECT[signal.status];
+  }, 0);
+  const hasDirectHighConcern = observedSignals.some(
+    (signal) => signal.direct && signal.status === "high_concern",
+  );
+  const reliability = Math.max(
+    hasDirectHighConcern ? 0.72 : 0,
+    0.35 + coverage.completeness * 0.65,
+  );
+  const rawScore = clamp(rule.baseScore + rawEffect, 0, 10);
+  const score = round1(
+    clamp(
+      NO_EVIDENCE_REFERENCE_SCORE +
+        (rawScore - NO_EVIDENCE_REFERENCE_SCORE) * reliability,
+      0,
+      10,
+    ),
+  );
+
   return {
     id: draft.id,
     score,
     confidence,
-    dataCompleteness: round1(coverage.completeness * 10) / 10,
+    dataCompleteness: round1(coverage.completeness),
     evidence: observedSignals.slice(0, 10).map((signal) => ({
       fact: signal.summary,
       source: signal.source,
