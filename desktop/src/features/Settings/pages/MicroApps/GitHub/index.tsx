@@ -1,36 +1,34 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CheckCircle2,
   Copy,
   ExternalLink,
   Github,
   KeyRound,
   LoaderCircle,
   RefreshCcw,
-  Settings2,
   ShieldCheck,
   Unplug,
 } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
-import { Button, TextInput } from "@/shared/ui";
+import { Button } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
   disconnectGitHub,
   getGitHubConnection,
   getGitHubRepositories,
   pollGitHubDeviceFlow,
-  saveGitHubConnection,
   startGitHubDeviceFlow,
   validateGitHubConnection,
   type GitHubConnectionResponse,
   type GitHubDeviceFlow,
   type GitHubInstallation,
 } from "@/shared/api/github";
+import { openExternalUrl } from "@/shared/platform/desktopRuntime";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 
 const statusText: Record<GitHubConnectionResponse["connection"]["status"], string> = {
-  unconfigured: "未配置",
+  unconfigured: "未连接",
   authorizing: "等待授权",
   connected: "已连接",
   error: "连接异常",
@@ -44,13 +42,10 @@ const statusVariant = (
 
 export default function GitHubMicroAppPage() {
   const [connection, setConnection] = useState<GitHubConnectionResponse | null>(null);
-  const [clientId, setClientId] = useState("");
-  const [appSlug, setAppSlug] = useState("");
   const [installations, setInstallations] = useState<GitHubInstallation[]>([]);
   const [repositoryCount, setRepositoryCount] = useState(0);
   const [deviceFlow, setDeviceFlow] = useState<GitHubDeviceFlow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -81,8 +76,6 @@ export default function GitHubMicroAppPage() {
 
   const applyConnection = useCallback((result: GitHubConnectionResponse) => {
     setConnection(result);
-    setClientId(result.connection.clientId);
-    setAppSlug(result.connection.appSlug);
   }, []);
 
   const load = useCallback(async () => {
@@ -147,35 +140,25 @@ export default function GitHubMicroAppPage() {
     [applyConnection, load, loadRepositories, stopPolling],
   );
 
-  const saveSettings = async () => {
-    if (!clientId.trim() || !appSlug.trim()) {
-      message.warning("请填写 GitHub App Client ID 和 App Slug");
-      return;
-    }
-    setSaving(true);
-    try {
-      const result = await saveGitHubConnection({
-        clientId: clientId.trim(),
-        appSlug: appSlug.trim(),
-        enabled: true,
-      });
-      applyConnection(result);
-      setInstallations([]);
-      setRepositoryCount(0);
-      message.success("GitHub App 配置已保存");
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存 GitHub 配置失败");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const beginConnection = async () => {
     setConnecting(true);
     stopPolling();
     try {
       const flow = await startGitHubDeviceFlow();
       setDeviceFlow(flow);
+
+      try {
+        await navigator.clipboard?.writeText(flow.userCode);
+      } catch {
+        // Clipboard access may be unavailable; the code remains visible in Mira.
+      }
+
+      try {
+        await openExternalUrl(flow.verificationUri);
+      } catch {
+        message.error("无法自动打开系统浏览器，请点击下方“打开授权页”");
+      }
+
       void pollAuthorization(flow);
     } catch (error) {
       setConnecting(false);
@@ -223,18 +206,26 @@ export default function GitHubMicroAppPage() {
   };
 
   const connected = connection?.connection.status === "connected";
+  const configured = Boolean(
+    connection?.connection.clientId && connection?.connection.appSlug,
+  );
 
   return (
     <MicroAppPageLayout
       miniTitle="Micro Apps"
       title="GitHub"
-      description="连接 GitHub App，并由 GitHub 原生安装页按仓库授权。Mira 只看到你明确交给它的项目。"
+      description="连接 GitHub，选择 Mira 可以使用的项目。仓库权限由 GitHub 官方授权管理。"
       contentClassName="space-y-5 pt-5"
       slot={
         <div className="flex flex-wrap items-center justify-end gap-2">
           {connected ? (
             <>
-              <Button variant="ghost" size="sm" onClick={() => void validateConnection()} disabled={refreshing}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void validateConnection()}
+                disabled={refreshing}
+              >
                 <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 验证连接
               </Button>
@@ -251,7 +242,11 @@ export default function GitHubMicroAppPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-ui-panel bg-surface-primary text-text-primary shadow-shadow-sm">
             {connection?.connection.avatarUrl ? (
-              <img src={connection.connection.avatarUrl} alt="GitHub avatar" className="h-14 w-14 rounded-ui-panel object-cover" />
+              <img
+                src={connection.connection.avatarUrl}
+                alt="GitHub avatar"
+                className="h-14 w-14 rounded-ui-panel object-cover"
+              />
             ) : (
               <Github className="h-7 w-7" />
             )}
@@ -259,20 +254,19 @@ export default function GitHubMicroAppPage() {
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-semibold text-text-primary">
-                {connection?.connection.login || "GitHub App 尚未连接"}
+                {connection?.connection.login || "GitHub 尚未连接"}
               </h2>
               <Badge variant={statusVariant(connection?.connection.status ?? "unconfigured")}>
                 {statusText[connection?.connection.status ?? "unconfigured"]}
               </Badge>
-              {connected ? <Badge variant="muted">Device Flow</Badge> : null}
             </div>
             <p className="text-sm leading-6 text-text-secondary">
-              身份授权与仓库安装范围分开管理；仓库边界由 GitHub App installation 强制执行，不靠 Mira 前端筛选。
+              你可以在 GitHub 中选择个人账号或组织，并随时调整 Mira 能访问的项目。
             </p>
           </div>
           <div className="grid grid-cols-2 gap-5 border-t border-border pt-4 text-left md:border-l md:border-t-0 md:pl-5 md:pt-0">
-            <Metric label="安装实例" value={String(installations.length)} />
-            <Metric label="已授权仓库" value={String(repositoryCount)} />
+            <Metric label="账号 / 组织" value={String(installations.length)} />
+            <Metric label="已授权项目" value={String(repositoryCount)} />
           </div>
         </div>
       </Card>
@@ -282,62 +276,42 @@ export default function GitHubMicroAppPage() {
       ) : (
         <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 space-y-5">
-            <Card className="p-5">
-              <div className="mb-5 flex items-start gap-3">
-                <Settings2 className="mt-0.5 h-5 w-5 text-icon-secondary" />
-                <div>
-                  <h3 className="font-semibold text-text-primary">GitHub App 配置</h3>
-                  <p className="mt-1 text-sm leading-6 text-text-secondary">
-                    桌面端使用 Device Flow，不保存 Client Secret，也不打包 GitHub App 私钥。请先在 GitHub App 设置里启用 Device Flow。
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Client ID">
-                  <TextInput value={clientId} onChange={setClientId} placeholder="Iv1.xxxxxxxxxxxxxxxx" />
-                </Field>
-                <Field label="App Slug">
-                  <TextInput value={appSlug} onChange={setAppSlug} placeholder="uichat-mira" />
-                </Field>
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button variant="primary" size="sm" onClick={() => void saveSettings()} disabled={saving}>
-                  {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  {saving ? "保存中" : "保存配置"}
-                </Button>
-                <a
-                  href="https://github.com/settings/apps/new"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex h-9 items-center gap-2 rounded-ui-control px-3 text-sm font-medium text-primary hover:bg-primary/10"
-                >
-                  创建 GitHub App
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </div>
-            </Card>
-
             {!connected ? (
               <Card className="p-5">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-3">
                     <KeyRound className="mt-0.5 h-5 w-5 text-icon-secondary" />
                     <div>
-                      <h3 className="font-semibold text-text-primary">连接 GitHub 账号</h3>
+                      <h3 className="font-semibold text-text-primary">连接 GitHub</h3>
                       <p className="mt-1 text-sm leading-6 text-text-secondary">
-                        浏览器确认身份后，GitHub 再让你为个人账号或组织选择全部仓库或指定仓库。
+                        Mira 会打开系统浏览器。登录后，由 GitHub 引导你选择账号、组织和项目范围。
                       </p>
+                      {!configured ? (
+                        <p className="mt-2 text-xs leading-5 text-danger">
+                          当前开发版本尚未配置 GitHub 连接服务。
+                        </p>
+                      ) : null}
                     </div>
                   </div>
-                  <Button variant="primary" onClick={() => void beginConnection()} disabled={connecting || !clientId.trim() || !appSlug.trim()}>
-                    {connecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />}
+                  <Button
+                    variant="primary"
+                    onClick={() => void beginConnection()}
+                    disabled={connecting || !configured}
+                  >
+                    {connecting ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Github className="h-4 w-4" />
+                    )}
                     {connecting ? "等待授权" : "连接 GitHub"}
                   </Button>
                 </div>
 
                 {deviceFlow ? (
                   <div className="mt-5 rounded-ui-panel border border-primary/20 bg-primary/5 p-4">
-                    <div className="text-sm font-medium text-text-primary">在 GitHub 页面输入授权码</div>
+                    <div className="text-sm font-medium text-text-primary">
+                      已打开 GitHub，请输入这个授权码
+                    </div>
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                       <code className="rounded-ui-control border border-border bg-surface-primary px-4 py-2 text-lg font-semibold tracking-[0.18em] text-text-primary">
                         {deviceFlow.userCode}
@@ -345,12 +319,17 @@ export default function GitHubMicroAppPage() {
                       <Button variant="ghost" size="sm" onClick={() => void copyCode()}>
                         <Copy className="h-4 w-4" />复制
                       </Button>
-                      <a href={deviceFlow.verificationUri} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-                        打开授权页 <ExternalLink className="h-3.5 w-3.5" />
+                      <a
+                        href={deviceFlow.verificationUri}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        重新打开授权页 <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     </div>
                     <p className="mt-3 text-xs leading-5 text-text-secondary">
-                      Mira 正在等待 GitHub 回传结果。授权码到期后需要重新生成。
+                      授权完成后无需手动刷新，Mira 会自动接收结果。
                     </p>
                   </div>
                 ) : null}
@@ -359,19 +338,30 @@ export default function GitHubMicroAppPage() {
               <Card padding="none">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-5">
                   <div>
-                    <h3 className="font-semibold text-text-primary">项目授权</h3>
+                    <h3 className="font-semibold text-text-primary">已授权项目</h3>
                     <p className="mt-1 text-sm leading-6 text-text-secondary">
-                      这里展示 GitHub App installation 实际授予的仓库，不维护第二套虚假的项目白名单。
+                      这里只显示你在 GitHub 中明确授权给 Mira 的仓库。
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {connection?.installUrl ? (
-                      <a href={connection.installUrl} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-ui-control border border-primary/20 px-3 text-sm font-medium text-primary hover:bg-primary/10">
-                        添加仓库授权 <ExternalLink className="h-4 w-4" />
+                      <a
+                        href={connection.installUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-9 items-center gap-2 rounded-ui-control border border-primary/20 px-3 text-sm font-medium text-primary hover:bg-primary/10"
+                      >
+                        选择项目 <ExternalLink className="h-4 w-4" />
                       </a>
                     ) : null}
-                    <Button variant="ghost" size="sm" onClick={() => void loadRepositories()} disabled={refreshing}>
-                      <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />刷新
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void loadRepositories()}
+                      disabled={refreshing}
+                    >
+                      <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                      刷新
                     </Button>
                   </div>
                 </div>
@@ -379,9 +369,9 @@ export default function GitHubMicroAppPage() {
                 {installations.length === 0 ? (
                   <div className="p-8 text-center">
                     <ShieldCheck className="mx-auto h-8 w-8 text-icon-secondary" />
-                    <div className="mt-3 font-medium text-text-primary">还没有 GitHub App installation</div>
+                    <div className="mt-3 font-medium text-text-primary">还没有授权项目</div>
                     <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary">
-                      点击“添加仓库授权”，在 GitHub 原生页面选择账号或组织，并选择 Only select repositories。
+                      点击“选择项目”，在 GitHub 中选择个人账号或组织，再勾选允许 Mira 使用的仓库。
                     </p>
                   </div>
                 ) : (
@@ -400,20 +390,19 @@ export default function GitHubMicroAppPage() {
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-5 w-5 text-icon-secondary" />
                 <div>
-                  <h3 className="font-semibold text-text-primary">权限边界</h3>
+                  <h3 className="font-semibold text-text-primary">项目由你决定</h3>
                   <div className="mt-3 space-y-3 text-sm leading-6 text-text-secondary">
-                    <p>GitHub 负责决定 Mira 能访问哪些仓库；移除 installation 或仓库后，访问立即失效。</p>
-                    <p>这一页只负责授权与仓库范围。Issue、PR、Actions 等执行能力继续通过 GitHub MCP / Harness 消费，不在页面里重复造 API 工具。</p>
+                    <p>GitHub 负责执行项目权限边界。你移除某个项目后，Mira 将不再能访问它。</p>
+                    <p>组织项目可能需要组织管理员批准，这是 GitHub 的安全策略。</p>
                   </div>
                 </div>
               </div>
             </Card>
             <Card className="p-5">
-              <h3 className="font-semibold text-text-primary">建议的 GitHub App 权限</h3>
+              <h3 className="font-semibold text-text-primary">连接后可以做什么</h3>
               <div className="mt-3 space-y-2 text-sm leading-6 text-text-secondary">
-                <p><strong className="text-text-primary">Metadata</strong>：Read-only（必需）</p>
-                <p><strong className="text-text-primary">Contents / Issues / Pull requests / Actions</strong>：按 Mira 实际启用的 MCP toolset 再开。</p>
-                <p>第一版先少给权限，后面需要写操作再由用户回 GitHub 调整。</p>
+                <p>查看仓库、Issue、Pull Request 与 Actions 状态。</p>
+                <p>涉及创建、修改或执行的操作，仍会遵循 Mira 的权限和确认策略。</p>
               </div>
             </Card>
           </div>
@@ -429,46 +418,60 @@ function InstallationCard({ installation }: { installation: GitHubInstallation }
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {installation.account.avatarUrl ? (
-            <img src={installation.account.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+            <img
+              src={installation.account.avatarUrl}
+              alt=""
+              className="h-10 w-10 rounded-full object-cover"
+            />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-secondary"><Github className="h-5 w-5" /></div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-secondary">
+              <Github className="h-5 w-5" />
+            </div>
           )}
           <div className="min-w-0">
             <div className="font-medium text-text-primary">{installation.account.login}</div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="muted">
-                {installation.repositorySelection === "selected" ? "指定仓库" : "全部仓库"}
+                {installation.repositorySelection === "selected" ? "指定项目" : "全部项目"}
               </Badge>
-              <span className="text-xs text-text-secondary">{installation.repositories.length} 个仓库</span>
+              <span className="text-xs text-text-secondary">
+                {installation.repositories.length} 个仓库
+              </span>
             </div>
           </div>
         </div>
-        <a href={installation.manageUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-          管理授权 <ExternalLink className="h-3.5 w-3.5" />
+        <a
+          href={installation.manageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+        >
+          调整项目 <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2">
         {installation.repositories.map((repository) => (
-          <a key={repository.id} href={repository.htmlUrl} target="_blank" rel="noreferrer" className="rounded-ui-panel border border-border p-3 transition-colors hover:bg-surface-secondary/50">
+          <a
+            key={repository.id}
+            href={repository.htmlUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-ui-panel border border-border p-3 transition-colors hover:bg-surface-secondary/50"
+          >
             <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-sm font-medium text-text-primary">{repository.fullName}</span>
+              <span className="truncate text-sm font-medium text-text-primary">
+                {repository.fullName}
+              </span>
               {repository.private ? <Badge variant="muted">Private</Badge> : null}
             </div>
-            <div className="mt-1 text-xs text-text-secondary">默认分支：{repository.defaultBranch || "-"}</div>
+            <div className="mt-1 text-xs text-text-secondary">
+              默认分支：{repository.defaultBranch || "-"}
+            </div>
           </a>
         ))}
       </div>
     </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="space-y-2">
-      <span className="text-sm font-medium text-text-primary">{label}</span>
-      {children}
-    </label>
   );
 }
 
