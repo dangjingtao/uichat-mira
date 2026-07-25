@@ -60,7 +60,10 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
     const assessment = toFertilityAssessmentState(session.state);
     const profile = resolveFertilityServiceProfile(assessment.facts);
     const scopeFlags = getFertilityScopeFlags(profile.assessmentScope);
-    const sourceBundle = loadFertilitySourceBundle();
+    const sourceBundle = loadFertilitySourceBundle({
+      reportProfileId: profile.reportProfileId,
+      scoringProfileId: profile.scoringProfileId,
+    });
     for (const diagnostic of sourceBundle.diagnostics) {
       writeStructuredLog("warn", {
         scope: "fertility-report",
@@ -179,6 +182,8 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       scope: "fertility-report",
       event: "source-profiles-applied",
       sessionId: session.sessionId,
+      requestedReportProfileId: profile.reportProfileId,
+      requestedScoringProfileId: profile.scoringProfileId,
       reportProfileId: sourceBundle.reportProfile.id,
       scoringProfileId: sourceBundle.scoringProfile.id,
       scoringProfileVersion: sourceBundle.scoringProfile.version,
