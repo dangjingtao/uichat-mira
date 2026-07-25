@@ -88,12 +88,12 @@ describe("withWorkbenchMetadata", () => {
     ).toBe("browser_computer_use");
   });
 
-  it("groups GitHub read tools and supplies tool-specific parameter drafts", () => {
+  it("groups exactly four GitHub domain tools and supplies operation drafts", () => {
     const projected = withWorkbenchMetadata([
-      createGitHubTool("github_repo_read"),
-      createGitHubTool("github_issue_read"),
-      createGitHubTool("github_pr_read"),
-      createGitHubTool("github_actions_status"),
+      createGitHubTool("github_repository"),
+      createGitHubTool("github_issue"),
+      createGitHubTool("github_pull_request"),
+      createGitHubTool("github_actions"),
     ]);
 
     expect(projected.every((tool) => tool.workbench?.groupId === "github")).toBe(true);
@@ -102,22 +102,26 @@ describe("withWorkbenchMetadata", () => {
       groupOrder: 50,
       icon: "github",
       defaultArgs: {
+        operation: "get",
         repository: "owner/repository",
         includeReadme: true,
         commitLimit: 5,
       },
     });
     expect(projected[1]?.workbench?.defaultArgs).toMatchObject({
+      operation: "list",
       repository: "owner/repository",
       state: "open",
       limit: 20,
     });
     expect(projected[2]?.workbench?.defaultArgs).toMatchObject({
+      operation: "list",
       repository: "owner/repository",
       state: "open",
       limit: 20,
     });
     expect(projected[3]?.workbench?.defaultArgs).toEqual({
+      operation: "list_runs",
       repository: "owner/repository",
       limit: 20,
       page: 1,
