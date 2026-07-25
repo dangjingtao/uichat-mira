@@ -28,30 +28,49 @@ const sampleDimension: FertilityDimension = {
   actions: { selfCare: [], discussWithClinician: [], testsToConsider: [] },
 };
 
+const reportSource = {
+  activeProfileId: "yuanjie",
+  profiles: {
+    yuanjie: {
+      service: {
+        brandName: "圆姐品牌",
+        teamName: "圆姐团队",
+        serviceLine: "圆姐服务线",
+        footerText: "圆姐页脚",
+        deliveryLabel: "圆姐交付",
+      },
+      theme: {
+        primaryColor: "#5B2A86",
+        secondaryColor: "#D79ACB",
+        accentColor: "#8FB5E8",
+        softBackground: "#F7F2FA",
+        textColor: "#2C2530",
+        mutedTextColor: "#766B79",
+      },
+    },
+    "clinic-a": {
+      service: {
+        brandName: "甲诊所",
+        teamName: "甲诊所专属团队",
+        serviceLine: "陪伴式生育健康服务",
+        footerText: "仅供健康教育参考。",
+        deliveryLabel: "专属团队交付",
+      },
+      theme: {
+        primaryColor: "#123456",
+        secondaryColor: "#654321",
+        accentColor: "#336699",
+        softBackground: "#F0F0F0",
+        textColor: "#222222",
+        mutedTextColor: "#777777",
+      },
+    },
+  },
+};
+
 describe("fertility runtime source profiles", () => {
   it("parses a named report profile and applies branding without regenerating content", () => {
-    const profile = parseFertilityReportProfileSource({
-      activeProfileId: "clinic-a",
-      profiles: {
-        "clinic-a": {
-          service: {
-            brandName: "甲诊所",
-            teamName: "甲诊所专属团队",
-            serviceLine: "陪伴式生育健康服务",
-            footerText: "仅供健康教育参考。",
-            deliveryLabel: "专属团队交付",
-          },
-          theme: {
-            primaryColor: "#123456",
-            secondaryColor: "#654321",
-            accentColor: "#336699",
-            softBackground: "#F0F0F0",
-            textColor: "#222222",
-            mutedTextColor: "#777777",
-          },
-        },
-      },
-    });
+    const profile = parseFertilityReportProfileSource(reportSource, "clinic-a");
 
     const result = applyFertilityReportProfile({
       profile,
@@ -63,6 +82,52 @@ describe("fertility runtime source profiles", () => {
     expect(result.html).toContain("甲诊所");
     expect(result.html).toContain("#123456");
     expect(result.markdown).toContain("甲诊所专属团队");
+  });
+
+  it("lets a service profile select a customer template without changing the global active profile", () => {
+    const selected = parseFertilityReportProfileSource(reportSource, "clinic-a");
+    const globalDefault = parseFertilityReportProfileSource(reportSource);
+
+    expect(selected.id).toBe("clinic-a");
+    expect(selected.brandName).toBe("甲诊所");
+    expect(globalDefault.id).toBe("yuanjie");
+    expect(globalDefault.brandName).toBe("圆姐品牌");
+  });
+
+  it("falls back safely when a requested customer template does not exist", () => {
+    const diagnostics: string[] = [];
+    const profile = parseFertilityReportProfileSource(
+      reportSource,
+      "missing-clinic",
+      diagnostics,
+    );
+
+    expect(profile.id).toBe("yuanjie");
+    expect(diagnostics.join("\n")).toContain("missing-clinic");
+  });
+
+  it("replaces theme values in two phases so overlapping colors do not cascade", () => {
+    const profile = parseFertilityReportProfileSource({
+      activeProfileId: "collision",
+      profiles: {
+        collision: {
+          service: {},
+          theme: {
+            primaryColor: "#8FB5E8",
+            secondaryColor: "#D79ACB",
+            accentColor: "#112233",
+          },
+        },
+      },
+    });
+    const result = applyFertilityReportProfile({
+      profile,
+      html: '<main class="report"><style>:root{--primary:#5B2A86;--accent:#8FB5E8}</style></main>',
+      markdown: "",
+    });
+
+    expect(result.html).toContain("--primary:#8FB5E8");
+    expect(result.html).toContain("--accent:#112233");
   });
 
   it("keeps built-in scoring untouched when the active profile is preserve_builtin", () => {
@@ -114,5 +179,31 @@ describe("fertility runtime source profiles", () => {
       scoringProfileId: "clinic-a",
       scoringProfileVersion: "clinic-a-v1",
     });
+  });
+
+  it("uses the profile reference score as calibration baseline when baseScore is omitted", () => {
+    const profile = parseFertilityScoringProfileSource({
+      activeProfileId: "clinic-a",
+      profiles: {
+        "clinic-a": {
+          mode: "recalculate_configured_dimensions",
+          version: "clinic-a-v2",
+          noEvidenceReferenceScore: 5,
+          statusEffect: { high_concern: -2 },
+          dimensions: {
+            female_oocyte_context: {
+              criterionWeights: { age_context: 1 },
+            },
+          },
+        },
+      },
+    });
+    const result = applyFertilityScoringProfile({
+      dimensions: { female_oocyte_context: sampleDimension },
+      profile,
+    });
+
+    // Recalculation starts from the profile baseline 5.0, not the already-calculated 4.8.
+    expect(result.female_oocyte_context?.score).toBe(4);
   });
 });
