@@ -12,6 +12,7 @@ import {
   getFertilityScopeFlags,
   hasExplicitFertilityServiceProfile,
   resolveFertilityServiceProfile,
+  type FertilityServiceProfile,
 } from "./service-profile.js";
 
 const SERVICE_PROFILE_REQUIREMENT: SkillRequirement = {
@@ -29,8 +30,8 @@ const FINAL_CONFIRMATION_REQUIREMENT: SkillRequirement = {
   id: "fertility-final-confirmation",
   kind: "user_input",
   description:
-    "需要用户确认是否还有尚未提供但重要的备孕、检查或治疗信息；没有补充时也需要明确确认。",
-  requiredFor: "结束信息收集并进入报告生成",
+    "信息收集已经收束。请用户做最后一次确认：如没有其他重要补充，即进入专属报告生成；如仍有补充，也可在本次一并说明。",
+  requiredFor: "完成唯一一次最终确认并进入报告生成",
   acceptedFormats: ["natural_language", "explicit_no_more_information"],
 };
 
@@ -275,7 +276,31 @@ const isLikelyActivationOnly = (query: string) => {
   );
 };
 
-const analysisSystemPrompt = `你是 Mira 专属生育健康服务团队中的信息整理 TaskModel。你的职责不是诊断或开处方，而是把用户自由叙述整理成结构化事实，并找出下一步最高价值的外部信息缺口。
+type FertilityCollectionDisposition =
+  | "continue"
+  | "ready_for_final_confirmation"
+  | "user_declined_more"
+  | "user_confirmed_report";
+
+const normalizeCollectionDisposition = (
+  value: unknown,
+  legacyReadyForFinalConfirmation: unknown,
+): FertilityCollectionDisposition => {
+  switch (value) {
+    case "ready_for_final_confirmation":
+    case "user_declined_more":
+    case "user_confirmed_report":
+      return value;
+    case "continue":
+      return "continue";
+    default:
+      return legacyReadyForFinalConfirmation === true
+        ? "ready_for_final_confirmation"
+        : "continue";
+  }
+};
+
+const analysisSystemPrompt = `你是 Mira 专属生育健康服务团队中的信息整理 TaskModel。你的职责不是诊断或开处方，而是把用户自由叙述整理成结构化事实，识别信息收集意图，并找出下一步最高价值的外部信息缺口。
 
 硬规则：
 1. 只返回 JSON，不要 Markdown。
@@ -289,7 +314,13 @@ const analysisSystemPrompt = `你是 Mira 专属生育健康服务团队中的�
 9. 不做疾病诊断，不给处方药方案，不给个体化药物/保健品剂量；建议分 selfCare / discussWithClinician / testsToConsider。
 10. 不把免疫、凝血、精子 DNA 碎片等检查当作所有人的常规必查项；没有明确指征时标记为需医生判断。
 11. nextRequirement 只描述当前最高价值的缺失信息、它为什么需要以及可接受的输入形式。它不是面向用户的问题，不要写“请问”“能否告诉我”等追问话术。
-12. readyForFinalConfirmation 只有在服务档案已完整且继续收集信息的边际价值已经较低时才为 true。
+12. collectionDisposition 必须独立于资料完整度判断用户本轮意图，只能取以下值：
+   - continue：用户在提供资料，或没有表达停止意愿；
+   - ready_for_final_confirmation：资料边际价值已较低，但用户没有明确要求停止；
+   - user_declined_more：用户明确表示不愿、不便、不知道或不再继续补充，但没有明确要求立即生成报告；
+   - user_confirmed_report：用户明确要求结束收集并立即生成/出具报告，或明确确认现在生成报告。
+13. 用户明确拒绝继续补充时，不得因为仍有缺口而返回 continue。用户明确要求生成报告时，不得返回 nextRequirement 继续追问。
+14. 不依赖固定关键词或语言；根据完整语义判断 collectionDisposition。
 
 输出结构：
 {
@@ -320,7 +351,7 @@ const analysisSystemPrompt = `你是 Mira 专属生育健康服务团队中的�
       "actions": {"selfCare":[],"discussWithClinician":[],"testsToConsider":[]}
     }
   ],
-  "readyForFinalConfirmation": false,
+  "collectionDisposition": "continue|ready_for_final_confirmation|user_declined_more|user_confirmed_report",
   "nextRequirement": {
     "id": "稳定的缺口标识",
     "description": "缺少的业务信息，不写成用户问题",
@@ -377,7 +408,10 @@ const analyzeTurn = async (input: {
           .filter((item): item is FertilityDimension => Boolean(item))
           .slice(0, 2)
       : [],
-    readyForFinalConfirmation: parsed.readyForFinalConfirmation === true,
+    collectionDisposition: normalizeCollectionDisposition(
+      parsed.collectionDisposition,
+      parsed.readyForFinalConfirmation,
+    ),
     nextRequirement: normalizeUserInputRequirement(
       parsed.nextRequirement,
       FALLBACK_REQUIREMENT,
@@ -403,6 +437,44 @@ const buildDirective = (
   stateRef: toSkillFlowStateRef(session),
   ...patch,
 });
+
+const buildReadyResult = (input: {
+  session: StoredSkillFlowSession;
+  nextRound: number;
+  nextState: FertilityAssessmentState;
+  serviceProfile: FertilityServiceProfile;
+}): SkillFlowRuntimeResult => {
+  const scopeFlags = getFertilityScopeFlags(input.serviceProfile.assessmentScope);
+  const readySession = withProcessedState(input.session, {
+    status: "ready",
+    round: input.nextRound,
+    state: input.nextState as unknown as Record<string, unknown>,
+  });
+  const directive = buildDirective(readySession, {
+    phase: "ready",
+    flowCompleted: true,
+    round: input.nextRound,
+    maxRounds: input.session.maxRounds,
+    next: {
+      intent: "generate_report",
+      targetSkillId: "fertility-report",
+      args: {
+        assessmentRef: toSkillFlowStateRef(readySession),
+        reportType: input.serviceProfile.assessmentScope,
+        format: "markdown",
+        includeFemale: scopeFlags.includeFemale,
+        includeMale: scopeFlags.includeMale,
+        displayName: input.serviceProfile.displayName,
+        currentGoal: input.serviceProfile.currentGoal,
+        htmlAvailable: true,
+      },
+    },
+  });
+  return {
+    session: { ...readySession, lastDirective: directive },
+    directive,
+  };
+};
 
 export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
   skillId: "fertility-assessment",
@@ -454,7 +526,7 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
         uncertainties: currentState.uncertainties,
         contradictions: currentState.contradictions,
         dimensionUpdates: [],
-        readyForFinalConfirmation: false,
+        collectionDisposition: "continue",
         nextRequirement: FALLBACK_REQUIREMENT,
       };
     }
@@ -486,41 +558,23 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
       dimensions,
     };
 
-    if (input.session.status === "final_confirmation") {
-      const readySession = withProcessedState(input.session, {
-        status: "ready",
-        round: nextRound,
-        state: nextState as unknown as Record<string, unknown>,
+    if (
+      input.session.status === "final_confirmation" ||
+      (profileReady && analysis.collectionDisposition === "user_confirmed_report")
+    ) {
+      return buildReadyResult({
+        session: input.session,
+        nextRound,
+        nextState,
+        serviceProfile,
       });
-      const directive = buildDirective(readySession, {
-        phase: "ready",
-        flowCompleted: true,
-        round: nextRound,
-        maxRounds: input.session.maxRounds,
-        next: {
-          intent: "generate_report",
-          targetSkillId: "fertility-report",
-          args: {
-            assessmentRef: toSkillFlowStateRef(readySession),
-            reportType: serviceProfile.assessmentScope,
-            format: "markdown",
-            includeFemale: scopeFlags.includeFemale,
-            includeMale: scopeFlags.includeMale,
-            displayName: serviceProfile.displayName,
-            currentGoal: serviceProfile.currentGoal,
-            htmlAvailable: true,
-          },
-        },
-      });
-      return {
-        session: { ...readySession, lastDirective: directive },
-        directive,
-      };
     }
 
     const shouldConfirm =
       profileReady &&
-      (analysis.readyForFinalConfirmation || nextRound >= input.session.maxRounds);
+      (analysis.collectionDisposition === "ready_for_final_confirmation" ||
+        analysis.collectionDisposition === "user_declined_more" ||
+        nextRound >= input.session.maxRounds);
     const nextSession = withProcessedState(input.session, {
       status: shouldConfirm ? "final_confirmation" : "collecting",
       round: nextRound,
