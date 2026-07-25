@@ -17,6 +17,8 @@ import { LanguageProvider } from "./app/providers/LanguageProvider";
 import { RoleModelConfigProvider } from "./app/providers/RoleModelConfigProvider";
 import { ThemeProvider } from "./app/providers/ThemeProvider";
 import { appPackageMeta } from "./shared/appMeta";
+import { installDesktopExternalLinkHandler } from "./shared/platform/externalLinks";
+
 const root = document.getElementById("root");
 
 if (!root) {
@@ -28,6 +30,8 @@ declare global {
     __uichatRoot?: Root;
   }
 }
+
+installDesktopExternalLinkHandler();
 
 const Main = () => {
   return (
