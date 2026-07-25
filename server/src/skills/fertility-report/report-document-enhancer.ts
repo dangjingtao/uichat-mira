@@ -59,8 +59,8 @@ const REPORT_ENHANCEMENT_CSS = `
   font-size: 10px;
 }
 .dimension-card {
-  border-top: 1px solid #d9cde0 !important;
-  padding-top: 24px !important;
+  border-top: 0 !important;
+  padding-top: 32px !important;
 }
 .dimension-title-row {
   border-left: 3px solid var(--secondary);
