@@ -26,6 +26,18 @@ export type GitHubConnectionRecord = {
   lastErrorMessage: string | null;
 };
 
+const BUILTIN_GITHUB_APP_CLIENT_ID = "Iv23li60DOYKM6wpvuXn";
+const BUILTIN_GITHUB_APP_SLUG = "uichat-mira-local-dev";
+
+const resolveGitHubAppConfig = () => ({
+  clientId:
+    (process.env.UI_CHAT_GITHUB_APP_CLIENT_ID ?? "").trim() ||
+    BUILTIN_GITHUB_APP_CLIENT_ID,
+  appSlug:
+    (process.env.UI_CHAT_GITHUB_APP_SLUG ?? "").trim() ||
+    BUILTIN_GITHUB_APP_SLUG,
+});
+
 const ensureTable = () => {
   getSqlite().exec(`
     CREATE TABLE IF NOT EXISTS github_connections (
@@ -98,14 +110,11 @@ const withRuntimeDefaults = (
 ): GitHubConnectionRecord | null => {
   if (!connection) return null;
 
+  const appConfig = resolveGitHubAppConfig();
   return {
     ...connection,
-    clientId:
-      connection.clientId ||
-      (process.env.UI_CHAT_GITHUB_APP_CLIENT_ID ?? "").trim(),
-    appSlug:
-      connection.appSlug ||
-      (process.env.UI_CHAT_GITHUB_APP_SLUG ?? "").trim(),
+    clientId: appConfig.clientId,
+    appSlug: appConfig.appSlug,
   };
 };
 
