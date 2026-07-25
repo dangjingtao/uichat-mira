@@ -8,15 +8,22 @@ import type {
   StoredSkillFlowSession,
 } from "../flow/types.js";
 import { toSkillFlowStateRef } from "../flow/state-store.js";
+import {
+  getFertilityScopeFlags,
+  hasExplicitFertilityServiceProfile,
+  resolveFertilityServiceProfile,
+} from "./service-profile.js";
 
-const INITIAL_REQUIREMENT: SkillRequirement = {
-  id: "fertility-baseline-context",
+const SERVICE_PROFILE_REQUIREMENT: SkillRequirement = {
+  id: "fertility-service-profile",
   kind: "user_input",
   description:
-    "缺少双方的基础备孕背景，包括年龄、备孕时长、妊娠/流产或辅助生殖经历、女方月经与检查、男方精液检查，以及当前最担心的问题。用户可以自由叙述，未知项可以跳过。",
-  requiredFor: "建立首轮备孕评估状态并识别后续最高价值信息缺口",
+    "为了由专属服务团队为用户建立正确档案，缺少以下基础信息：希望报告中如何称呼；评估对象是女方本人、男方本人还是夫妻双方；当前目标是自然备孕、辅助生殖/试管、既往失败经历复盘或其他。用户可以用一句话回答；夫妻评估可同时提供双方称呼。",
+  requiredFor: "确定专属报告抬头、评估对象和后续需要运行的女性/男性维度范围",
   acceptedFormats: ["natural_language"],
 };
+
+const INITIAL_REQUIREMENT = SERVICE_PROFILE_REQUIREMENT;
 
 const FINAL_CONFIRMATION_REQUIREMENT: SkillRequirement = {
   id: "fertility-final-confirmation",
@@ -268,23 +275,34 @@ const isLikelyActivationOnly = (query: string) => {
   );
 };
 
-const analysisSystemPrompt = `你是 Mira 的备孕/生育力信息整理 TaskModel。你的职责不是诊断或开处方，而是把用户自由叙述整理成结构化事实，并找出下一步最高价值的外部信息缺口。
+const analysisSystemPrompt = `你是 Mira 专属生育健康服务团队中的信息整理 TaskModel。你的职责不是诊断或开处方，而是把用户自由叙述整理成结构化事实，并找出下一步最高价值的外部信息缺口。
 
 硬规则：
 1. 只返回 JSON，不要 Markdown。
 2. factsPatch 只写本轮明确得到或可安全归一化的事实；不确定内容放 uncertainties。
-3. 用户口述化验值一律视为 user_reported，不假装已核验原始报告。
-4. 每次最多更新 2 个 dimensions；信息不足时 score 必须为 null，不要制造“精确生育概率”。
-5. 允许的 dimension id 只有：${FERTILITY_DIMENSION_IDS.join(", ")}。
-6. AMH/AFC 主要反映卵巢储备/促排反应背景，不能单独等同卵子质量或自然受孕概率。
-7. 不做疾病诊断，不给处方药方案，不给个体化药物/保健品剂量；建议分 selfCare / discussWithClinician / testsToConsider。
-8. 不把免疫、凝血、精子 DNA 碎片等检查当作所有人的常规必查项；没有明确指征时标记为需医生判断。
-9. nextRequirement 只描述当前最高价值的缺失信息、它为什么需要以及可接受的输入形式。它不是面向用户的问题，不要写“请问”“能否告诉我”等追问话术。
-10. readyForFinalConfirmation 只有在继续收集信息的边际价值已经较低时才为 true。
+3. 首先维护 factsPatch.serviceProfile：displayName（报告称呼）、assessmentScope（female|male|couple）、subjectGender（female|male|couple）、currentGoal（natural_conception|assisted_reproduction|failure_review|general），夫妻评估可附 femaleName / maleName。缺少这些字段时，nextRequirement 必须优先要求补齐。
+4. 用户口述化验值一律视为 user_reported，不假装已核验原始报告。
+5. 每次最多更新 2 个 dimensions；信息不足时 score 必须为 null，不要制造“精确生育概率”。
+6. 只更新与 assessmentScope 匹配的维度：female 仅 female_*，male 仅 male_*，couple 才允许两者。范围尚未确认时不要更新维度。
+7. 允许的 dimension id 只有：${FERTILITY_DIMENSION_IDS.join(", ")}。
+8. AMH/AFC 主要反映卵巢储备/促排反应背景，不能单独等同卵子质量或自然受孕概率。
+9. 不做疾病诊断，不给处方药方案，不给个体化药物/保健品剂量；建议分 selfCare / discussWithClinician / testsToConsider。
+10. 不把免疫、凝血、精子 DNA 碎片等检查当作所有人的常规必查项；没有明确指征时标记为需医生判断。
+11. nextRequirement 只描述当前最高价值的缺失信息、它为什么需要以及可接受的输入形式。它不是面向用户的问题，不要写“请问”“能否告诉我”等追问话术。
+12. readyForFinalConfirmation 只有在服务档案已完整且继续收集信息的边际价值已经较低时才为 true。
 
 输出结构：
 {
-  "factsPatch": {},
+  "factsPatch": {
+    "serviceProfile": {
+      "displayName": "报告称呼",
+      "assessmentScope": "female|male|couple",
+      "subjectGender": "female|male|couple",
+      "currentGoal": "natural_conception|assisted_reproduction|failure_review|general",
+      "femaleName": "可选",
+      "maleName": "可选"
+    }
+  },
   "missingCriticalFields": [],
   "uncertainties": [],
   "contradictions": [],
@@ -441,13 +459,27 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
       };
     }
 
+    const mergedFacts = mergeRecord(currentState.facts, analysis.factsPatch);
+    const profileReady = hasExplicitFertilityServiceProfile(mergedFacts);
+    const serviceProfile = resolveFertilityServiceProfile(mergedFacts);
+    const scopeFlags = getFertilityScopeFlags(serviceProfile.assessmentScope);
+
     const dimensions = { ...currentState.dimensions };
-    for (const item of analysis.dimensionUpdates) dimensions[item.id] = item;
+    if (profileReady) {
+      for (const item of analysis.dimensionUpdates) {
+        if (
+          (item.id.startsWith("female_") && scopeFlags.includeFemale) ||
+          (item.id.startsWith("male_") && scopeFlags.includeMale)
+        ) {
+          dimensions[item.id] = item;
+        }
+      }
+    }
 
     const nextRound = input.session.round + 1;
     const nextState: FertilityAssessmentState = {
       ...currentState,
-      facts: mergeRecord(currentState.facts, analysis.factsPatch),
+      facts: mergedFacts,
       missingCriticalFields: analysis.missingCriticalFields,
       uncertainties: analysis.uncertainties,
       contradictions: analysis.contradictions,
@@ -470,10 +502,12 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
           targetSkillId: "fertility-report",
           args: {
             assessmentRef: toSkillFlowStateRef(readySession),
-            reportType: "couple",
+            reportType: serviceProfile.assessmentScope,
             format: "markdown",
-            includeFemale: true,
-            includeMale: true,
+            includeFemale: scopeFlags.includeFemale,
+            includeMale: scopeFlags.includeMale,
+            displayName: serviceProfile.displayName,
+            currentGoal: serviceProfile.currentGoal,
             htmlAvailable: true,
           },
         },
@@ -485,7 +519,8 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
     }
 
     const shouldConfirm =
-      analysis.readyForFinalConfirmation || nextRound >= input.session.maxRounds;
+      profileReady &&
+      (analysis.readyForFinalConfirmation || nextRound >= input.session.maxRounds);
     const nextSession = withProcessedState(input.session, {
       status: shouldConfirm ? "final_confirmation" : "collecting",
       round: nextRound,
@@ -499,7 +534,11 @@ export const fertilityAssessmentRuntime: SkillConversationFlowRuntime = {
       interruption: {
         reason: "missing_requirement",
         requirements: [
-          shouldConfirm ? FINAL_CONFIRMATION_REQUIREMENT : analysis.nextRequirement,
+          shouldConfirm
+            ? FINAL_CONFIRMATION_REQUIREMENT
+            : profileReady
+              ? analysis.nextRequirement
+              : SERVICE_PROFILE_REQUIREMENT,
         ],
       },
     });
