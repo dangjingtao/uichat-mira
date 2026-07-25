@@ -23,12 +23,15 @@ import {
   completeFertilityDimensions,
   getFertilityDimensionPairs,
 } from "./dimension-analysis.js";
+import { applyFertilityReportProfile } from "./report-profile.js";
 import {
   buildFertilityReportFileName,
   buildFertilityReportTitle,
   renderFertilityHtmlReport,
   renderFertilityMarkdownReport,
 } from "./report-renderer.js";
+import { applyFertilityScoringProfile } from "./scoring-calibration.js";
+import { loadFertilitySourceBundle } from "./source-config.js";
 
 const withUpdatedState = (
   session: StoredSkillFlowSession,
@@ -57,8 +60,25 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
     const assessment = toFertilityAssessmentState(session.state);
     const profile = resolveFertilityServiceProfile(assessment.facts);
     const scopeFlags = getFertilityScopeFlags(profile.assessmentScope);
+    const sourceBundle = loadFertilitySourceBundle();
+    for (const diagnostic of sourceBundle.diagnostics) {
+      writeStructuredLog("warn", {
+        scope: "fertility-report",
+        event: "source-config-fallback",
+        sessionId: session.sessionId,
+        diagnostic,
+      });
+    }
+
     const dimensionPairs = getFertilityDimensionPairs(profile.assessmentScope);
-    const dimensions = await completeFertilityDimensions(assessment, dimensionPairs);
+    const builtInDimensions = await completeFertilityDimensions(
+      assessment,
+      dimensionPairs,
+    );
+    const dimensions = applyFertilityScoringProfile({
+      dimensions: builtInDimensions,
+      profile: sourceBundle.scoringProfile,
+    });
     const withDimensions: FertilityAssessmentState = {
       ...assessment,
       dimensions,
@@ -69,17 +89,24 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       summary,
     };
     const generatedAt = new Date().toISOString();
-    const html = renderFertilityHtmlReport({
+    const rawHtml = renderFertilityHtmlReport({
       state: reportState,
       profile,
       generatedAt,
     });
+    const rawMarkdown = renderFertilityMarkdownReport({
+      state: reportState,
+      profile,
+      generatedAt,
+    });
+    const profiledReport = applyFertilityReportProfile({
+      html: rawHtml,
+      markdown: rawMarkdown,
+      profile: sourceBundle.reportProfile,
+    });
+    const html = profiledReport.html;
     const report = {
-      markdown: renderFertilityMarkdownReport({
-        state: reportState,
-        profile,
-        generatedAt,
-      }),
+      markdown: profiledReport.markdown,
       html,
       generatedAt,
     };
@@ -127,6 +154,9 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
           includeMale: scopeFlags.includeMale,
           htmlAvailable: true,
           pdfAvailable,
+          reportProfileId: sourceBundle.reportProfile.id,
+          scoringProfileId: sourceBundle.scoringProfile.id,
+          scoringProfileVersion: sourceBundle.scoringProfile.version,
         },
       },
       delivery: {
@@ -143,6 +173,15 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
         },
       },
     };
+
+    writeStructuredLog("info", {
+      scope: "fertility-report",
+      event: "source-profiles-applied",
+      sessionId: session.sessionId,
+      reportProfileId: sourceBundle.reportProfile.id,
+      scoringProfileId: sourceBundle.scoringProfile.id,
+      scoringProfileVersion: sourceBundle.scoringProfile.version,
+    });
 
     return {
       session: { ...nextSession, lastDirective: directive },
