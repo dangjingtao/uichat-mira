@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "activeProfileId": "clinical-default",
+  "profiles": {
+    "clinical-default": {
+      "version": "fertility-rubric-v2.0.0",
+      "mode": "preserve_builtin",
+      "noEvidenceReferenceScore": 5.0,
+      "statusEffect": {
+        "favorable": 0.8,
+        "neutral": 0,
+        "mild_concern": -0.75,
+        "moderate_concern": -1.45,
+        "high_concern": -2.35,
+        "unknown": 0
+      },
+      "dimensions": {}
+    },
+    "doctor-tunable-example": {
+      "version": "fertility-rubric-v2.0.0-clinic-a",
+      "mode": "recalculate_configured_dimensions",
+      "noEvidenceReferenceScore": 5.0,
+      "statusEffect": {
+        "favorable": 0.8,
+        "neutral": 0,
+        "mild_concern": -0.75,
+        "moderate_concern": -1.45,
+        "high_concern": -2.35,
+        "unknown": 0
+      },
+      "dimensions": {
+        "female_oocyte_context": {
+          "baseScore": 6.5,
+          "minScore": 0,
+          "maxScore": 10,
+          "scoreOffset": 0,
+          "criterionWeights": {
+            "age_context": 1.6,
+            "oocyte_embryo_outcomes": 1.5,
+            "pregnancy_loss_context": 0.8,
+            "oxidative_context": 0.5
+          }
+        },
+        "male_concentration": {
+          "baseScore": 6.3,
+          "minScore": 0,
+          "maxScore": 10,
+          "scoreOffset": 0,
+          "criterionWeights": {
+            "concentration": 1.3,
+            "total_sperm_number": 1.2,
+            "repeat_consistency": 1.1,
+            "testicular_history": 0.8
+          }
+        }
+      }
+    }
+  }
+}
