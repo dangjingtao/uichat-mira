@@ -81,6 +81,51 @@ const resolveChromiumExecutable = () => {
   return candidates.find((candidate) => candidate && fs.existsSync(candidate));
 };
 
+const PRINT_LAYOUT_OVERRIDES = `
+@page { size: A4; margin: 23mm 12mm 21mm; }
+@media print {
+  .print-header {
+    top: -17mm !important;
+    min-height: 6mm;
+    align-items: flex-end;
+    padding-bottom: 2mm !important;
+    background: #fff;
+  }
+  .print-footer {
+    bottom: -16mm !important;
+    min-height: 7mm;
+    align-items: flex-start;
+    padding-top: 2mm !important;
+    background: #fff;
+    line-height: 1.35;
+  }
+  .dimension-card,
+  .detail-grid section,
+  .core-judgement {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+  .dimension-title-row,
+  .section-head,
+  h2,
+  h3,
+  h4,
+  figcaption {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+  .radar-figure,
+  .score-bars,
+  .summary-block,
+  .gap-block,
+  .closing-section > div:last-child {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+  .eyebrow { display: none !important; }
+}
+`;
+
 export const renderHtmlReportToPdf = async (input: {
   html: string;
   outputPath: string;
@@ -106,6 +151,7 @@ export const renderHtmlReportToPdf = async (input: {
       deviceScaleFactor: 1,
     });
     await page.setContent(input.html, { waitUntil: "load" });
+    await page.addStyleTag({ content: PRINT_LAYOUT_OVERRIDES });
     await page.evaluate("document.fonts ? document.fonts.ready : Promise.resolve()");
     await page.emulateMedia({ media: "print" });
     await page.pdf({
@@ -114,10 +160,10 @@ export const renderHtmlReportToPdf = async (input: {
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
-        top: "10mm",
-        right: "10mm",
-        bottom: "12mm",
-        left: "10mm",
+        top: "23mm",
+        right: "12mm",
+        bottom: "21mm",
+        left: "12mm",
       },
     });
 
