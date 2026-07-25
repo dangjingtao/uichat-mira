@@ -37,16 +37,16 @@ describe("GitHub proxy-aware fetch", () => {
 
   it("routes GitHub requests through the configured SOCKS5 agent", async () => {
     const directFetch = vi.fn(async () => new Response("direct"));
-    const proxiedFetch = vi.fn(async () =>
+    const proxiedFetchMock = vi.fn(async () =>
       new NodeFetchResponse(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
-    ) as unknown as typeof nodeFetch;
+    );
     const proxyAwareFetch = createGitHubProxyAwareFetch({
       directFetch,
       readProxySettings: () => proxySettings,
-      proxiedFetch,
+      proxiedFetch: proxiedFetchMock as unknown as typeof nodeFetch,
     });
 
     const response = await proxyAwareFetch("https://github.com/login/device/code", {
@@ -55,8 +55,8 @@ describe("GitHub proxy-aware fetch", () => {
 
     expect(await response.json()).toEqual({ ok: true });
     expect(directFetch).not.toHaveBeenCalled();
-    expect(proxiedFetch).toHaveBeenCalledTimes(1);
-    expect(proxiedFetch.mock.calls[0]?.[1]).toMatchObject({
+    expect(proxiedFetchMock).toHaveBeenCalledTimes(1);
+    expect(proxiedFetchMock.mock.calls[0]?.[1]).toMatchObject({
       method: "POST",
       agent: expect.anything(),
     });
@@ -64,17 +64,17 @@ describe("GitHub proxy-aware fetch", () => {
 
   it("keeps non-GitHub traffic on the native direct fetch", async () => {
     const directFetch = vi.fn(async () => new Response("direct"));
-    const proxiedFetch = vi.fn() as unknown as typeof nodeFetch;
+    const proxiedFetchMock = vi.fn();
     const proxyAwareFetch = createGitHubProxyAwareFetch({
       directFetch,
       readProxySettings: () => proxySettings,
-      proxiedFetch,
+      proxiedFetch: proxiedFetchMock as unknown as typeof nodeFetch,
     });
 
     const response = await proxyAwareFetch("https://example.com/resource");
 
     expect(await response.text()).toBe("direct");
     expect(directFetch).toHaveBeenCalledTimes(1);
-    expect(proxiedFetch).not.toHaveBeenCalled();
+    expect(proxiedFetchMock).not.toHaveBeenCalled();
   });
 });
