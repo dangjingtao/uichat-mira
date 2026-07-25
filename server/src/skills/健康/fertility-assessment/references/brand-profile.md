@@ -38,6 +38,8 @@ references/report-profiles.json
 
 修改 Source 后，新生成的报告会按文件修改时间读取最新配置，不需要修改 TypeScript，也不会改变已经完成的旧报告。
 
+当前 Skill 详情页负责公开展示这些配置。宿主应用尚未提供 Source 编辑入口时，仍需通过技能文件管理或后续开放的编辑入口修改 `report-profiles.json`；本说明不把“可查看”误写成“已支持前端编辑”。
+
 ## 当前已发布模板
 
 ### `yuanjie`
