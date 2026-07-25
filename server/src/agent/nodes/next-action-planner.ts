@@ -73,6 +73,11 @@ const buildStructuredRequirementQuestion = (
     .slice(0, 3);
   if (userInputRequirements.length === 0) return null;
 
+  if (userInputRequirements.length === 1) {
+    const authoredPrompt = userInputRequirements[0]?.userPrompt?.trim();
+    if (authoredPrompt) return authoredPrompt;
+  }
+
   const clauses = userInputRequirements
     .map(toParentRequirementClause)
     .filter(Boolean);
