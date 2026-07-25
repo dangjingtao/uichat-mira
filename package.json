@@ -52,7 +52,7 @@
     "version:sync": "node scripts/sync-version.js",
     "internal:build:desktop": "pnpm --filter @ui-chat-mira/desktop build",
     "internal:build:server": "pnpm --filter @ui-chat-mira/server build",
-    "internal:prepare:desktop-artifacts": "node scripts/prepare-desktop-artifacts.js",
+    "internal:prepare:desktop-artifacts": "node scripts/prepare-desktop-artifacts.js && pnpm prepare:vivliostyle-runtime && node scripts/stage-vivliostyle-runtime.mjs",
     "internal:prepare:tauri": "node scripts/prepare-tauri-assets.js",
     "internal:dev:tauri:services": "node scripts/tauri-dev-launcher.cjs",
     "prepare:terminal-runtime": "node scripts/prepare-terminal-runtime.mjs",
