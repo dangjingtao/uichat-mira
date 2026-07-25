@@ -3,13 +3,62 @@ id: fertility-assessment
 name: fertility-assessment
 displayName: 备孕全景评估
 description: 当用户希望进行个人或夫妻备孕/生育力梳理、复盘试管/IUI/既往妊娠经历、整理相关检查结果，并最终形成可读的专属备孕全景评估报告时使用。通过自然多轮对话完成服务建档、信息收集、结构化评估、最终确认、量化评分、报告生成与交付。
-version: 1.0.0
+version: 1.1.0
 source: Mira Lab
 category: 健康
 visibility: public
 ---
 
 # 备孕全景评估
+
+## 用户可见说明
+
+本服务通过自然对话帮助个人或夫妻梳理备孕、辅助生殖、既往妊娠和相关检查信息，并生成一份包含十维画像、置信度、资料缺口和就诊讨论方向的专属报告。
+
+### 您会得到什么
+
+- 女方个人、男方个人或夫妻双方对应的十维量化画像；
+- 当前优势、优先事项和下一次就诊最值得问的问题；
+- 每个维度的分数、置信度和资料完整度；
+- 行内可读报告，并在本机 PDF 环境可用时提供 PDF；
+- 一段来自专属服务团队的温和总结。
+
+### 评分如何理解
+
+当前公开评分标准为 `fertility-rubric-v2.0.0`。
+
+```text
+8.0–10.0  优势维持
+6.5–7.9   总体稳定
+5.0–6.4   建议优化
+3.0–4.9   需要关注
+0–2.9     优先评估
+```
+
+分数用于形成当前画像和排序，不代表自然受孕率、试管成功率、活产率或疾病概率。资料不足时不会记为 0 分，而是向 `5.0` 中性参考基准收缩，并同时降低置信度、显示资料完整度和缺失依据。
+
+完整说明见：`references/scoring-standard-v2.md`。
+
+### 隐私与主动提供
+
+- 可以使用称呼或化名；
+- 任何问题都可以跳过，也可以随时停止；
+- 本 Skill 不要求身份证号、详细住址等与本次评估无关的身份信息；
+- 使用云模型时，完成评估所需的内容会由当前配置的模型服务商处理；
+- 夫妻联合评估前，应确认已获得另一位评估对象同意。
+
+完整说明见：`references/privacy-and-data-use.md`。
+
+### 当前品牌模板
+
+当前默认模板为 `yuanjie`：
+
+- 品牌：圆姐聊女性全周期服务；
+- 服务团队：Mira 生育健康评估服务团队；
+- 主色：`#5B2A86`；
+- 配置源：`references/report-profiles.json`。
+
+品牌、团队、页眉页脚、交付文案和配色由报告 Profile 管理，不改变用户事实和医学评分规则。完整说明见：`references/brand-profile.md`。
 
 ## Routing
 
@@ -78,9 +127,11 @@ visibility: public
 - 对话开场应像专业顾问接待，不像固定问卷。
 - 报告必须显示服务对象称呼、评估类型、评估范围、生成日期、评分规则版本和服务团队。
 - 用户只提供个人信息时，不得在报告中生成另一性别的空白十维页面。
-- 报告先展示十维雷达图和评分条，再进入“核心判断 / 已有依据 / 当前关注 / 建议补充 / 下一步计划”。
+- 报告先展示自动目录、服务团队结论、十维雷达图和评分条，再进入“核心判断 / 已有依据 / 当前关注 / 建议补充 / 下一步计划”。
 - 图表必须由最终数值状态直接生成静态 SVG / HTML，不依赖打印时临时脚本执行。
 - 页眉、页脚、品牌色、服务团队名称由 `report-profiles.json` 管理；`activeProfileId` 是默认模板，服务档案中的 `reportProfileId` 可以为单个客户选择另一个已发布模板。
+- 维度标题、分数、完整度、进度条和核心判断首段构成不可拆的章节开场组；放不下时整体移到下一页。
+- 具体治疗、检查、药物、补充剂和手术方向只能作为就诊讨论问题，不得写成替用户决定的方案或效果承诺。
 
 ## Source runtime contract
 
@@ -107,6 +158,12 @@ visibility: public
 
 详细规则按需读取，不把所有领域细节长期塞进 `SKILL.md`：
 
+- `skill://fertility-assessment/references/scoring-standard-v2.md`
+  - 用户可读的评分区间、置信度、资料完整度、十维名称与医学边界。
+- `skill://fertility-assessment/references/privacy-and-data-use.md`
+  - 主动提供、化名、跳过问题、停止评估、模型处理链路和夫妻信息边界。
+- `skill://fertility-assessment/references/brand-profile.md`
+  - 当前品牌模板、公开配置项和 Source Profile 边界。
 - `skill://fertility-assessment/references/assessment-framework.md`
   - 信息域、结构化评估原则、数据来源语义、医学安全边界。
 - `skill://fertility-assessment/references/report-contract.md`
@@ -117,8 +174,6 @@ visibility: public
   - 十维内置评分方法、证据字段、医学边界和依据来源。
 - `skill://fertility-assessment/references/scoring-profiles.json`
   - 医生 / 顾问可审阅的评分校准 Profile；默认不覆盖内置规则。
-- `skill://fertility-assessment/references/service-report-source.yaml`
-  - 第一、二轮设计期兼容说明；运行时配置以 JSON Profile Source 为准。
 
 只在当前阶段确实需要细节时读取对应 reference。
 
@@ -128,6 +183,7 @@ visibility: public
 - 不为了图表完整而编造事实；
 - 不把状态分解释成怀孕概率；
 - 不让报告阶段重新发明与 assessment state 冲突的新事实；
+- “已有依据”只放事实，“当前关注”只放由事实推导出的影响，“建议补充”只放确实缺失且会改变判断的信息；三栏之间必须去重；
 - 信息不足时输出低置信度参考分，同时保留 `uncertainty / missingEvidence` 和建议补充项；
 - 新事实或新检查结果出现时，先更新 assessment state，再重新计算评分并生成报告，不直接手改旧报告结论。
 
