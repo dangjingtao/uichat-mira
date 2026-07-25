@@ -76,6 +76,43 @@ describe("nextActionPlannerNode active Skill conversation flow", () => {
     );
   });
 
+  it("preserves a single service-toned userPrompt without adding interrogation boilerplate", async () => {
+    const userPrompt =
+      "谢谢你已经把AMH和AFC说得很清楚。我还想了解一次既往取卵结果，因为它最能帮助我们理解实际反应；记得多少说多少，不方便回答也没关系。";
+    const state = createState({
+      skillId: "fertility-assessment",
+      sessionId: "fertility-session-1",
+      phase: "collecting",
+      flowCompleted: false,
+      round: 2,
+      maxRounds: 10,
+      interruption: {
+        reason: "missing_requirement",
+        requirements: [
+          {
+            id: "fertility-prior-retrieval",
+            kind: "user_input",
+            description: "既往取卵结果",
+            requiredFor: "理解实际促排反应",
+            acceptedFormats: ["natural_language", "service_conversation"],
+            userPrompt,
+          },
+        ],
+      },
+    });
+
+    const result = await nextActionPlannerNode(state);
+
+    expect(mocks.basePlanner).not.toHaveBeenCalled();
+    expect(result.nextAction).toMatchObject({
+      type: "ask_user",
+      question: userPrompt,
+    });
+    expect(
+      result.nextAction?.type === "ask_user" && result.nextAction.question,
+    ).not.toContain("请补充以下信息");
+  });
+
   it("keeps final confirmation as one Parent question and accepts an explicit no-more answer", async () => {
     const state = createState({
       skillId: "fertility-assessment",
