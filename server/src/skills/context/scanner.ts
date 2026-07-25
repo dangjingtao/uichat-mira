@@ -2,13 +2,31 @@ import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getBuiltInSkillPackage } from "../registry.js";
+import {
+  getBuiltInSkillPackage,
+  MIRA_LAB_SKILL_SOURCE,
+} from "../registry.js";
 import type { SkillManifest } from "./types.js";
 
 const FRONTMATTER_BOUNDARY = "---";
 const MAX_MANIFEST_BYTES = 16 * 1024;
 const PUBLIC_VISIBILITY = "public";
 const BLOCKED_VISIBILITIES = new Set(["internal", "private", "hidden"]);
+const OFFICIAL_SKILL_SOURCE_ALIASES = new Set([
+  "Mira",
+  "Mira WenShu",
+  "Kimi / WenShu",
+  MIRA_LAB_SKILL_SOURCE,
+]);
+const CATEGORY_DISPLAY_NAMES: Record<string, string> = {
+  development: "工程研发",
+};
+
+const normalizeSkillSource = (value: string) =>
+  OFFICIAL_SKILL_SOURCE_ALIASES.has(value) ? MIRA_LAB_SKILL_SOURCE : value;
+
+const normalizeCategoryLabel = (value: string) =>
+  CATEGORY_DISPLAY_NAMES[value.toLowerCase()] ?? value;
 
 const stripQuotes = (value: string) => {
   const trimmed = value.trim();
@@ -142,6 +160,11 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
   ).trim();
   if (!id) return null;
 
+  const rawSource = String(frontmatter.source || fallback?.source || "").trim();
+  const rawCategory = String(
+    candidate.categoryFromDirectory || frontmatter.category || fallback?.category || "",
+  ).trim();
+
   return {
     id,
     name: String(
@@ -155,16 +178,8 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
       String(frontmatter.description || fallback?.description || "").trim() || id,
     version: String(frontmatter.version || fallback?.version || "1.0.0"),
     entry: candidate.skillFile,
-    ...(frontmatter.source || fallback?.source
-      ? { source: String(frontmatter.source || fallback?.source).trim() }
-      : {}),
-    ...(candidate.categoryFromDirectory || frontmatter.category || fallback?.category
-      ? {
-          category: String(
-            candidate.categoryFromDirectory || frontmatter.category || fallback?.category,
-          ).trim(),
-        }
-      : {}),
+    ...(rawSource ? { source: normalizeSkillSource(rawSource) } : {}),
+    ...(rawCategory ? { category: normalizeCategoryLabel(rawCategory) } : {}),
     ...(frontmatter.license ? { license: String(frontmatter.license).trim() } : {}),
     ...(fallback?.runtimePack
       ? { runtimeRequirements: [`${fallback.runtimePack.id}@${fallback.runtimePack.version}`] }
