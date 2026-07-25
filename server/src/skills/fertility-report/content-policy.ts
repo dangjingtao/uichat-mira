@@ -86,7 +86,8 @@ const isSemanticallyDuplicate = (left: string, right: string) => {
     if (bGrams.has(gram)) overlap += 1;
   }
   const union = new Set([...aGrams, ...bGrams]).size;
-  return union > 0 && overlap / union >= 0.68;
+  const shorterOverlap = overlap / Math.min(aGrams.size, bGrams.size);
+  return union > 0 && (overlap / union >= 0.68 || shorterOverlap >= 0.55);
 };
 
 const uniqueMeaningful = (
