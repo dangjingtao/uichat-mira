@@ -10,9 +10,9 @@ import {
 } from "../mcp/tools/edit-actions.tool.js";
 import { editFileTool } from "../mcp/tools/edit-file.tool.js";
 import { grepTool } from "../mcp/tools/grep.tool.js";
+import { githubIssueReadTool } from "../mcp/tools/github-issue-read.tool.js";
 import {
   githubActionsStatusTool,
-  githubIssueReadTool,
   githubPrReadTool,
   githubRepoReadTool,
 } from "../mcp/tools/github-read.tool.js";
