@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-25
+Last verified: 2026-07-25
 Layer: raw-source
 Module: Develoments
 Feature: RuntimeArchitecture
@@ -15,6 +15,7 @@ Related:
   - context-budget-runtime.md
   - chat-agent-fast-review-2026-06-27.md
   - mcp-marketplace-agent-integration.md
+  - multi-agent-execution-truth.md
   - ../platform/tauri.md
 
 ## 单点真相范围
@@ -93,6 +94,7 @@ Electron 和 Tauri 还共享同一批 `node-runtime/` 与 `terminal-runtime/` st
 - renderer 不直接分支操作 host / port / native runtime
 - 桌面壳层之间共享尽可能多的构建输入
 - 模型调用前的上下文预算与审计应由 backend runtime 统一处理
+- Main Agent、forked Skill Agent、private Runtime、审批恢复和 Parent recovery 的当前合同见 `multi-agent-execution-truth.md`
 
 当前桌面产品只支持 Windows。Electron 与 Tauri 对 renderer 统一暴露
 `platform: "win32"`；工作空间根目录只接受 Windows 盘符绝对路径或 UNC
@@ -107,12 +109,15 @@ Electron 和 Tauri 还共享同一批 `node-runtime/` 与 `terminal-runtime/` st
 - 改 preload 暴露面
 - 改 Electron / Tauri 打包边界
 
+涉及 Main Agent / Skill Agent 的任务局部执行所有权、私有 Runtime、approval checkpoint resume 或多 Agent 产品表述时，先读 `multi-agent-execution-truth.md`。
+
 ## 相关文档
 
 - `ipc-and-preload.md`
 - `api-response-spec.md`
 - `model-config-api.md`
-  - `context-budget-runtime.md`
-  - `chat-agent-fast-review-2026-06-27.md`
-  - `mcp-marketplace-agent-integration.md`
-  - `../platform/tauri.md`
+- `context-budget-runtime.md`
+- `chat-agent-fast-review-2026-06-27.md`
+- `mcp-marketplace-agent-integration.md`
+- `multi-agent-execution-truth.md`
+- `../platform/tauri.md`
