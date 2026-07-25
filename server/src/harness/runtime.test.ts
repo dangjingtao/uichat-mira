@@ -24,16 +24,18 @@ const appDataRoot = getTestArtifactDir("harness-runtime-codegraph-appdata");
 let activeWorkspaceRoot = "";
 let activeService: ReturnType<typeof createCodeGraphStudioService> | null = null;
 
-describe("initializeHarnessRuntime codebase_explore registration", () => {
-  afterEach(() => {
-    void activeService?.stop();
-    activeService = null;
-    setActiveCodeGraphStudioService(null);
-    clearHarnessRegistry();
-    resetHarnessRuntime();
-    fs.rmSync(storageRoot, { recursive: true, force: true });
-    fs.rmSync(appDataRoot, { recursive: true, force: true });
-  });
+const resetRuntime = () => {
+  void activeService?.stop();
+  activeService = null;
+  setActiveCodeGraphStudioService(null);
+  clearHarnessRegistry();
+  resetHarnessRuntime();
+  fs.rmSync(storageRoot, { recursive: true, force: true });
+  fs.rmSync(appDataRoot, { recursive: true, force: true });
+};
+
+describe("initializeHarnessRuntime capability registration", () => {
+  afterEach(resetRuntime);
 
   it("keeps codebase_explore registered by default", () => {
     initializeHarnessRuntime();
@@ -49,4 +51,27 @@ describe("initializeHarnessRuntime codebase_explore registration", () => {
     expect(decision.exposedToolIds).toContain("codebase_explore");
   });
 
+  it("registers exactly four GitHub domain tools and no legacy read wrappers", () => {
+    initializeHarnessRuntime();
+
+    const githubToolIds = listCapabilityDefinitions()
+      .filter((definition) => definition.domain === "github")
+      .map((definition) => definition.id)
+      .sort();
+
+    expect(githubToolIds).toEqual([
+      "github_actions",
+      "github_issue",
+      "github_pull_request",
+      "github_repository",
+    ]);
+    expect(githubToolIds).not.toEqual(
+      expect.arrayContaining([
+        "github_repo_read",
+        "github_issue_read",
+        "github_pr_read",
+        "github_actions_status",
+      ]),
+    );
+  });
 });
