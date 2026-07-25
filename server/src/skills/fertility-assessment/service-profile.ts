@@ -20,7 +20,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const cleanText = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : undefined;
 
-const normalizeScope = (value: unknown): FertilityAssessmentScope | undefined => {
+export const normalizeFertilityAssessmentScope = (
+  value: unknown,
+): FertilityAssessmentScope | undefined => {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (["female", "woman", "女", "女方", "女性", "本人女方"].includes(normalized)) {
     return "female";
@@ -44,6 +46,28 @@ const normalizeGoal = (value: unknown): FertilityServiceGoal => {
   return "general";
 };
 
+export const hasExplicitFertilityServiceProfile = (facts: Record<string, unknown>) => {
+  const serviceProfile = isRecord(facts.serviceProfile) ? facts.serviceProfile : {};
+  const displayName =
+    cleanText(serviceProfile.displayName) ??
+    cleanText(serviceProfile.preferredName) ??
+    cleanText(facts.displayName) ??
+    cleanText(facts.preferredName) ??
+    cleanText(facts.name);
+  const scope =
+    normalizeFertilityAssessmentScope(serviceProfile.assessmentScope) ??
+    normalizeFertilityAssessmentScope(serviceProfile.subjectGender) ??
+    normalizeFertilityAssessmentScope(facts.assessmentScope) ??
+    normalizeFertilityAssessmentScope(facts.gender);
+  const goal =
+    cleanText(serviceProfile.currentGoal) ??
+    cleanText(serviceProfile.goal) ??
+    cleanText(facts.currentGoal) ??
+    cleanText(facts.goal);
+
+  return Boolean(displayName && scope && goal);
+};
+
 export const resolveFertilityServiceProfile = (
   facts: Record<string, unknown>,
 ): FertilityServiceProfile => {
@@ -62,10 +86,10 @@ export const resolveFertilityServiceProfile = (
     cleanText(facts.maleName);
 
   const assessmentScope =
-    normalizeScope(serviceProfile.assessmentScope) ??
-    normalizeScope(serviceProfile.subjectGender) ??
-    normalizeScope(facts.assessmentScope) ??
-    normalizeScope(facts.gender) ??
+    normalizeFertilityAssessmentScope(serviceProfile.assessmentScope) ??
+    normalizeFertilityAssessmentScope(serviceProfile.subjectGender) ??
+    normalizeFertilityAssessmentScope(facts.assessmentScope) ??
+    normalizeFertilityAssessmentScope(facts.gender) ??
     (femaleName && maleName ? "couple" : femaleName ? "female" : maleName ? "male" : "couple");
 
   const explicitDisplayName =
