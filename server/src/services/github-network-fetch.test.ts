@@ -37,11 +37,15 @@ describe("GitHub proxy-aware fetch", () => {
 
   it("routes GitHub requests through the configured SOCKS5 agent", async () => {
     const directFetch = vi.fn(async () => new Response("direct"));
-    const proxiedFetchMock = vi.fn(async () =>
-      new NodeFetchResponse(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const proxiedFetchMock = vi.fn(
+      async (
+        _input: Parameters<typeof nodeFetch>[0],
+        _init?: Parameters<typeof nodeFetch>[1],
+      ) =>
+        new NodeFetchResponse(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
     );
     const proxyAwareFetch = createGitHubProxyAwareFetch({
       directFetch,
