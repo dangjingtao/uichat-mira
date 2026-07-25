@@ -34,7 +34,7 @@ const DOMAIN_METADATA: Record<string, WorkbenchPresentation> = {
   github: {
     groupLabel: "GitHub",
     groupDescription:
-      "读取已通过 GitHub 官方 installation 授权的仓库、Issue、Pull Request 与 Actions。",
+      "在 GitHub 官方 installation 授权范围内管理仓库、Issue、Pull Request 与 Actions。",
     groupOrder: 50,
     icon: "github",
   },
@@ -53,15 +53,16 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
   move_path: { path: "", destinationPath: "" },
   web_search: { query: "" },
   news_search: { query: "" },
-  github_repo_read: {
+  github_repository: {
+    operation: "get",
     repository: "owner/repository",
     includeReadme: true,
     includeLanguages: false,
     includeBranches: false,
-    branchLimit: 20,
     commitLimit: 5,
   },
-  github_issue_read: {
+  github_issue: {
+    operation: "list",
     repository: "owner/repository",
     state: "open",
     sort: "updated",
@@ -69,7 +70,8 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
     limit: 20,
     page: 1,
   },
-  github_pr_read: {
+  github_pull_request: {
+    operation: "list",
     repository: "owner/repository",
     state: "open",
     sort: "updated",
@@ -77,7 +79,8 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
     limit: 20,
     page: 1,
   },
-  github_actions_status: {
+  github_actions: {
+    operation: "list_runs",
     repository: "owner/repository",
     limit: 20,
     page: 1,
@@ -131,7 +134,9 @@ export const withWorkbenchMetadata = (
         ...(ownership?.presentation ??
           DOMAIN_METADATA[definition.domain] ??
           fallbackDomainMetadata(definition.domain)),
-        ...(DEFAULT_ARGS[definition.id] ? { defaultArgs: DEFAULT_ARGS[definition.id] } : {}),
+        ...(DEFAULT_ARGS[definition.id]
+          ? { defaultArgs: DEFAULT_ARGS[definition.id] }
+          : {}),
       },
     };
   });
