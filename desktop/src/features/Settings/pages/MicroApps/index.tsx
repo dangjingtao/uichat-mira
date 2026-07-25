@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, FileText, Image, Mail, MonitorSmartphone, Newspaper, PlugZap, Settings, StickyNote } from "lucide-react";
+import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, FileText, Github, Image, Mail, MonitorSmartphone, Newspaper, PlugZap, Settings, StickyNote } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
@@ -80,6 +80,14 @@ const featuredStudioEntries = [
     route: "/settings/micro-apps/codegraph-studio",
     capability: undefined,
   },
+  {
+    key: "github",
+    route: "/settings/micro-apps/github",
+    capability: undefined,
+    title: "GitHub",
+    description: "通过 GitHub App 连接账号，并由 GitHub 原生安装页按项目授权仓库。",
+    actionLabel: "进入 GitHub",
+  },
 ] as const;
 
 const featuredStudioIcons = {
@@ -93,6 +101,7 @@ const featuredStudioIcons = {
   imageGeneration: Image,
   ttsStudio: AudioLines,
   codeGraph: Boxes,
+  github: Github,
 } as const;
 
 export default function MicroAppsSettings() {
