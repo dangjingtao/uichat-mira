@@ -1,3 +1,4 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SkillContext } from "@/skills/context/types.js";
 
 export type SkillAgentExecutionStatus =
@@ -28,8 +29,31 @@ export type SkillAgentRequirement = {
   description: string;
   requiredFor: string;
   toolId?: string;
+  toolCallId?: string;
   input?: Record<string, unknown>;
   inputHash?: string;
+};
+
+export type SkillAgentPendingInvocation = {
+  toolCallId: string;
+  toolId: string;
+  input: Record<string, unknown>;
+  inputHash: string;
+};
+
+/**
+ * Serializable Pi transcript checkpoint captured at a governed approval boundary.
+ * Resume replaces the approval placeholder tool result with the exact runtime
+ * result, then continues this transcript instead of prompting the original goal
+ * again.
+ */
+export type SkillAgentCheckpoint = {
+  version: 1;
+  messages: AgentMessage[];
+  pendingInvocation: SkillAgentPendingInvocation;
+  evidence: unknown[];
+  artifacts: unknown[];
+  toolCalls: string[];
 };
 
 export type SkillAgentExecutionResult = {
@@ -39,6 +63,7 @@ export type SkillAgentExecutionResult = {
   artifacts: unknown[];
   missingEvidence?: unknown[];
   requirements?: SkillAgentRequirement[];
+  checkpoint?: SkillAgentCheckpoint;
   recoverable?: boolean;
   error?: string;
   trace?: {
@@ -62,6 +87,7 @@ export type SkillAgentExecutionInput = {
   threadId?: string;
   turnId?: string;
   approvedInvocations?: SkillAgentApprovedInvocation[];
+  checkpoint?: SkillAgentCheckpoint;
 };
 
 export type SkillAgentToolBinding = {
