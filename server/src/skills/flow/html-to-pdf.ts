@@ -309,8 +309,8 @@ export const renderHtmlReportToPdf = async (input: {
     });
     await page.setContent(input.html, { waitUntil: "load" });
 
-    const isFertilityReport = await page.evaluate(
-      () => Boolean(document.querySelector("[data-fertility-scope]")),
+    const isFertilityReport = await page.evaluate<boolean>(
+      'Boolean(document.querySelector("[data-fertility-scope]"))',
     );
     if (isFertilityReport) {
       await page.addStyleTag({ content: FERTILITY_PRINT_STYLE });
