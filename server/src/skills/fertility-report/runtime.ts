@@ -18,10 +18,12 @@ import type {
   SkillDirectiveHandoffRuntime,
   StoredSkillFlowSession,
 } from "../flow/types.js";
+import { applyFertilityReportContentPolicy } from "./content-policy.js";
 import {
   buildFertilityReportContent,
   getFertilityDimensionPairs,
 } from "./dimension-analysis.js";
+import { enhanceFertilityReportHtml } from "./report-document-enhancer.js";
 import { applyFertilityReportProfile } from "./report-profile.js";
 import {
   buildFertilityReportFileName,
@@ -56,7 +58,7 @@ const escapeHtml = (value: string) =>
 const appendClosingToHtml = (html: string, closingMessage: string) => {
   const closing = closingMessage.trim();
   if (!closing) return html;
-  const section = `<section class="section closing-section">
+  const section = `<section class="section closing-section" id="section-closing">
     <div class="section-head"><h2>写在最后</h2><p>来自专属服务团队的一段话</p></div>
     <div style="padding:24px 28px;border-left:5px solid var(--secondary);background:var(--soft);font-size:16px;line-height:1.9;color:var(--ink)">${escapeHtml(closing)}</div>
   </section>`;
@@ -76,7 +78,7 @@ const removeInternalDimensionIds = (html: string) =>
 
 export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
   skillId: "fertility-report",
-  version: "1.1.0",
+  version: "1.2.0",
 
   async execute({ session, sourceDirective, args }) {
     const stateRef = toSkillFlowStateRef(session);
@@ -109,26 +111,33 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       assessment,
       dimensionPairs,
     );
-    const dimensions = applyFertilityScoringProfile({
+    const calibratedDimensions = applyFertilityScoringProfile({
       dimensions: generatedContent.dimensions,
       profile: sourceBundle.scoringProfile,
     });
-    const reportState: FertilityAssessmentState = {
-      ...assessment,
-      dimensions,
+    const governedContent = applyFertilityReportContentPolicy({
+      dimensions: calibratedDimensions,
       summary: generatedContent.summary,
       closingMessage: generatedContent.closingMessage,
+    });
+    const reportState: FertilityAssessmentState = {
+      ...assessment,
+      dimensions: governedContent.dimensions,
+      summary: governedContent.summary,
+      closingMessage: governedContent.closingMessage,
     };
     const generatedAt = new Date().toISOString();
-    const rawHtml = appendClosingToHtml(
-      removeInternalDimensionIds(
-        renderFertilityHtmlReport({
-          state: reportState,
-          profile,
-          generatedAt,
-        }),
+    const rawHtml = enhanceFertilityReportHtml(
+      appendClosingToHtml(
+        removeInternalDimensionIds(
+          renderFertilityHtmlReport({
+            state: reportState,
+            profile,
+            generatedAt,
+          }),
+        ),
+        governedContent.closingMessage,
       ),
-      generatedContent.closingMessage,
     );
     const rawMarkdown = appendClosingToMarkdown(
       renderFertilityMarkdownReport({
@@ -136,7 +145,7 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
         profile,
         generatedAt,
       }),
-      generatedContent.closingMessage,
+      governedContent.closingMessage,
     );
     const profiledReport = applyFertilityReportProfile({
       html: rawHtml,
