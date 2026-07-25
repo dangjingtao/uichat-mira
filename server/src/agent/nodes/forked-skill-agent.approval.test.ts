@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentNodeState } from "../node-runtime.js";
+import type { SkillAgentCheckpoint } from "@/skills/agent/types.js";
 
 const mocks = vi.hoisted(() => ({
   runPilot: vi.fn(),
@@ -37,6 +38,58 @@ const baseState = (): AgentNodeState =>
     },
   }) as AgentNodeState;
 
+const checkpoint = (): SkillAgentCheckpoint => ({
+  version: 1,
+  messages: [
+    {
+      role: "user",
+      content: "Create a Word report",
+      timestamp: 1,
+    },
+    {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-current",
+          name: "office_document",
+          arguments: { operation: "create", outputPath: "current.docx" },
+        },
+      ],
+      api: "openai-completions",
+      provider: "test",
+      model: "test",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "toolUse",
+      timestamp: 2,
+    },
+    {
+      role: "toolResult",
+      toolCallId: "call-current",
+      toolName: "office_document",
+      content: [{ type: "text", text: "needs approval" }],
+      isError: false,
+      timestamp: 3,
+    },
+  ],
+  pendingInvocation: {
+    toolCallId: "call-current",
+    toolId: "office_document",
+    input: { operation: "create", outputPath: "current.docx" },
+    inputHash: "current-hash",
+  },
+  evidence: [],
+  artifacts: [],
+  toolCalls: ["office_document"],
+});
+
 describe("forkedSkillAgentNode approval replay scope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -44,7 +97,7 @@ describe("forkedSkillAgentNode approval replay scope", () => {
     mocks.getProfile.mockReturnValue({
       skillId: "docx",
       engine: "pi-agent-core",
-      mode: "forked",
+      mode: "forked-agent",
       allowedHarnessToolIds: [],
       runtimeBindings: [],
     });
@@ -63,8 +116,49 @@ describe("forkedSkillAgentNode approval replay scope", () => {
     expect(mocks.runPilot).toHaveBeenCalledOnce();
   });
 
-  it("passes only the currently frozen exact approval into a replay fork", async () => {
+  it("persists the exact Pi checkpoint on the Parent approval boundary", async () => {
+    const frozenCheckpoint = checkpoint();
+    mocks.runPilot.mockResolvedValueOnce({
+      status: "needs_input",
+      summary: "approval required",
+      evidence: [],
+      artifacts: [],
+      requirements: [
+        {
+          id: "approval:office_document:current-hash",
+          kind: "approval",
+          description: "approve document creation",
+          requiredFor: "office_document",
+          toolId: "office_document",
+          toolCallId: "call-current",
+          input: { operation: "create", outputPath: "current.docx" },
+          inputHash: "current-hash",
+        },
+      ],
+      checkpoint: frozenCheckpoint,
+      trace: {
+        engine: "pi-agent-core",
+        skillId: "docx",
+        toolCalls: ["office_document"],
+      },
+    });
+
+    const patch = await forkedSkillAgentNode(baseState());
+
+    expect(patch.pendingApproval?.toolCallId).toBe("call-current");
+    expect(patch.pendingToolCall).toMatchObject({
+      id: "call-current",
+      toolId: "office_document",
+      inputHash: "current-hash",
+      origin: "skill_agent",
+      skillId: "docx",
+      skillAgentCheckpoint: frozenCheckpoint,
+    });
+  });
+
+  it("passes only the current exact approval and checkpoint into resume", async () => {
     const state = baseState();
+    const frozenCheckpoint = checkpoint();
     state.approvedInvocations = [
       {
         toolId: "office_document",
@@ -82,25 +176,30 @@ describe("forkedSkillAgentNode approval replay scope", () => {
       },
     ];
     state.pendingToolCall = {
+      id: "call-current",
       toolId: "office_document",
       args: { operation: "create", outputPath: "current.docx" },
       inputHash: "current-hash",
       source: "llm_tool_call",
       origin: "skill_agent",
       skillId: "docx",
+      skillAgentCheckpoint: frozenCheckpoint,
       createdAt: "2026-07-24T00:00:30.000Z",
-    };
+    } as AgentNodeState["pendingToolCall"];
 
     await forkedSkillAgentNode(state);
 
     expect(mocks.runPilot).toHaveBeenCalledOnce();
-    expect(mocks.runPilot.mock.calls[0]?.[0].approvedInvocations).toEqual([
-      {
-        toolId: "office_document",
-        inputHash: "current-hash",
-        input: { operation: "create", outputPath: "current.docx" },
-      },
-    ]);
+    expect(mocks.runPilot.mock.calls[0]?.[0]).toMatchObject({
+      approvedInvocations: [
+        {
+          toolId: "office_document",
+          inputHash: "current-hash",
+          input: { operation: "create", outputPath: "current.docx" },
+        },
+      ],
+      checkpoint: frozenCheckpoint,
+    });
   });
 
   it("does not leak historical approvals into a fresh fork", async () => {
@@ -118,5 +217,6 @@ describe("forkedSkillAgentNode approval replay scope", () => {
     await forkedSkillAgentNode(state);
 
     expect(mocks.runPilot.mock.calls[0]?.[0].approvedInvocations).toEqual([]);
+    expect(mocks.runPilot.mock.calls[0]?.[0].checkpoint).toBeUndefined();
   });
 });
