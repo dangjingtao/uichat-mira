@@ -7,6 +7,7 @@ const DEFAULT_TOKENS = {
   footerText:
     "本报告用于健康教育、信息整理和就诊准备，不构成诊断、处方或替代生殖专科医生的医疗决策。",
   deliveryLabel: "专属服务团队交付",
+  scoringVersion: "fertility-rubric-v2.0.0",
   theme: {
     primaryColor: "#5B2A86",
     secondaryColor: "#D79ACB",
@@ -42,6 +43,7 @@ export const applyFertilityReportProfile = (input: {
   html: string;
   markdown: string;
   profile: FertilityReportProfile;
+  scoringVersion?: string;
 }) => {
   const replacements: Array<[string, string]> = [
     [DEFAULT_TOKENS.brandName, input.profile.brandName],
@@ -49,6 +51,10 @@ export const applyFertilityReportProfile = (input: {
     [DEFAULT_TOKENS.serviceLine, input.profile.serviceLine],
     [DEFAULT_TOKENS.footerText, input.profile.footerText],
     [DEFAULT_TOKENS.deliveryLabel, input.profile.deliveryLabel],
+    [
+      DEFAULT_TOKENS.scoringVersion,
+      input.scoringVersion?.trim() || DEFAULT_TOKENS.scoringVersion,
+    ],
     [DEFAULT_TOKENS.theme.primaryColor, input.profile.theme.primaryColor],
     [DEFAULT_TOKENS.theme.secondaryColor, input.profile.theme.secondaryColor],
     [DEFAULT_TOKENS.theme.accentColor, input.profile.theme.accentColor],
