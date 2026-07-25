@@ -3,71 +3,8 @@ import path from "node:path";
 import { chromium } from "playwright-core";
 import { writeStructuredLog } from "@/logger";
 
-const FERTILITY_REPORT_MARKER = "MIRA · FERTILITY OVERVIEW";
-
 const FERTILITY_PRINT_STYLE = `
   @media print {
-    .report {
-      border: 0 !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-      overflow: visible !important;
-    }
-
-    .summary-card,
-    .dimension-card,
-    .detail-grid section,
-    .gap-card {
-      background: transparent !important;
-      border: 0 !important;
-      border-radius: 0 !important;
-      box-shadow: none !important;
-    }
-
-    .summary-card {
-      padding: 12px 0 !important;
-      border-top: 2px solid #d9d1c9 !important;
-    }
-
-    .dimension-card {
-      padding: 18px 0 16px !important;
-      border-top: 1px solid #d9d1c9 !important;
-      break-inside: avoid-page !important;
-      page-break-inside: avoid !important;
-    }
-
-    .dimension-card:first-child {
-      border-top: 0 !important;
-    }
-
-    .detail-grid {
-      column-gap: 8mm !important;
-      row-gap: 0 !important;
-    }
-
-    .detail-grid section {
-      padding: 8px 0 !important;
-      border-top: 1px solid #ece7e2 !important;
-      break-inside: avoid-page !important;
-      page-break-inside: avoid !important;
-    }
-
-    .gap-card {
-      padding: 12px 0 !important;
-      border-top: 2px solid #d9d1c9 !important;
-    }
-
-    .eyebrow,
-    .print-empty-detail {
-      display: none !important;
-    }
-
-    .score-pill {
-      border-radius: 0 !important;
-      background: transparent !important;
-      padding: 0 !important;
-    }
-
     .rose-print {
       margin: 0 0 8mm !important;
       padding: 0 !important;
@@ -108,9 +45,9 @@ const FERTILITY_PRINT_STYLE = `
     }
 
     .rose-sector.scored {
-      fill: #c98660;
+      fill: #d79acb;
       fill-opacity: .72;
-      stroke: #a95f39;
+      stroke: #5b2a86;
     }
 
     .rose-sector.missing {
@@ -129,56 +66,34 @@ const FERTILITY_PRINT_STYLE = `
       fill: #8b8178;
       font-size: 10px;
     }
-
-    .summary-card,
-    .gap-card,
-    table,
-    tr,
-    .section-head,
-    .dimension-title-row,
-    h2,
-    h3,
-    h4,
-    figcaption {
-      break-inside: avoid-page !important;
-      page-break-inside: avoid !important;
-      break-after: avoid-page;
-      page-break-after: avoid;
-    }
-
-    p,
-    li {
-      orphans: 3;
-      widows: 3;
-    }
   }
 `;
 
 const FERTILITY_ROSE_CHART_SCRIPT = String.raw`
 (() => {
   const femalePairs = [
-    ["female_endometrium", "子宫内膜与宫腔"],
-    ["female_hormonal_balance", "激素与排卵"],
-    ["female_oocyte_context", "卵子相关背景"],
+    ["female_endometrium", "子宫内膜"],
+    ["female_hormonal_balance", "激素排卵"],
+    ["female_oocyte_context", "卵子潜力"],
     ["female_ovarian_reserve", "卵巢储备"],
     ["female_metabolic_health", "代谢健康"],
-    ["female_immune_context", "免疫相关背景"],
-    ["female_pelvic_environment", "盆腔与输卵管环境"],
-    ["female_nutrition", "营养状况"],
+    ["female_immune_context", "免疫凝血"],
+    ["female_pelvic_environment", "盆腔输卵管"],
+    ["female_nutrition", "营养储备"],
     ["female_lifestyle", "生活方式"],
-    ["female_sleep_stress", "睡眠、压力与情绪"],
+    ["female_sleep_stress", "情绪睡眠"],
   ];
   const malePairs = [
-    ["male_dna_integrity", "精子 DNA 完整性相关背景"],
+    ["male_dna_integrity", "DNA完整性"],
     ["male_morphology", "精子形态"],
     ["male_motility", "精子活力"],
-    ["male_concentration", "精子浓度与总数"],
-    ["male_semen_volume", "精液量与基础参数"],
-    ["male_hormonal_balance", "男性激素相关背景"],
-    ["male_inflammation", "炎症与泌尿生殖系统背景"],
-    ["male_nutrition", "营养状况"],
+    ["male_concentration", "精子浓度"],
+    ["male_semen_volume", "精液量"],
+    ["male_hormonal_balance", "激素生精"],
+    ["male_inflammation", "炎症背景"],
+    ["male_nutrition", "营养支持"],
     ["male_lifestyle", "生活方式"],
-    ["male_sleep_stress", "睡眠、压力与情绪"],
+    ["male_sleep_stress", "情绪睡眠"],
   ];
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -197,13 +112,6 @@ const FERTILITY_ROSE_CHART_SCRIPT = String.raw`
       const scoreText = card.querySelector(".score-pill")?.textContent || "";
       const match = scoreText.match(/(\d+(?:\.\d+)?)/);
       if (id) byId.set(id, match ? Number(match[1]) : null);
-
-      card.querySelectorAll(".detail-grid section").forEach((detail) => {
-        const empty = detail.querySelector(".empty")?.textContent || "";
-        if (/暂无足够信息|当前没有足够/.test(empty)) {
-          detail.classList.add("print-empty-detail");
-        }
-      });
     });
     return byId;
   };
@@ -214,17 +122,21 @@ const FERTILITY_ROSE_CHART_SCRIPT = String.raw`
     return node;
   };
 
-  const insertChart = (sectionTitle, chartTitle, pairs) => {
+  const findSection = (titles) => {
     const heading = Array.from(document.querySelectorAll(".section-head h2"))
-      .find((item) => item.textContent?.trim() === sectionTitle);
-    const section = heading?.closest(".section");
-    if (!section || section.querySelector(".rose-print, .rose-figure")) return;
+      .find((item) => titles.includes(item.textContent?.trim()));
+    return heading?.closest(".section");
+  };
+
+  const insertChart = (titles, chartTitle, pairs) => {
+    const section = findSection(titles);
+    if (!section || section.querySelector(".rose-print")) return;
 
     const scores = parseSectionScores(section);
     const figure = document.createElement("figure");
     figure.className = "rose-print";
     const caption = document.createElement("figcaption");
-    caption.innerHTML = `<strong>${chartTitle}</strong><span>实色表示已有状态分；虚线表示信息不足</span>`;
+    caption.innerHTML = `<strong>${chartTitle}</strong><span>实色表示已有状态分；虚线表示低置信度或资料不足</span>`;
     figure.appendChild(caption);
 
     const svg = createSvgNode("svg", {
@@ -256,11 +168,10 @@ const FERTILITY_ROSE_CHART_SCRIPT = String.raw`
       const end = (index + 1) * step - 2;
       const startPoint = polarPoint(cx, cy, radius, start);
       const endPoint = polarPoint(cx, cy, radius, end);
-      const path = createSvgNode("path", {
+      svg.appendChild(createSvgNode("path", {
         d: `M ${cx} ${cy} L ${startPoint.x.toFixed(2)} ${startPoint.y.toFixed(2)} A ${radius.toFixed(2)} ${radius.toFixed(2)} 0 0 1 ${endPoint.x.toFixed(2)} ${endPoint.y.toFixed(2)} Z`,
         class: `rose-sector ${score === null ? "missing" : "scored"}`,
-      });
-      svg.appendChild(path);
+      }));
 
       const labelPoint = polarPoint(cx, cy, labelRadius, index * step + step / 2);
       const anchor = labelPoint.x < cx - 12 ? "end" : labelPoint.x > cx + 12 ? "start" : "middle";
@@ -279,18 +190,18 @@ const FERTILITY_ROSE_CHART_SCRIPT = String.raw`
         "text-anchor": anchor,
         class: "rose-value",
       });
-      valueNode.textContent = score === null ? "—" : score.toFixed(1);
+      valueNode.textContent = score === null ? "低置信" : score.toFixed(1);
       svg.appendChild(valueNode);
     });
 
-    svg.appendChild(createSvgNode("circle", { cx, cy, r: 4, fill: "#7f4d33" }));
+    svg.appendChild(createSvgNode("circle", { cx, cy, r: 4, fill: "#5b2a86" }));
     figure.appendChild(svg);
     const dimensions = section.querySelector(".dimensions");
     section.insertBefore(figure, dimensions || null);
   };
 
-  insertChart("女方十维画像", "女方十维玫瑰图", femalePairs);
-  insertChart("男方十维画像", "男方十维玫瑰图", malePairs);
+  insertChart(["女性生育力综合画像", "女方十维画像"], "女性生育力十维画像", femalePairs);
+  insertChart(["男性生育力综合画像", "男方十维画像"], "男性生育力十维画像", malePairs);
 })();
 `;
 
@@ -398,8 +309,8 @@ export const renderHtmlReportToPdf = async (input: {
     });
     await page.setContent(input.html, { waitUntil: "load" });
 
-    const isFertilityReport = await page.evaluate<boolean>(
-      `Boolean(document.body && document.body.textContent && document.body.textContent.includes(${JSON.stringify(FERTILITY_REPORT_MARKER)}))`,
+    const isFertilityReport = await page.evaluate(
+      () => Boolean(document.querySelector("[data-fertility-scope]")),
     );
     if (isFertilityReport) {
       await page.addStyleTag({ content: FERTILITY_PRINT_STYLE });
