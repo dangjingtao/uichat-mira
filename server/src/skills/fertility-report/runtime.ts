@@ -1,5 +1,8 @@
 import { writeStructuredLog } from "@/logger";
-import { toFertilityAssessmentState } from "../fertility-assessment/runtime.js";
+import {
+  toFertilityAssessmentState,
+  type FertilityAssessmentState,
+} from "../fertility-assessment/runtime.js";
 import {
   getFertilityScopeFlags,
   resolveFertilityServiceProfile,
@@ -29,7 +32,7 @@ import {
 
 const withUpdatedState = (
   session: StoredSkillFlowSession,
-  state: ReturnType<typeof toFertilityAssessmentState>,
+  state: FertilityAssessmentState,
 ): StoredSkillFlowSession => ({
   ...session,
   status: "ready",
@@ -56,12 +59,12 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
     const scopeFlags = getFertilityScopeFlags(profile.assessmentScope);
     const dimensionPairs = getFertilityDimensionPairs(profile.assessmentScope);
     const dimensions = await completeFertilityDimensions(assessment, dimensionPairs);
-    const withDimensions = {
+    const withDimensions: FertilityAssessmentState = {
       ...assessment,
       dimensions,
     };
     const summary = await buildFertilitySummary(withDimensions);
-    const reportState = {
+    const reportState: FertilityAssessmentState = {
       ...withDimensions,
       summary,
     };
