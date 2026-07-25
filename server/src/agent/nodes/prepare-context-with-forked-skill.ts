@@ -46,12 +46,12 @@ const buildNeedsInputQuestion = (
 };
 
 /**
- * Compatibility wrapper for the forked Skill Agent pilot.
+ * Compatibility wrapper for profiled forked Skills.
  *
- * Default behavior is unchanged unless MIRA_SKILL_AGENT_RUNTIME=pi-core.
- * Once a matched Skill delegates execution to the isolated Pi executor, the
- * Parent keeps governance/finalization ownership without taking task-local
- * construction back from the Skill Agent.
+ * A matched Skill with an execution profile delegates task-local work to the
+ * isolated Pi executor by default. Parent retains approval, recovery and final
+ * response governance without taking construction ownership back from the
+ * Skill Agent.
  */
 export const prepareContextWithForkedSkillAgentNode = async (
   state: AgentNodeState,
