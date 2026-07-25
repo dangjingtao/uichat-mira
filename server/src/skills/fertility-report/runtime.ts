@@ -19,8 +19,7 @@ import type {
   StoredSkillFlowSession,
 } from "../flow/types.js";
 import {
-  buildFertilitySummary,
-  completeFertilityDimensions,
+  buildFertilityReportContent,
   getFertilityDimensionPairs,
 } from "./dimension-analysis.js";
 import { applyFertilityReportProfile } from "./report-profile.js";
@@ -43,9 +42,41 @@ const withUpdatedState = (
   updatedAt: new Date().toISOString(),
 });
 
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char);
+
+const appendClosingToHtml = (html: string, closingMessage: string) => {
+  const closing = closingMessage.trim();
+  if (!closing) return html;
+  const section = `<section class="section closing-section">
+    <div class="section-head"><h2>写在最后</h2><p>来自专属服务团队的一段话</p></div>
+    <div style="padding:24px 28px;border-left:5px solid var(--secondary);background:var(--soft);font-size:16px;line-height:1.9;color:var(--ink)">${escapeHtml(closing)}</div>
+  </section>`;
+  const footerMarker = '<footer class="report-footer">';
+  return html.includes(footerMarker)
+    ? html.replace(footerMarker, `${section}\n${footerMarker}`)
+    : `${html}${section}`;
+};
+
+const appendClosingToMarkdown = (markdown: string, closingMessage: string) => {
+  const closing = closingMessage.trim();
+  return closing ? `${markdown.trim()}\n\n## 写在最后\n\n${closing}\n` : markdown;
+};
+
+const removeInternalDimensionIds = (html: string) =>
+  html.replace(/<div class="eyebrow">[^<]*<\/div>/g, "");
+
 export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
   skillId: "fertility-report",
-  version: "1.0.0",
+  version: "1.1.0",
 
   async execute({ session, sourceDirective, args }) {
     const stateRef = toSkillFlowStateRef(session);
@@ -74,34 +105,39 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
     }
 
     const dimensionPairs = getFertilityDimensionPairs(profile.assessmentScope);
-    const builtInDimensions = await completeFertilityDimensions(
+    const generatedContent = await buildFertilityReportContent(
       assessment,
       dimensionPairs,
     );
     const dimensions = applyFertilityScoringProfile({
-      dimensions: builtInDimensions,
+      dimensions: generatedContent.dimensions,
       profile: sourceBundle.scoringProfile,
     });
-    const withDimensions: FertilityAssessmentState = {
+    const reportState: FertilityAssessmentState = {
       ...assessment,
       dimensions,
-    };
-    const summary = await buildFertilitySummary(withDimensions);
-    const reportState: FertilityAssessmentState = {
-      ...withDimensions,
-      summary,
+      summary: generatedContent.summary,
+      closingMessage: generatedContent.closingMessage,
     };
     const generatedAt = new Date().toISOString();
-    const rawHtml = renderFertilityHtmlReport({
-      state: reportState,
-      profile,
-      generatedAt,
-    });
-    const rawMarkdown = renderFertilityMarkdownReport({
-      state: reportState,
-      profile,
-      generatedAt,
-    });
+    const rawHtml = appendClosingToHtml(
+      removeInternalDimensionIds(
+        renderFertilityHtmlReport({
+          state: reportState,
+          profile,
+          generatedAt,
+        }),
+      ),
+      generatedContent.closingMessage,
+    );
+    const rawMarkdown = appendClosingToMarkdown(
+      renderFertilityMarkdownReport({
+        state: reportState,
+        profile,
+        generatedAt,
+      }),
+      generatedContent.closingMessage,
+    );
     const profiledReport = applyFertilityReportProfile({
       html: rawHtml,
       markdown: rawMarkdown,
@@ -187,6 +223,10 @@ export const fertilityReportRuntime: SkillDirectiveHandoffRuntime = {
       reportProfileId: sourceBundle.reportProfile.id,
       scoringProfileId: sourceBundle.scoringProfile.id,
       scoringProfileVersion: sourceBundle.scoringProfile.version,
+      generationMode:
+        profile.assessmentScope === "couple"
+          ? "female-plus-male-plus-joint-summary"
+          : "single-subject-one-pass",
     });
 
     return {
