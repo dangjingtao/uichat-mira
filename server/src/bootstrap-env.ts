@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { installGitHubProxyAwareGlobalFetch } from "@/services/github-network-fetch.js";
 
 type LoadLocalEnv = (rootDir: string) => Record<string, string>;
 const requireFromWorkspace = (workspaceRoot: string) =>
@@ -47,3 +48,4 @@ export const applyWorkspaceEnvBootstrap = (startDir = process.cwd()) => {
 };
 
 applyWorkspaceEnvBootstrap();
+installGitHubProxyAwareGlobalFetch();
