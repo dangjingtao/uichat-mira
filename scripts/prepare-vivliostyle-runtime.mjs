@@ -70,30 +70,42 @@ function assertRuntime(root) {
 function installRuntime() {
   removeDir(runtimeCacheRoot);
   ensureDir(runtimeCacheRoot);
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const npmArgs = [
+    "install",
+    "--prefix",
+    runtimeCacheRoot,
+    "--omit=dev",
+    "--no-audit",
+    "--no-fund",
+    "--no-package-lock",
+    `@vivliostyle/cli@${pinnedVersion}`,
+  ];
+  const childEnv = {
+    ...process.env,
+    PUPPETEER_SKIP_DOWNLOAD: "true",
+    PUPPETEER_SKIP_CHROME_DOWNLOAD: "true",
+  };
+
   console.log(`Installing Vivliostyle CLI ${pinnedVersion}...`);
-  execFileSync(
-    npmCommand,
-    [
-      "install",
-      "--prefix",
-      runtimeCacheRoot,
-      "--omit=dev",
-      "--no-audit",
-      "--no-fund",
-      "--no-package-lock",
-      `@vivliostyle/cli@${pinnedVersion}`,
-    ],
-    {
-      cwd: projectRoot,
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        PUPPETEER_SKIP_DOWNLOAD: "true",
-        PUPPETEER_SKIP_CHROME_DOWNLOAD: "true",
+  if (process.platform === "win32") {
+    execFileSync(
+      process.env.ComSpec || process.env.COMSPEC || "cmd.exe",
+      ["/d", "/c", "npm.cmd", ...npmArgs],
+      {
+        cwd: projectRoot,
+        stdio: "inherit",
+        env: childEnv,
+        windowsHide: true,
       },
-    },
-  );
+    );
+    return;
+  }
+
+  execFileSync("npm", npmArgs, {
+    cwd: projectRoot,
+    stdio: "inherit",
+    env: childEnv,
+  });
 }
 
 function resolveRuntimeSource() {
