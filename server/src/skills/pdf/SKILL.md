@@ -28,6 +28,37 @@ The spec supports:
   - `spacer`, `pageBreak`;
 - `references[]` with text/title and optional real URL.
 
+For creation, `spec.title` and a non-empty `spec.blocks[]` are mandatory. A report must never be represented only by cover metadata. Use this canonical shape:
+
+```json
+{
+  "operation": "create",
+  "outputPath": "report.pdf",
+  "spec": {
+    "title": "报告标题",
+    "pageSize": "A4",
+    "orientation": "portrait",
+    "blocks": [
+      { "type": "heading1", "text": "测试目标" },
+      { "type": "paragraph", "text": "正文内容。" },
+      { "type": "heading1", "text": "验证结果" },
+      {
+        "type": "table",
+        "caption": "验证表",
+        "header": true,
+        "rows": [
+          ["检查项", "状态"],
+          ["Skill 命中", "通过"],
+          ["Artifact 生成", "通过"]
+        ]
+      }
+    ]
+  }
+}
+```
+
+Text blocks use `text`. Table blocks use a non-empty two-dimensional `rows` array; do not use `data`, `columns`, or a top-level `table` field. Content that is not placed in `spec.blocks` will not appear in the PDF body.
+
 Content quality, facts, outline and citations must be prepared before calling the deterministic runtime. Do not fabricate sources.
 
 For long reports, build the outline first, then write the full document against that outline. If a target length/page count is explicit, validate the finished artifact instead of guessing from source text length.
