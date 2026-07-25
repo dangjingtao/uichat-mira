@@ -1,0 +1,43 @@
+version: 1
+
+service:
+  brandName: 圆姐聊女性全周期服务
+  teamName: Mira 生育健康评估服务团队
+  serviceLine: 备孕从了解自己开始，陪伴你一起接好孕。
+
+intake:
+  requiredProfileFields:
+    - displayName
+    - assessmentScope
+    - currentGoal
+  assessmentScopeOptions:
+    - female
+    - male
+    - couple
+  currentGoalOptions:
+    - natural_conception
+    - assisted_reproduction
+    - failure_review
+    - general
+
+reportTheme:
+  primaryColor: "#5B2A86"
+  secondaryColor: "#D79ACB"
+  accentColor: "#8FB5E8"
+  softBackground: "#F7F2FA"
+  textColor: "#2C2530"
+  mutedTextColor: "#766B79"
+  headerEnabled: true
+  footerEnabled: true
+  footerText: 本报告用于健康教育、信息整理和就诊准备，不构成诊断、处方或医疗决策。
+
+reportCover:
+  showServiceObject: true
+  showAssessmentType: true
+  showAssessmentScope: true
+  showGeneratedDate: true
+  showServiceTeam: true
+
+notes:
+  - 本文件是生育评估报告的服务身份与视觉 source；修改时不得改变 Conversation Flow、轮次上限、最终确认或报告 handoff。
+  - 第一轮仅配置服务接待、报告抬头、品牌色与页眉页脚；评分规则在独立 source 中维护。
