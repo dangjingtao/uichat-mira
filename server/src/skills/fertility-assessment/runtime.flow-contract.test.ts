@@ -18,7 +18,7 @@ const createSession = (
   threadId: "thread-1",
   userId: 1,
   skillId: "fertility-assessment",
-  skillVersion: "1.0.0",
+  skillVersion: "1.1.0",
   status: "collecting",
   round: 0,
   maxRounds: 10,
@@ -35,7 +35,13 @@ const runtimeInput = (session: StoredSkillFlowSession, query: string) => ({
   userId: session.userId,
   userMessageId: `message-${session.round + 1}`,
   query,
-  messages: [],
+  messages: [
+    {
+      role: "user" as const,
+      content: query,
+      parts: [],
+    },
+  ],
 });
 
 const serviceProfile = {
@@ -53,18 +59,23 @@ const analysisResult = (
 ) =>
   JSON.stringify({
     factsPatch: { serviceProfile, ...(patch.factsPatch as object | undefined) },
+    evidenceItems: patch.evidenceItems ?? [],
     missingCriticalFields: [],
     uncertainties: [],
     contradictions: [],
+    declinedRequirementIds: patch.declinedRequirementIds ?? [],
     dimensionUpdates: patch.dimensionUpdates ?? [],
     collectionDisposition:
       patch.collectionDisposition ??
       (readyForFinalConfirmation ? "ready_for_final_confirmation" : "continue"),
     nextRequirement: {
       id: "fertility-next-gap",
-      description: "缺少下一项最高价值信息",
+      description: "下一项最高价值业务信息",
       requiredFor: "继续完善评估",
-      acceptedFormats: ["natural_language"],
+      acceptedFormats: ["natural_language", "service_conversation"],
+      userPrompt:
+        "谢谢你前面说得很清楚。我还想了解一次既往治疗结果，因为它最能帮助我们理解当前方向；记得多少说多少，不方便回答也没关系。",
+      ...(patch.nextRequirement as object | undefined),
     },
   });
 
@@ -73,7 +84,7 @@ describe("fertility assessment conversation flow contract", () => {
     vi.clearAllMocks();
   });
 
-  it("starts with the lightweight service-profile requirement", async () => {
+  it("starts with a service-toned lightweight profile requirement", async () => {
     const result = await fertilityAssessmentRuntime.processTurn(
       runtimeInput(createSession(), "帮我做一个备孕全景评估"),
     );
@@ -90,10 +101,61 @@ describe("fertility assessment conversation flow contract", () => {
         requirements: [{ id: "fertility-service-profile", kind: "user_input" }],
       },
     });
-    expect(result.directive.interruption?.requirements[0]?.description).toContain(
-      "如何称呼",
+    expect(result.directive.interruption?.requirements[0]?.userPrompt).toContain(
+      "怎么称呼",
     );
+    expect(
+      (
+        result.session.state.caseRecord as {
+          askedRequirementIds: string[];
+        }
+      ).askedRequirementIds,
+    ).toContain("fertility-service-profile");
     expect(result.session.status).toBe("collecting");
+  });
+
+  it("persists raw answers and numbered evidence in the temporary case record", async () => {
+    mocks.collectTaskModelText.mockResolvedValue(
+      analysisResult(false, {
+        evidenceItems: [
+          {
+            fieldId: "female.age",
+            statement: "女方34岁",
+            value: 34,
+            source: "user_reported",
+            relatedDimensionIds: ["female_oocyte_context"],
+          },
+          {
+            fieldId: "female.amh",
+            statement: "AMH 1.8 ng/mL，用户口述",
+            value: 1.8,
+            unit: "ng/mL",
+            source: "user_reported",
+            relatedDimensionIds: ["female_ovarian_reserve"],
+          },
+        ],
+      }),
+    );
+
+    const result = await fertilityAssessmentRuntime.processTurn(
+      runtimeInput(createSession(), "女方34岁，AMH 1.8 ng/mL。"),
+    );
+    const caseRecord = result.session.state.caseRecord as {
+      evidenceLedger: Record<string, { fieldId: string }>;
+      answerLog: Array<{ text: string }>;
+      askedRequirementIds: string[];
+    };
+
+    expect(Object.keys(caseRecord.evidenceLedger)).toEqual(["E001", "E002"]);
+    expect(Object.values(caseRecord.evidenceLedger).map((item) => item.fieldId)).toEqual([
+      "female.age",
+      "female.amh",
+    ]);
+    expect(caseRecord.answerLog.at(-1)?.text).toContain("女方34岁");
+    expect(caseRecord.askedRequirementIds).toContain("fertility-next-gap");
+    expect(result.directive.interruption?.requirements[0]?.userPrompt).toContain(
+      "谢谢你",
+    );
   });
 
   it("keeps the one-time final confirmation stage", async () => {
@@ -129,8 +191,27 @@ describe("fertility assessment conversation flow contract", () => {
     expect(result.directive.interruption?.requirements).toEqual([
       expect.objectContaining({ id: "fertility-final-confirmation" }),
     ]);
-    expect(result.directive.interruption?.requirements[0]?.description).not.toContain(
-      "缺少下一项最高价值信息",
+  });
+
+  it("does not ask the same requirement twice", async () => {
+    mocks.collectTaskModelText.mockResolvedValue(analysisResult(false));
+    const state = fertilityAssessmentRuntime.createInitialState() as Record<
+      string,
+      unknown
+    >;
+    state.caseRecord = {
+      evidenceLedger: {},
+      askedRequirementIds: ["fertility-next-gap"],
+      declinedRequirementIds: [],
+      answerLog: [],
+    };
+    const result = await fertilityAssessmentRuntime.processTurn(
+      runtimeInput(createSession({ round: 2, state }), "这部分我刚才已经说过了。"),
+    );
+
+    expect(result.directive.phase).toBe("final_confirmation");
+    expect(result.directive.interruption?.requirements[0]?.id).toBe(
+      "fertility-final-confirmation",
     );
   });
 
@@ -157,7 +238,7 @@ describe("fertility assessment conversation flow contract", () => {
     expect(result.directive.interruption).toBeUndefined();
   });
 
-  it("hands the same scoped assessment state to the internal report stage after confirmation", async () => {
+  it("hands the same scoped case record to the internal report stage after confirmation", async () => {
     mocks.collectTaskModelText.mockResolvedValue(analysisResult(true));
     const result = await fertilityAssessmentRuntime.processTurn(
       runtimeInput(
@@ -185,6 +266,7 @@ describe("fertility assessment conversation flow contract", () => {
       },
     });
     expect(result.directive.next?.args?.assessmentRef).toBe(result.directive.stateRef);
+    expect(result.session.state.caseRecord).toBeDefined();
     expect(result.session.status).toBe("ready");
   });
 
@@ -200,9 +282,11 @@ describe("fertility assessment conversation flow contract", () => {
             femaleName: "林女士",
           },
         },
+        evidenceItems: [],
         missingCriticalFields: ["AFC"],
         uncertainties: [],
         contradictions: [],
+        declinedRequirementIds: [],
         dimensionUpdates: [
           {
             id: "female_ovarian_reserve",
@@ -232,9 +316,11 @@ describe("fertility assessment conversation flow contract", () => {
         collectionDisposition: "continue",
         nextRequirement: {
           id: "female-next-gap",
-          description: "缺少女方AFC结果",
+          description: "女方AFC结果",
           requiredFor: "完善女性卵巢储备评估",
-          acceptedFormats: ["natural_language"],
+          acceptedFormats: ["natural_language", "service_conversation"],
+          userPrompt:
+            "谢谢你已经说了AMH。我还想了解AFC，因为它能和AMH互相印证；不知道也没关系。",
         },
       }),
     );
