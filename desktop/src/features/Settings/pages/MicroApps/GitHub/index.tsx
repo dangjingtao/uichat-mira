@@ -27,6 +27,8 @@ import {
 import { openExternalUrl } from "@/shared/platform/desktopRuntime";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
 
+const MAX_DEVICE_FLOW_POLL_DELAY_SECONDS = 30;
+
 const statusText: Record<GitHubConnectionResponse["connection"]["status"], string> = {
   unconfigured: "未连接",
   authorizing: "等待授权",
@@ -50,6 +52,7 @@ export default function GitHubMicroAppPage() {
   const [refreshing, setRefreshing] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollingRef = useRef(false);
+  const retryNoticeShownRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     pollingRef.current = false;
@@ -103,15 +106,30 @@ export default function GitHubMicroAppPage() {
       pollingRef.current = true;
       pollTimerRef.current = setTimeout(async () => {
         if (!pollingRef.current) return;
+        if (Date.parse(flow.expiresAt) <= Date.now()) {
+          stopPolling();
+          setConnecting(false);
+          setDeviceFlow(null);
+          retryNoticeShownRef.current = false;
+          message.error("授权码已过期，请重新连接");
+          await load();
+          return;
+        }
+
         try {
           const result = await pollGitHubDeviceFlow(flow.flowId);
           if (result.status === "pending") {
+            if (result.retryable && !retryNoticeShownRef.current) {
+              retryNoticeShownRef.current = true;
+              message.warning("网络暂时不可用，Mira 正在继续确认 GitHub 授权");
+            }
             void pollAuthorization(flow, result.intervalSeconds ?? delaySeconds);
             return;
           }
           stopPolling();
           setConnecting(false);
           setDeviceFlow(null);
+          retryNoticeShownRef.current = false;
           if (result.status === "connected" && result.connection) {
             applyConnection({
               connection: result.connection,
@@ -130,10 +148,26 @@ export default function GitHubMicroAppPage() {
                   : "GitHub 授权失败"),
           );
           await load();
-        } catch (error) {
-          stopPolling();
-          setConnecting(false);
-          message.error(error instanceof Error ? error.message : "轮询 GitHub 授权失败");
+        } catch {
+          if (Date.parse(flow.expiresAt) <= Date.now()) {
+            stopPolling();
+            setConnecting(false);
+            setDeviceFlow(null);
+            retryNoticeShownRef.current = false;
+            message.error("授权码已过期，请重新连接");
+            await load();
+            return;
+          }
+
+          if (!retryNoticeShownRef.current) {
+            retryNoticeShownRef.current = true;
+            message.warning("网络暂时不可用，Mira 正在继续确认 GitHub 授权");
+          }
+          const nextDelay = Math.min(
+            MAX_DEVICE_FLOW_POLL_DELAY_SECONDS,
+            Math.max(delaySeconds, 5) + 5,
+          );
+          void pollAuthorization(flow, nextDelay);
         }
       }, Math.max(delaySeconds, 5) * 1000);
     },
@@ -143,6 +177,7 @@ export default function GitHubMicroAppPage() {
   const beginConnection = async () => {
     setConnecting(true);
     stopPolling();
+    retryNoticeShownRef.current = false;
     try {
       const flow = await startGitHubDeviceFlow();
       setDeviceFlow(flow);
@@ -162,6 +197,7 @@ export default function GitHubMicroAppPage() {
       void pollAuthorization(flow);
     } catch (error) {
       setConnecting(false);
+      retryNoticeShownRef.current = false;
       message.error(error instanceof Error ? error.message : "启动 GitHub 授权失败");
     }
   };
@@ -184,6 +220,7 @@ export default function GitHubMicroAppPage() {
     stopPolling();
     setConnecting(false);
     setDeviceFlow(null);
+    retryNoticeShownRef.current = false;
     try {
       const result = await disconnectGitHub();
       applyConnection(result);
@@ -321,7 +358,7 @@ export default function GitHubMicroAppPage() {
                       </a>
                     </div>
                     <p className="mt-3 text-xs leading-5 text-text-secondary">
-                      授权完成后无需手动刷新，Mira 会自动接收结果。
+                      授权完成后无需手动刷新，Mira 会自动接收结果；网络短暂波动时也会继续确认。
                     </p>
                   </div>
                 ) : null}
