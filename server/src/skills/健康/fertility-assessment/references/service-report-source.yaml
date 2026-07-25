@@ -1,4 +1,6 @@
 version: 1
+status: compatibility_reference
+runtimeSource: report-profiles.json
 
 service:
   brandName: 圆姐聊女性全周期服务
@@ -39,5 +41,6 @@ reportCover:
   showServiceTeam: true
 
 notes:
-  - 本文件是生育评估报告的服务身份与视觉 source；修改时不得改变 Conversation Flow、轮次上限、最终确认或报告 handoff。
-  - 第一轮仅配置服务接待、报告抬头、品牌色与页眉页脚；评分规则在独立 source 中维护。
+  - 本文件保留第一轮设计语义，便于阅读和兼容旧说明。
+  - 运行时实际读取 report-profiles.json；通过 activeProfileId 切换客户模板，技能修改页保存后下一份报告生效。
+  - 修改任何 Source 都不得改变 Conversation Flow、轮次上限、最终确认或报告 handoff。
