@@ -60,6 +60,7 @@
     "smoke:terminal-runtime:staged": "pnpm prepare:terminal-runtime && pnpm internal:build:server && node scripts/smoke-terminal-runtime.mjs --full",
     "smoke:pi-skill-agent": "pnpm --filter @ui-chat-mira/server smoke:pi-skill-agent",
     "prepare:piper-runtime": "node scripts/prepare-piper-runtime.mjs",
+    "prepare:vivliostyle-runtime": "node scripts/prepare-vivliostyle-runtime.mjs",
     "prepare:local-model-packs": "node scripts/prepare-local-model-packs.mjs",
     "archive:local-model-packs": "node scripts/archive-local-model-packs.mjs",
     "smoke:local-model-runtime": "node scripts/smoke-local-model-runtime.mjs",
