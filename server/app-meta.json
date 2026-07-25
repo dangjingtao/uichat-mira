@@ -38,11 +38,11 @@
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "1d77bc0bcc046501d4a1691fe51aed33f7247266",
-            "shortHash": "1d77bc0",
-            "message": "Merge remote-tracking branch 'origin/dev' into dev",
-            "author": "Tomz",
-            "date": "2026-07-24T15:34:59+08:00"
+            "hash": "5535a1d66efad24ed4ef4bee09ec0f05fd3221b4",
+            "shortHash": "5535a1d",
+            "message": "test(agent): smoke default Pi skill ownership path",
+            "author": "DangJingtao",
+            "date": "2026-07-24T16:43:18+08:00"
           }
         },
         {

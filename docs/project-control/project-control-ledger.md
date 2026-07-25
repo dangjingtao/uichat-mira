@@ -311,6 +311,7 @@ related:
 | Debt ID | Status | Summary | Evidence |
 | --- | --- | --- | --- |
 | `TD-AGENT-02` | `OPEN` | AgentGraph 最终回答阶段未可靠消费结构化工具结果；当前不修改 AgentGraph 主链 | [TD-AGENT-02](decisions/TD-AGENT-02-tool-result-answer-context-gap.md) |
+| `TD-AGENT-03` | `OPEN` | Agent 附件解析结果未进入 Planner；xlsx 中文 Sheet 名和有效范围输出也存在缺口 | [TD-AGENT-03](decisions/TD-AGENT-03-agent-file-context-not-reaching-planner.md) |
 
 ## Non-Ledger Evidence Files
 
