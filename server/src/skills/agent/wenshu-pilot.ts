@@ -12,6 +12,7 @@ import type {
   SkillAgentCheckpoint,
   SkillAgentExecutionInput,
   SkillAgentExecutionResult,
+  SkillAgentRequirement,
   SkillAgentToolBinding,
 } from "./types.js";
 
@@ -51,6 +52,70 @@ const createSkillResourceTool = (skillId: string): SkillAgentToolBinding => ({
     };
   },
 });
+
+const ACCEPTANCE_REPORT_PATTERN = /(?:项目|工程|系统|产品)?验收报告|acceptance\s+report/i;
+const TEMPLATE_OR_EXAMPLE_PATTERN = /模板|示例|样例|范例|通用|演示|template|sample|example/i;
+const ACCEPTANCE_FACT_PATTERNS = [
+  /项目名称\s*[:：]/i,
+  /(?:委托方|甲方|建设单位|客户)\s*[:：]/i,
+  /(?:承接方|乙方|承建单位|实施单位|供应商)\s*[:：]/i,
+  /验收日期\s*[:：]|\b20\d{2}[-/.年]\d{1,2}/i,
+  /(?:验收内容|验收范围|交付物|交付清单)\s*[:：]/i,
+  /(?:验收标准|验收依据|验收条件)\s*[:：]/i,
+  /(?:验收结论|验收结果)\s*[:：]|(?:通过|不通过)验收/i,
+];
+
+const buildDeterministicNeedsInput = (input: {
+  goal: string;
+  skillContext: SkillContext;
+  checkpoint?: SkillAgentCheckpoint;
+}): SkillAgentExecutionResult | null => {
+  const skillId = input.skillContext.primary?.id;
+  if (skillId !== "docx" || input.checkpoint) return null;
+  const goal = input.goal.trim();
+  if (!ACCEPTANCE_REPORT_PATTERN.test(goal) || TEMPLATE_OR_EXAMPLE_PATTERN.test(goal)) {
+    return null;
+  }
+
+  const suppliedFactGroups = ACCEPTANCE_FACT_PATTERNS.filter((pattern) =>
+    pattern.test(goal),
+  ).length;
+  if (suppliedFactGroups >= 3) return null;
+
+  const requirements: SkillAgentRequirement[] = [
+    {
+      id: "docx:acceptance:project",
+      kind: "user_input",
+      description:
+        "请提供项目名称、委托方/甲方、承接方/乙方，以及计划或实际验收日期。",
+      requiredFor: "acceptance_report_identity",
+    },
+    {
+      id: "docx:acceptance:scope",
+      kind: "user_input",
+      description:
+        "请提供本次验收范围、主要交付物，以及采用的验收依据或通过标准。",
+      requiredFor: "acceptance_report_scope",
+    },
+    {
+      id: "docx:acceptance:result",
+      kind: "user_input",
+      description:
+        "请提供实际完成情况、遗留问题（如有）和预期验收结论；若只需要空白模板，请明确说“生成模板”。",
+      requiredFor: "acceptance_report_result",
+    },
+  ];
+
+  return {
+    status: "needs_input",
+    summary:
+      "A formal acceptance report requires project-specific facts; generating authoritative-looking business content from no source data would be fabrication.",
+    requirements,
+    evidence: [],
+    artifacts: [],
+    trace: { engine: "pi-agent-core", skillId, toolCalls: [] },
+  };
+};
 
 export const prepareWenShuPiSkillAgentPilot = (input: {
   goal: string;
@@ -119,6 +184,9 @@ export const runWenShuPiSkillAgentPilot = async (input: {
   approvedInvocations?: SkillAgentApprovedInvocation[];
   checkpoint?: SkillAgentCheckpoint;
 }): Promise<SkillAgentExecutionResult> => {
+  const deterministicNeedsInput = buildDeterministicNeedsInput(input);
+  if (deterministicNeedsInput) return deterministicNeedsInput;
+
   const prepared = prepareWenShuPiSkillAgentPilot(input);
   const result = await runPiSkillAgent({
     execution: prepared.execution,
