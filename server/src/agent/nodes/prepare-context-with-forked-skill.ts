@@ -1,7 +1,9 @@
+import { getSkillAgentExecutionProfile } from "@/skills/agent/profiles.js";
 import type { AgentNodeState, EmitAgentExecutionNode } from "../node-runtime.js";
 import type {
   AgentEvidenceReference,
   AgentFinalizationPacket,
+  AgentToolExposureState,
 } from "../types.js";
 import { evidenceNode } from "./evidence.js";
 import { forkedSkillAgentNode } from "./forked-skill-agent.js";
@@ -45,6 +47,20 @@ const buildNeedsInputQuestion = (
   return questions.join("\n");
 };
 
+const narrowParentRecoveryToolExposure = (input: {
+  skillId: string;
+  toolExposure?: AgentToolExposureState;
+}): AgentToolExposureState | undefined => {
+  if (!input.toolExposure) return undefined;
+  const profile = getSkillAgentExecutionProfile(input.skillId);
+  if (!profile) return input.toolExposure;
+  const allowed = new Set(profile.allowedHarnessToolIds);
+  return {
+    exposedTools: input.toolExposure.exposedTools.filter((toolId) => allowed.has(toolId)),
+    toolMeta: input.toolExposure.toolMeta.filter((tool) => allowed.has(tool.toolId)),
+  };
+};
+
 /**
  * Compatibility wrapper for profiled forked Skills.
  *
@@ -79,6 +95,7 @@ export const prepareContextWithForkedSkillAgentNode = async (
     ...evidence,
   };
   const delegatedResult = readDelegatedResult(delegatedObservation);
+  const skillId = delegatedObservation.stepId.replace(/^skill_agent:/, "") || "skill";
 
   // Approval is Parent-governed and wins over needs_input. The Pi loop pauses
   // immediately on pendingApproval, preserving the frozen exact invocation.
@@ -104,12 +121,20 @@ export const prepareContextWithForkedSkillAgentNode = async (
     };
   }
 
-  // insufficient_evidence and recoverable failure remain Parent recovery paths.
+  // insufficient_evidence and recoverable failure remain Parent recovery paths,
+  // but recovery may only use the Skill profile's read-only Harness surface.
+  // Parent must not bypass the private runtime through terminal/edit/code tools.
   if (
     delegatedObservation.status === "partial" ||
     delegatedObservation.status === "failed"
   ) {
-    return committed;
+    return {
+      ...committed,
+      toolExposure: narrowParentRecoveryToolExposure({
+        skillId,
+        toolExposure: preparedState.toolExposure,
+      }),
+    };
   }
 
   // A terminal Skill failure must preserve the existing Main Agent terminal C
@@ -130,7 +155,6 @@ export const prepareContextWithForkedSkillAgentNode = async (
   // Parent finalization packet over the committed Skill observation so the Pi
   // loop can go directly to Generate instead of asking Main Planner to rebuild
   // the deliverable a second time.
-  const skillId = delegatedObservation.stepId.replace(/^skill_agent:/, "") || "skill";
   const evidenceRef = `observation:${observationIndex}` as AgentEvidenceReference;
   const finalizationPacket: AgentFinalizationPacket = {
     type: "answer",
