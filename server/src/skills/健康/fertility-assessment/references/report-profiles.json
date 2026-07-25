@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "activeProfileId": "yuanjie",
+  "profiles": {
+    "yuanjie": {
+      "service": {
+        "brandName": "圆姐聊女性全周期服务",
+        "teamName": "Mira 生育健康评估服务团队",
+        "serviceLine": "备孕从了解自己开始，陪伴你一起接好孕。",
+        "footerText": "本报告用于健康教育、信息整理和就诊准备，不构成诊断、处方或替代生殖专科医生的医疗决策。",
+        "deliveryLabel": "专属服务团队交付"
+      },
+      "theme": {
+        "primaryColor": "#5B2A86",
+        "secondaryColor": "#D79ACB",
+        "accentColor": "#8FB5E8",
+        "softBackground": "#F7F2FA",
+        "textColor": "#2C2530",
+        "mutedTextColor": "#766B79"
+      }
+    },
+    "mira-default": {
+      "service": {
+        "brandName": "Mira 生育健康评估",
+        "teamName": "Mira 专属健康服务团队",
+        "serviceLine": "从了解当前状态开始，整理下一步行动方向。",
+        "footerText": "本报告用于健康教育、信息整理和就诊准备，不替代医疗诊断与专科医生决策。",
+        "deliveryLabel": "专属评估服务交付"
+      },
+      "theme": {
+        "primaryColor": "#3E8F6A",
+        "secondaryColor": "#A8D5C2",
+        "accentColor": "#8FB5E8",
+        "softBackground": "#F2F8F5",
+        "textColor": "#24322C",
+        "mutedTextColor": "#66756E"
+      }
+    }
+  }
+}
