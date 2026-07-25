@@ -12,6 +12,9 @@ intake:
     - displayName
     - assessmentScope
     - currentGoal
+  optionalInternalFields:
+    - reportProfileId
+    - scoringProfileId
   assessmentScopeOptions:
     - female
     - male
@@ -42,5 +45,7 @@ reportCover:
 
 notes:
   - 本文件保留第一轮设计语义，便于阅读和兼容旧说明。
-  - 运行时实际读取 report-profiles.json；通过 activeProfileId 切换客户模板，技能修改页保存后下一份报告生效。
+  - 运行时实际读取 report-profiles.json 与 scoring-profiles.json；技能修改页保存后下一份报告生效。
+  - activeProfileId 是全局默认；服务档案可通过 reportProfileId / scoringProfileId 选择已发布 Profile，不应在客户访谈中追问。
+  - 请求的 Profile 不存在时回退到 activeProfileId，并写结构化诊断。
   - 修改任何 Source 都不得改变 Conversation Flow、轮次上限、最终确认或报告 handoff。
