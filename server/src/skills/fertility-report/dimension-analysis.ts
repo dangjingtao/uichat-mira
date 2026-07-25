@@ -1,4 +1,7 @@
-import { collectTaskModelText } from "@/services/task-model.service.js";
+import {
+  providerProxyService,
+  type NormalizedChatMessage,
+} from "@/services/provider-proxy.service/index.js";
 import type {
   FertilityAssessmentState,
   FertilityDimension,
@@ -53,6 +56,19 @@ export const getFertilityDimensionPairs = (
   return [...FEMALE_DIMENSIONS, ...MALE_DIMENSIONS];
 };
 
+export type FertilityReportSummary = {
+  strengths: string[];
+  priorities: string[];
+  visitPrep: string[];
+  lifestyleFocus: string[];
+};
+
+export type FertilityReportContent = {
+  dimensions: Record<string, FertilityDimension>;
+  summary: FertilityReportSummary;
+  closingMessage: string;
+};
+
 const SIGNAL_STATUSES = new Set<FertilitySignalStatus>([
   "favorable",
   "neutral",
@@ -78,7 +94,7 @@ const unwrapJsonFence = (value: string) => {
 
 const parseJsonObject = (value: string): Record<string, unknown> => {
   const parsed = JSON.parse(unwrapJsonFence(value).trim()) as unknown;
-  if (!isRecord(parsed)) throw new Error("TaskModel did not return a JSON object");
+  if (!isRecord(parsed)) throw new Error("Report model did not return a JSON object");
   return parsed;
 };
 
@@ -97,9 +113,9 @@ const uniqueStrings = (values: unknown, limit = 12) =>
 const normalizeActions = (value: unknown): FertilityDimension["actions"] => {
   const actions = isRecord(value) ? value : {};
   return {
-    selfCare: uniqueStrings(actions.selfCare, 8),
-    discussWithClinician: uniqueStrings(actions.discussWithClinician, 8),
-    testsToConsider: uniqueStrings(actions.testsToConsider, 8),
+    selfCare: uniqueStrings(actions.selfCare, 6),
+    discussWithClinician: uniqueStrings(actions.discussWithClinician, 6),
+    testsToConsider: uniqueStrings(actions.testsToConsider, 6),
   };
 };
 
@@ -135,7 +151,7 @@ const normalizeSignals = (
       direct: candidate.direct === true,
     });
   }
-  return signals.slice(0, 12);
+  return signals.slice(0, 14);
 };
 
 const normalizeAssessmentDraft = (
@@ -150,133 +166,179 @@ const normalizeAssessmentDraft = (
   return {
     id: expectedId,
     signals: normalizeSignals(value.signals, allowedCriterionIds),
-    strengths: uniqueStrings(value.strengths, 8),
-    concerns: uniqueStrings(value.concerns, 8),
-    missingEvidence: uniqueStrings(value.missingEvidence, 8),
+    strengths: uniqueStrings(value.strengths, 6),
+    concerns: uniqueStrings(value.concerns, 6),
+    missingEvidence: uniqueStrings(value.missingEvidence, 6),
     interpretation:
       typeof value.interpretation === "string" ? value.interpretation.trim() : "",
     actions: normalizeActions(value.actions),
   };
 };
 
-const dimensionPrompt = (dimensionPairs: ReadonlyArray<FertilityDimensionPair>) => {
-  const rubrics = dimensionPairs.map(([id]) => getFertilityScoringRule(id));
-  return `你是 Mira 生育健康评估中的“证据归类 TaskModel”。你不负责打分；最终分数由确定性评分引擎根据你归类的证据计算。只返回 JSON 对象，不要 Markdown。
+const normalizeSummary = (value: unknown): FertilityReportSummary => {
+  const summary = isRecord(value) ? value : {};
+  return {
+    strengths: uniqueStrings(summary.strengths, 6),
+    priorities: uniqueStrings(summary.priorities, 6),
+    visitPrep: uniqueStrings(summary.visitPrep, 6),
+    lifestyleFocus: uniqueStrings(summary.lifestyleFocus, 6),
+  };
+};
+
+const mergeSummary = (items: FertilityReportSummary[]): FertilityReportSummary => ({
+  strengths: uniqueStrings(items.flatMap((item) => item.strengths), 6),
+  priorities: uniqueStrings(items.flatMap((item) => item.priorities), 6),
+  visitPrep: uniqueStrings(items.flatMap((item) => item.visitPrep), 6),
+  lifestyleFocus: uniqueStrings(items.flatMap((item) => item.lifestyleFocus), 6),
+});
+
+const fallbackSummary = (state: FertilityAssessmentState): FertilityReportSummary => ({
+  strengths: [],
+  priorities: state.missingCriticalFields.slice(0, 6),
+  visitPrep: [
+    "把现有检查结果、既往治疗时间线和当前用药或补充剂清单带给生殖专科医生核对",
+  ],
+  lifestyleFocus: [],
+});
+
+const fallbackClosing =
+  "谢谢您愿意把这些经历和信息交给我们整理。生育评估不是给人生下结论，而是帮助您更清楚地看见当前的位置和下一步可以怎样走。愿接下来的每一次选择都更有依据，也愿您在这个过程中被认真理解、被温柔支持。";
+
+const collectMainModelText = async (
+  messages: NormalizedChatMessage[],
+  options: { maxTokens: number; temperature?: number },
+) => {
+  let output = "";
+  for await (const delta of providerProxyService.streamChatText(
+    "default",
+    messages,
+    {
+      maxTokens: options.maxTokens,
+      temperature: options.temperature ?? 0.15,
+    },
+  )) {
+    output += delta;
+  }
+  const trimmed = output.trim();
+  if (!trimmed) throw new Error("Report model returned empty output");
+  return trimmed;
+};
+
+const subjectLabel = (pairs: ReadonlyArray<FertilityDimensionPair>) =>
+  pairs[0]?.[0].startsWith("male_") ? "男方" : "女方";
+
+const reportPrompt = (pairs: ReadonlyArray<FertilityDimensionPair>) => {
+  const rubrics = pairs.map(([id]) => getFertilityScoringRule(id));
+  return `你是 Mira 生育健康评估服务团队的完整报告撰写模型。本次需要一次性完成${subjectLabel(pairs)}全部十个维度的证据归类和报告内容。最终分数由程序根据你归类的 signals 确定，你不能自行打分。
 
 评分规则版本：${FERTILITY_SCORING_VERSION}
-本批规则：
+本次十维规则：
 ${JSON.stringify(rubrics, null, 2)}
 
 硬规则：
-1. 只分析本批指定维度；每个维度输出一项。
-2. 禁止输出 score、confidence 或 dataCompleteness。
-3. signals 只能使用规则中已经发布的 criterionId；status 只能是 favorable|neutral|mild_concern|moderate_concern|high_concern|unknown。
-4. 只有用户明确叙述、检查值、病史或原始资料支持时才建立 signal。不要为了填满规则编造证据。
-5. direct=true 仅用于明确数值、明确诊断/手术史、明确生活方式事实或可核对的治疗结果；推断必须 direct=false。
-6. 用户口述检查结果默认 source=user_reported；只有明确来自上传文档或原始记录时才用 document/clinical_record。
-7. 不把 AMH/AFC 当作卵子质量或自然受孕概率；不把单一精液参数当作男性不育诊断。
-8. 不因未做非普查项目而扣分：无指征时，免疫/凝血、DFI、广泛感染筛查等缺失应保持 unknown，不列为强制建议。
-9. TSH 使用实验室参考与临床情境；备孕阶段 2.5–4.0 mIU/L 不得自动归为风险。
-10. 不诊断、不处方、不输出个体化药物或补充剂剂量。testsToConsider 必须写成“与医生讨论是否需要”。
-11. interpretation 要像专属服务团队写给客户的核心判断，说明结果方向和证据限制，但不得自行给分。
-12. 即使资料很少也输出维度项；signals 可为空，由评分引擎产生低置信度中性参考分。
+1. 只返回 JSON，不要 Markdown、HTML 或解释。
+2. 必须输出本次指定的全部十个维度，每个维度恰好一项；禁止输出 score、confidence、dataCompleteness。
+3. caseRecord.evidenceLedger 是可追溯证据账本，answerLog 是原始访谈答复。两者和 facts 共同构成事实来源。任何一处已经出现的信息，都不得在其他维度写成“未提供”。
+4. 同一事实可以支持多个相关维度，但用户可见文字不得机械重复。已有依据、当前关注、建议补充三栏之间要去重，各自承担不同作用。
+5. signals 只能使用规则中已发布的 criterionId；status 只能是 favorable|neutral|mild_concern|moderate_concern|high_concern|unknown。
+6. 只有明确叙述、检查值、病史或治疗结果才建立 signal。用户口述检查默认 source=user_reported；推断 direct=false。
+7. 不把 AMH/AFC 当作卵子质量或自然受孕概率；不把单一精液参数当作男性不育诊断；无指征时未做免疫、凝血、DFI 等检查不扣分。
+8. interpretation 写成专属服务团队的核心判断：说明方向、证据和限制。不得出现内部维度 id、TaskModel、JSON、Runtime 等内部术语。
+9. 不诊断、不处方，不替用户选择具体促排、移植或供卵路径。可提示与医生讨论适用性、局限性和需要核对的资料，但不得像医嘱一样替代临床决策。
+10. actions 必须与当前证据相关。用户未提供吸烟、运动、体重等资料时，不得假设问题存在，也不要批量塞入通用生活方式清单。
+11. 没有证据的维度仍输出，但 interpretation 简短说明当前资料有限；missingEvidence 最多4项，actions 可以为空，不要为了凑页数重复“暂无足够信息”。
+12. summary 每组最多6条，优先写真正影响当前决策的方向；低置信度维度优先表达为资料缺口，不下强结论。
+13. closingMessage 是报告最后的祝福性总结，温和、克制、不许诺结果，承认过程的不易，并让用户感到被认真理解。长度80-180字。
 
 输出结构：
 {
   "dimensions": [
     {
-      "id": "指定维度 id",
-      "signals": [
-        {
-          "criterionId": "已发布 criterionId",
-          "status": "favorable|neutral|mild_concern|moderate_concern|high_concern|unknown",
-          "summary": "对应的明确事实及其方向",
-          "source": "user_reported|document|clinical_record|inferred",
-          "direct": true
-        }
-      ],
+      "id": "指定维度id",
+      "signals": [{"criterionId":"...","status":"...","summary":"...","source":"user_reported|document|clinical_record|inferred","direct":true}],
       "strengths": [],
       "concerns": [],
       "missingEvidence": [],
       "interpretation": "",
-      "actions": {
-        "selfCare": [],
-        "discussWithClinician": [],
-        "testsToConsider": []
-      }
+      "actions": {"selfCare":[],"discussWithClinician":[],"testsToConsider":[]}
     }
-  ]
+  ],
+  "summary": {"strengths":[],"priorities":[],"visitPrep":[],"lifestyleFocus":[]},
+  "closingMessage": ""
 }`;
 };
 
-export const completeFertilityDimensions = async (
+const generateSubjectContent = async (
   state: FertilityAssessmentState,
   pairs: ReadonlyArray<FertilityDimensionPair>,
 ) => {
-  const dimensions: Record<string, FertilityDimension> = {};
+  const drafts = new Map(
+    pairs.map(([id]) => [id, buildEmptyFertilityAssessmentDraft(id)]),
+  );
+  let summary = fallbackSummary(state);
+  let closingMessage = fallbackClosing;
 
-  for (let index = 0; index < pairs.length; index += 2) {
-    const batch = pairs.slice(index, index + 2);
-    const batchById = new Map(
-      batch.map(([id]) => [id, buildEmptyFertilityAssessmentDraft(id)]),
-    );
-    try {
-      const output = await collectTaskModelText(
-        [
-          { role: "system", content: dimensionPrompt(batch), parts: [] },
-          {
-            role: "user",
-            content: JSON.stringify(
-              {
-                facts: state.facts,
-                interviewDimensionDrafts: Object.fromEntries(
-                  batch.map(([id]) => [id, state.dimensions[id] ?? null]),
-                ),
-              },
-              null,
-              2,
-            ),
-            parts: [],
-          },
-        ],
+  try {
+    const output = await collectMainModelText(
+      [
+        { role: "system", content: reportPrompt(pairs), parts: [] },
         {
-          maxTokens: 1800,
-          temperature: 0,
-          purpose: `fertility-report-evidence:${batch.map(([id]) => id).join(",")}`,
+          role: "user",
+          content: JSON.stringify(
+            {
+              facts: state.facts,
+              caseRecord: state.caseRecord,
+              interviewDimensionDrafts: Object.fromEntries(
+                pairs.map(([id]) => [id, state.dimensions[id] ?? null]),
+              ),
+            },
+            null,
+            2,
+          ),
+          parts: [],
         },
+      ],
+      { maxTokens: 12000, temperature: 0.15 },
+    );
+    const parsed = parseJsonObject(output);
+    const candidates = Array.isArray(parsed.dimensions) ? parsed.dimensions : [];
+    for (const [id] of pairs) {
+      const candidate = candidates.find(
+        (item) => isRecord(item) && item.id === id,
       );
-      const parsed = parseJsonObject(output);
-      const candidates = Array.isArray(parsed.dimensions) ? parsed.dimensions : [];
-      for (const [id] of batch) {
-        const candidate = candidates.find(
-          (item) => isRecord(item) && item.id === id,
-        );
-        batchById.set(id, normalizeAssessmentDraft(candidate, id));
-      }
-    } catch {
-      // A bounded evidence-extraction call may fail; every dimension still receives
-      // a deterministic low-confidence reference score instead of disappearing.
+      drafts.set(id, normalizeAssessmentDraft(candidate, id));
     }
-
-    for (const [id] of batch) {
-      dimensions[id] = scoreFertilityDimension(
-        batchById.get(id) ?? buildEmptyFertilityAssessmentDraft(id),
-      );
+    summary = normalizeSummary(parsed.summary);
+    if (typeof parsed.closingMessage === "string" && parsed.closingMessage.trim()) {
+      closingMessage = parsed.closingMessage.trim().slice(0, 500);
     }
+  } catch {
+    // A complete subject-level generation may fail. Deterministic scoring still
+    // emits every requested dimension from empty drafts instead of losing the report.
   }
 
-  return dimensions;
+  const dimensions: Record<string, FertilityDimension> = {};
+  for (const [id] of pairs) {
+    dimensions[id] = scoreFertilityDimension(
+      drafts.get(id) ?? buildEmptyFertilityAssessmentDraft(id),
+    );
+  }
+  return { dimensions, summary, closingMessage };
 };
 
-export const buildFertilitySummary = async (state: FertilityAssessmentState) => {
+const buildJointSummary = async (
+  state: FertilityAssessmentState,
+  dimensions: Record<string, FertilityDimension>,
+  fallbacks: FertilityReportSummary[],
+) => {
   try {
     const parsed = parseJsonObject(
-      await collectTaskModelText(
+      await collectMainModelText(
         [
           {
             role: "system",
             content:
-              "你是 Mira 生育健康评估服务团队的报告汇总 TaskModel。只返回 JSON：{strengths:string[],priorities:string[],visitPrep:string[],lifestyleFocus:string[]}。每组最多6条。只根据给定 facts 和已由规则引擎计算的 dimensions；分数越低、置信度越高的维度优先级越高，低置信度低分应优先表达为补充资料而非下结论。不诊断、不处方、不写个体化药物或补充剂剂量。语言清晰、克制、有行动方向。",
+              "你是 Mira 生育健康评估服务团队的夫妻联合摘要模型。只返回 JSON：{summary:{strengths:string[],priorities:string[],visitPrep:string[],lifestyleFocus:string[]},closingMessage:string}。每组最多6条。根据同一份夫妻病例和已由规则引擎计算的男女维度，写共同决策最重要的方向；不要重复男女详情，不诊断、不处方、不替代医生。closingMessage 要温和、克制、承认双方共同经历，不许诺结果。",
             parts: [],
           },
           {
@@ -284,15 +346,13 @@ export const buildFertilitySummary = async (state: FertilityAssessmentState) => 
             content: JSON.stringify(
               {
                 facts: state.facts,
+                caseRecord: state.caseRecord,
                 dimensions: Object.fromEntries(
-                  Object.entries(state.dimensions).map(([id, dimension]) => [
+                  Object.entries(dimensions).map(([id, dimension]) => [
                     id,
                     {
                       ...dimension,
-                      scoreBand:
-                        typeof dimension.score === "number"
-                          ? getFertilityScoreBand(dimension.score)
-                          : null,
+                      scoreBand: getFertilityScoreBand(dimension.score ?? 5),
                     },
                   ]),
                 ),
@@ -303,23 +363,61 @@ export const buildFertilitySummary = async (state: FertilityAssessmentState) => 
             parts: [],
           },
         ],
-        { maxTokens: 800, temperature: 0, purpose: "fertility-report-summary" },
+        { maxTokens: 2800, temperature: 0.15 },
       ),
     );
     return {
-      strengths: uniqueStrings(parsed.strengths, 6),
-      priorities: uniqueStrings(parsed.priorities, 6),
-      visitPrep: uniqueStrings(parsed.visitPrep, 6),
-      lifestyleFocus: uniqueStrings(parsed.lifestyleFocus, 6),
+      summary: normalizeSummary(parsed.summary),
+      closingMessage:
+        typeof parsed.closingMessage === "string" && parsed.closingMessage.trim()
+          ? parsed.closingMessage.trim().slice(0, 500)
+          : fallbackClosing,
     };
   } catch {
     return {
-      strengths: [],
-      priorities: state.missingCriticalFields.slice(0, 6),
-      visitPrep: [
-        "把关键检查结果、既往治疗时间线和当前用药/补充剂清单带给生殖专科医生核对",
-      ],
-      lifestyleFocus: [],
+      summary: mergeSummary(fallbacks),
+      closingMessage: fallbackClosing,
     };
   }
 };
+
+export const buildFertilityReportContent = async (
+  state: FertilityAssessmentState,
+  pairs: ReadonlyArray<FertilityDimensionPair>,
+): Promise<FertilityReportContent> => {
+  const femalePairs = pairs.filter(([id]) => id.startsWith("female_"));
+  const malePairs = pairs.filter(([id]) => id.startsWith("male_"));
+  const groups = [femalePairs, malePairs].filter((group) => group.length > 0);
+  const generated = [];
+  for (const group of groups) {
+    generated.push(await generateSubjectContent(state, group));
+  }
+
+  const dimensions = Object.assign({}, ...generated.map((item) => item.dimensions));
+  if (generated.length === 1) {
+    return {
+      dimensions,
+      summary: generated[0]?.summary ?? fallbackSummary(state),
+      closingMessage: generated[0]?.closingMessage ?? fallbackClosing,
+    };
+  }
+
+  const joint = await buildJointSummary(
+    state,
+    dimensions,
+    generated.map((item) => item.summary),
+  );
+  return {
+    dimensions,
+    summary: joint.summary,
+    closingMessage: joint.closingMessage,
+  };
+};
+
+export const completeFertilityDimensions = async (
+  state: FertilityAssessmentState,
+  pairs: ReadonlyArray<FertilityDimensionPair>,
+) => (await buildFertilityReportContent(state, pairs)).dimensions;
+
+export const buildFertilitySummary = async (state: FertilityAssessmentState) =>
+  state.summary ?? fallbackSummary(state);
