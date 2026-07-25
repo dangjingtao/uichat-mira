@@ -15,6 +15,12 @@ export type SkillRequirement = {
   requiredFor: string;
   acceptedFormats?: string[];
   alternatives?: string[];
+  /**
+   * Optional domain-authored wording for a governed user-input boundary.
+   * Parent still owns ask_user, but may preserve this wording when the Skill
+   * needs a specific service tone or a single carefully scoped question.
+   */
+  userPrompt?: string;
 };
 
 export type SkillInterruption = {
@@ -34,7 +40,7 @@ export type SkillDirective = {
   maxRounds?: number;
   /**
    * Structured execution interruption. It reports missing external conditions
-   * only; Planner remains the sole owner of ask_user and user-facing wording.
+   * only; Planner remains the sole owner of ask_user.
    */
   interruption?: SkillInterruption;
   /** @deprecated Read-only compatibility for sessions persisted before interruption. */
