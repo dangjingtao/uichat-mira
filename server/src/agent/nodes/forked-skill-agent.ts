@@ -11,6 +11,7 @@ import { getSkillAgentExecutionProfile } from "@/skills/agent/profiles.js";
 import { runWenShuPiSkillAgentPilot } from "@/skills/agent/wenshu-pilot.js";
 import type {
   SkillAgentApprovedInvocation,
+  SkillAgentCheckpoint,
   SkillAgentRequirement,
 } from "@/skills/agent/types.js";
 
@@ -18,20 +19,31 @@ type SkillAwareTaskFrame = NonNullable<AgentNodeState["currentTaskFrame"]> & {
   skillContext?: SkillContext;
 };
 
+type SkillAgentPendingToolCall = {
+  id: string;
+  toolId: string;
+  args: Record<string, unknown>;
+  inputHash: string;
+  source: "llm_tool_call";
+  origin: "skill_agent";
+  skillId: string;
+  skillAgentCheckpoint: SkillAgentCheckpoint;
+  createdAt: string;
+};
+
 const getSkillContext = (state: AgentNodeState) =>
   (state.currentTaskFrame as SkillAwareTaskFrame | undefined)?.skillContext;
 
 const isSkillAgentPendingToolCall = (
   pendingToolCall: AgentToolCallRequest | undefined,
-): pendingToolCall is AgentToolCallRequest & {
-  source: "llm_tool_call";
-  origin: "skill_agent";
-  skillId?: string;
-} =>
+): pendingToolCall is AgentToolCallRequest & SkillAgentPendingToolCall =>
   Boolean(
     pendingToolCall &&
       "origin" in pendingToolCall &&
-      pendingToolCall.origin === "skill_agent",
+      pendingToolCall.origin === "skill_agent" &&
+      "id" in pendingToolCall &&
+      typeof pendingToolCall.id === "string" &&
+      "skillAgentCheckpoint" in pendingToolCall,
   );
 
 const getReplayApprovedInvocations = (
@@ -41,7 +53,7 @@ const getReplayApprovedInvocations = (
   if (!isSkillAgentPendingToolCall(pendingToolCall)) return [];
 
   // Only the invocation currently frozen for this resume may cross back into
-  // the new fork. Older approvals from previous fork boundaries must not become
+  // the fork. Older approvals from previous boundaries must never become
   // reusable grants that can repeat already-executed side effects.
   return (state.approvedInvocations ?? [])
     .filter(
@@ -54,6 +66,38 @@ const getReplayApprovedInvocations = (
       inputHash: approval.inputHash,
       input: approval.input,
     }));
+};
+
+const getReplayCheckpoint = (
+  state: AgentNodeState,
+  skillId: string,
+): SkillAgentCheckpoint | undefined => {
+  const pendingToolCall = state.pendingToolCall;
+  if (!pendingToolCall || !("origin" in pendingToolCall)) return undefined;
+  if (pendingToolCall.origin !== "skill_agent") return undefined;
+  if (!isSkillAgentPendingToolCall(pendingToolCall)) {
+    throw new Error(
+      "Frozen Skill approval is missing its Pi transcript checkpoint; refusing to restart the original goal.",
+    );
+  }
+  if (pendingToolCall.skillId !== skillId) {
+    throw new Error(
+      `Frozen Skill approval belongs to ${pendingToolCall.skillId}, not active Skill ${skillId}.`,
+    );
+  }
+
+  const checkpoint = pendingToolCall.skillAgentCheckpoint;
+  const frozen = checkpoint.pendingInvocation;
+  if (
+    frozen.toolCallId !== pendingToolCall.id ||
+    frozen.toolId !== pendingToolCall.toolId ||
+    frozen.inputHash !== pendingToolCall.inputHash
+  ) {
+    throw new Error(
+      "Frozen Skill approval does not match its Pi checkpoint invocation; resume was blocked.",
+    );
+  }
+  return checkpoint;
 };
 
 const toObservationStatus = (
@@ -82,6 +126,7 @@ const findApprovalRequirement = (
     (requirement) =>
       requirement.kind === "approval" &&
       Boolean(requirement.toolId) &&
+      Boolean(requirement.toolCallId) &&
       Boolean(requirement.inputHash) &&
       Boolean(requirement.input),
   );
@@ -90,25 +135,42 @@ const buildParentApprovalPatch = (input: {
   state: AgentNodeState;
   skillId: string;
   requirement: SkillAgentRequirement;
+  checkpoint: SkillAgentCheckpoint;
   createdAt: string;
 }): Pick<AgentNodeState, "pendingApproval" | "pendingToolCall" | "policyDecision"> => {
   const toolId = input.requirement.toolId!;
+  const toolCallId = input.requirement.toolCallId!;
   const args = structuredClone(input.requirement.input!);
   const inputHash = input.requirement.inputHash!;
-  const pendingToolCall: AgentToolCallRequest = {
+  const frozen = input.checkpoint.pendingInvocation;
+  if (
+    frozen.toolId !== toolId ||
+    frozen.toolCallId !== toolCallId ||
+    frozen.inputHash !== inputHash
+  ) {
+    throw new Error(
+      "Pi approval requirement does not match its serialized checkpoint invocation.",
+    );
+  }
+
+  const skillPendingToolCall: SkillAgentPendingToolCall = {
+    id: toolCallId,
     toolId,
     args,
     inputHash,
     source: "llm_tool_call",
     origin: "skill_agent",
     skillId: input.skillId,
+    skillAgentCheckpoint: structuredClone(input.checkpoint),
     createdAt: input.createdAt,
   };
+  const pendingToolCall = skillPendingToolCall as AgentToolCallRequest;
   const pendingApproval: AgentApprovalRequest = {
     id: crypto.randomUUID(),
     runId: input.state.runId,
     stepId: `skill_agent:${input.skillId}`,
     toolId,
+    toolCallId,
     reason: input.requirement.description,
     input: args,
     inputHash,
@@ -137,13 +199,16 @@ export const forkedSkillAgentNode = async (
   const profile = getSkillAgentExecutionProfile(skillId);
   if (!profile) return {};
 
+  const checkpoint = getReplayCheckpoint(state, skillId);
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-forked-skill-agent",
     nodeType: "reason",
     phase: "start",
     label: "技能执行代理",
-    summary: `正在把 ${skillId} Skill 委托给隔离 Pi Agent 执行`,
+    summary: checkpoint
+      ? `正在恢复 ${skillId} Skill 的已审批 Pi 执行上下文`
+      : `正在把 ${skillId} Skill 委托给隔离 Pi Agent 执行`,
     details: {
       skillId,
       engine: profile.engine,
@@ -151,7 +216,8 @@ export const forkedSkillAgentNode = async (
       allowedHarnessToolIds: profile.allowedHarnessToolIds,
       runtimeBindings: profile.runtimeBindings,
       workspaceRoot: state.workspaceRoot ?? null,
-      approvalResume: isSkillAgentPendingToolCall(state.pendingToolCall),
+      approvalResume: Boolean(checkpoint),
+      resumeToolCallId: checkpoint?.pendingInvocation.toolCallId ?? null,
     },
   });
 
@@ -191,6 +257,7 @@ export const forkedSkillAgentNode = async (
     userId: state.userId,
     threadId: state.threadId,
     approvedInvocations: getReplayApprovedInvocations(state),
+    checkpoint,
   });
 
   const facts = [
@@ -227,7 +294,9 @@ export const forkedSkillAgentNode = async (
           : result.status === "failed"
             ? "failed"
             : "partial",
-      actionTaken: `Delegated ${skillId} Skill to Pi Agent Core`,
+      actionTaken: checkpoint
+        ? `Resumed ${skillId} Skill from its exact Pi approval checkpoint`
+        : `Delegated ${skillId} Skill to Pi Agent Core`,
       keyFindings: facts.slice(0, 8),
       ...(result.missingEvidence?.length
         ? { gaps: result.missingEvidence.map((item) => String(item)) }
@@ -241,6 +310,7 @@ export const forkedSkillAgentNode = async (
           skillId,
           engine: profile.engine,
           status: result.status,
+          resumedFromApproval: Boolean(checkpoint),
           artifacts: result.artifacts,
           requirements: result.requirements ?? [],
           missingEvidence: result.missingEvidence ?? [],
@@ -255,11 +325,17 @@ export const forkedSkillAgentNode = async (
   };
 
   const approvalRequirement = findApprovalRequirement(result.requirements);
+  if (approvalRequirement && !result.checkpoint) {
+    throw new Error(
+      "Pi Skill Agent requested approval without a resumable transcript checkpoint.",
+    );
+  }
   const approvalPatch = approvalRequirement
     ? buildParentApprovalPatch({
         state,
         skillId,
         requirement: approvalRequirement,
+        checkpoint: result.checkpoint!,
         createdAt,
       })
     : isSkillAgentPendingToolCall(state.pendingToolCall)
@@ -282,11 +358,13 @@ export const forkedSkillAgentNode = async (
     details: {
       skillId,
       status: result.status,
+      resumedFromApproval: Boolean(checkpoint),
       artifactCount: result.artifacts.length,
       requirementCount: result.requirements?.length ?? 0,
       missingEvidenceCount: result.missingEvidence?.length ?? 0,
       toolCalls: result.trace?.toolCalls ?? [],
       approvalToolId: approvalRequirement?.toolId ?? null,
+      approvalToolCallId: approvalRequirement?.toolCallId ?? null,
       approvalInputHash: approvalRequirement?.inputHash ?? null,
     },
   });
