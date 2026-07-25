@@ -294,10 +294,10 @@ export default function GitHubMicroAppPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Client ID">
-                  <TextInput value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="Iv1.xxxxxxxxxxxxxxxx" />
+                  <TextInput value={clientId} onChange={setClientId} placeholder="Iv1.xxxxxxxxxxxxxxxx" />
                 </Field>
                 <Field label="App Slug">
-                  <TextInput value={appSlug} onChange={(event) => setAppSlug(event.target.value)} placeholder="uichat-mira" />
+                  <TextInput value={appSlug} onChange={setAppSlug} placeholder="uichat-mira" />
                 </Field>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-2">
