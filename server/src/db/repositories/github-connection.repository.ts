@@ -93,6 +93,22 @@ const read = (): GitHubConnectionRecord | null => {
   };
 };
 
+const withRuntimeDefaults = (
+  connection: GitHubConnectionRecord | null,
+): GitHubConnectionRecord | null => {
+  if (!connection) return null;
+
+  return {
+    ...connection,
+    clientId:
+      connection.clientId ||
+      (process.env.UI_CHAT_GITHUB_APP_CLIENT_ID ?? "").trim(),
+    appSlug:
+      connection.appSlug ||
+      (process.env.UI_CHAT_GITHUB_APP_SLUG ?? "").trim(),
+  };
+};
+
 const upsert = (
   input: Partial<Omit<GitHubConnectionRecord, "id">>,
 ): GitHubConnectionRecord => {
@@ -178,7 +194,7 @@ const upsert = (
       next.lastErrorMessage,
     );
 
-  return read()!;
+  return withRuntimeDefaults(read())!;
 };
 
 export const githubConnectionRepository = {
@@ -187,7 +203,7 @@ export const githubConnectionRepository = {
   },
   get() {
     ensureTable();
-    return read();
+    return withRuntimeDefaults(read());
   },
   upsert,
   clearAuthorization() {
