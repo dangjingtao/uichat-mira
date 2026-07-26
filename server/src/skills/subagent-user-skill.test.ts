@@ -120,7 +120,6 @@ This user package must never inherit the built-in Office runtime.`,
     expect(manifest).toMatchObject({
       id: "docx",
       origin: "user",
-      runtimeRequirements: undefined,
       execution: {
         context: "fork",
         agent: "subAgent",
@@ -129,6 +128,7 @@ This user package must never inherit the built-in Office runtime.`,
         workspaceBound: false,
       },
     });
+    expect(manifest?.runtimeRequirements).toBeUndefined();
   });
 
   it("removes disabled packages from discovery and restores the same version when enabled", async () => {
