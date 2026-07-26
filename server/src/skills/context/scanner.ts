@@ -6,7 +6,7 @@ import {
   getBuiltInSkillPackage,
   MIRA_LAB_SKILL_SOURCE,
 } from "../registry.js";
-import type { SkillManifest } from "./types.js";
+import type { SkillExecutionManifest, SkillManifest } from "./types.js";
 
 const FRONTMATTER_BOUNDARY = "---";
 const MAX_MANIFEST_BYTES = 16 * 1024;
@@ -37,6 +37,38 @@ const stripQuotes = (value: string) => {
     return trimmed.slice(1, -1);
   }
   return trimmed;
+};
+
+const parseStringList = (value: string | undefined) => {
+  if (!value?.trim()) return [];
+  const normalized = value.trim();
+  const body =
+    normalized.startsWith("[") && normalized.endsWith("]")
+      ? normalized.slice(1, -1)
+      : normalized;
+  return [
+    ...new Set(
+      body
+        .split(",")
+        .map((item) => stripQuotes(item).trim())
+        .filter(Boolean),
+    ),
+  ];
+};
+
+const parseExecutionManifest = (
+  frontmatter: Record<string, string>,
+): SkillExecutionManifest | undefined => {
+  const rawContext = frontmatter["execution.context"]?.trim().toLowerCase();
+  if (rawContext !== "inline" && rawContext !== "fork") return undefined;
+
+  const agent = frontmatter["execution.agent"]?.trim();
+  return {
+    context: rawContext,
+    ...(agent ? { agent } : {}),
+    allowedTools: parseStringList(frontmatter["execution.allowedTools"]),
+    runtimeBindings: parseStringList(frontmatter["execution.runtimeBindings"]),
+  };
 };
 
 const parseFrontmatter = (raw: string) => {
@@ -164,6 +196,7 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
   const rawCategory = String(
     candidate.categoryFromDirectory || frontmatter.category || fallback?.category || "",
   ).trim();
+  const execution = parseExecutionManifest(frontmatter);
 
   return {
     id,
@@ -184,6 +217,7 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
     ...(fallback?.runtimePack
       ? { runtimeRequirements: [`${fallback.runtimePack.id}@${fallback.runtimePack.version}`] }
       : {}),
+    ...(execution ? { execution } : {}),
   };
 };
 
@@ -288,6 +322,13 @@ export class SkillRegistry {
       runtimeRequirements: manifest.runtimeRequirements
         ? [...manifest.runtimeRequirements]
         : undefined,
+      execution: manifest.execution
+        ? {
+            ...manifest.execution,
+            allowedTools: [...manifest.execution.allowedTools],
+            runtimeBindings: [...manifest.execution.runtimeBindings],
+          }
+        : undefined,
     };
   }
 
@@ -296,6 +337,13 @@ export class SkillRegistry {
       ...manifest,
       runtimeRequirements: manifest.runtimeRequirements
         ? [...manifest.runtimeRequirements]
+        : undefined,
+      execution: manifest.execution
+        ? {
+            ...manifest.execution,
+            allowedTools: [...manifest.execution.allowedTools],
+            runtimeBindings: [...manifest.execution.runtimeBindings],
+          }
         : undefined,
     }));
   }
