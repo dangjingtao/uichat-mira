@@ -8,7 +8,6 @@ const {
   completed,
   encodeGitHubRepositoryPath,
   mcpBadRequest,
-  mcpNotFound,
   normalizeBoolean,
   normalizeGitHubLogin,
   normalizeGitHubRepositoryName,
@@ -296,10 +295,7 @@ export const createExtendedRepositoryTool = (
             connection.accessToken,
             { signal: context.signal, allowNotFound: true },
           );
-          if (!repositorySnapshot) {
-            throw mcpNotFound(`Repository ${repository} was not found`);
-          }
-          const fullName = repositorySnapshot.full_name ?? repository;
+          const fullName = repositorySnapshot?.full_name ?? repository;
           const result = {
             accessible: false,
             installationId: null,
@@ -308,10 +304,10 @@ export const createExtendedRepositoryTool = (
             instructions:
               "Open the GitHub App installation settings, add this repository to Mira, then run ensure_installation_access again.",
             repository: {
-              id: repositorySnapshot.id ?? null,
+              id: repositorySnapshot?.id ?? null,
               fullName,
-              defaultBranch: repositorySnapshot.default_branch ?? "",
-              htmlUrl: repositorySnapshot.html_url ?? "",
+              defaultBranch: repositorySnapshot?.default_branch ?? "",
+              htmlUrl: repositorySnapshot?.html_url ?? "",
             },
           };
           addArtifact(context, {
@@ -322,7 +318,7 @@ export const createExtendedRepositoryTool = (
             data: result,
           });
           return completed(operation, fullName, result, [
-            `${fullName} exists but is not currently authorized for Mira.`,
+            `${fullName} is not currently authorized for Mira.`,
             "User action is required in GitHub App installation settings.",
           ]);
         }
