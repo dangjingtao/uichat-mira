@@ -24,7 +24,6 @@ type GitHubApi = ReturnType<typeof S.createGitHubApi>;
 
 type RepositoryResponse = {
   id?: number;
-  name?: string;
   full_name?: string;
   private?: boolean;
   visibility?: string;
@@ -35,13 +34,20 @@ type RepositoryResponse = {
 type PagesResponse = {
   status?: string;
   build_type?: "legacy" | "workflow";
-  source?: {
-    branch?: string;
-    path?: string;
-  };
+  source?: { branch?: string; path?: string };
   cname?: string | null;
   https_enforced?: boolean;
   html_url?: string;
+};
+
+type NormalizedPagesResult = {
+  enabled: boolean;
+  status: string | null;
+  buildType: "legacy" | "workflow" | null;
+  source: { branch: string; path: "/" | "/docs" } | null;
+  customDomain: string | null;
+  httpsEnforced: boolean;
+  url: string | null;
 };
 
 const createRepositoryVariant = {
@@ -50,20 +56,14 @@ const createRepositoryVariant = {
   required: ["operation", "owner", "name", "visibility"],
   properties: {
     operation: { type: "string", enum: ["create"] },
-    owner: {
-      type: "string",
-      description: "GitHub user or organization that will own the repository.",
-    },
+    owner: { type: "string" },
     name: {
       type: "string",
       minLength: 1,
       maxLength: 100,
       pattern: "^[A-Za-z0-9._-]+$",
     },
-    visibility: {
-      type: "string",
-      enum: ["public", "private"],
-    },
+    visibility: { type: "string", enum: ["public", "private"] },
     description: { type: "string", maxLength: 350 },
     autoInit: { type: "boolean", default: true },
   },
@@ -75,15 +75,17 @@ export const extendedRepositorySchema = {
     createRepositoryVariant,
     operationVariant("ensure_installation_access", {}),
     operationVariant("get_pages", {}),
-    operationVariant("configure_pages", {
-      mode: { type: "string", enum: ["workflow", "branch"] },
-      branch: { type: "string" },
-      path: { type: "string", enum: ["/", "/docs"], default: "/" },
-      customDomain: {
-        oneOf: [{ type: "string" }, { type: "null" }],
+    operationVariant(
+      "configure_pages",
+      {
+        mode: { type: "string", enum: ["workflow", "branch"] },
+        branch: { type: "string" },
+        path: { type: "string", enum: ["/", "/docs"], default: "/" },
+        customDomain: { oneOf: [{ type: "string" }, { type: "null" }] },
+        enforceHttps: { type: "boolean" },
       },
-      enforceHttps: { type: "boolean" },
-    }, ["mode"]),
+      ["mode"],
+    ),
   ],
 } as const;
 
@@ -100,18 +102,24 @@ const normalizeRepositoryName = (value: unknown) => {
   return name;
 };
 
-const normalizeVisibility = (value: unknown) => {
+const normalizeVisibility = (value: unknown): "public" | "private" => {
   if (value !== "public" && value !== "private") {
     throw mcpBadRequest("visibility must be public or private");
   }
   return value;
 };
 
-const normalizePagesMode = (value: unknown) => {
+const normalizePagesMode = (value: unknown): "workflow" | "branch" => {
   if (value !== "workflow" && value !== "branch") {
     throw mcpBadRequest("mode must be workflow or branch");
   }
   return value;
+};
+
+const normalizePagesPath = (value: unknown): "/" | "/docs" => {
+  if (value === undefined || value === "/") return "/";
+  if (value === "/docs") return "/docs";
+  throw mcpBadRequest("path must be / or /docs");
 };
 
 const normalizeOptionalBoolean = (value: unknown, name: string) =>
@@ -125,23 +133,20 @@ const normalizeCustomDomain = (value: unknown) => {
   });
 };
 
-const normalizePagesResult = (pages: PagesResponse | null) => {
-  if (!pages) return { enabled: false };
-  return {
-    enabled: true,
-    status: pages.status ?? null,
-    buildType: pages.build_type ?? null,
-    source: pages.source
-      ? {
-          branch: pages.source.branch ?? "",
-          path: pages.source.path === "/docs" ? "/docs" : "/",
-        }
-      : null,
-    customDomain: pages.cname ?? null,
-    httpsEnforced: pages.https_enforced ?? false,
-    url: pages.html_url ?? null,
-  };
-};
+const normalizePagesResult = (pages: PagesResponse | null): NormalizedPagesResult => ({
+  enabled: Boolean(pages),
+  status: pages?.status ?? null,
+  buildType: pages?.build_type ?? null,
+  source: pages?.source
+    ? {
+        branch: pages.source.branch ?? "",
+        path: pages.source.path === "/docs" ? "/docs" : "/",
+      }
+    : null,
+  customDomain: pages?.cname ?? null,
+  httpsEnforced: pages?.https_enforced ?? false,
+  url: pages?.html_url ?? null,
+});
 
 const isInstallationScopeError = (error: unknown) =>
   error instanceof Error && error.message.includes("is not authorized for Mira");
@@ -206,7 +211,7 @@ export const createExtendedRepositoryTool = (
 
         const connection = await client.getActiveConnection(context.signal);
         const endpoint =
-          connection.login.toLowerCase() === owner.toLowerCase()
+          (connection.login ?? "").toLowerCase() === owner.toLowerCase()
             ? "/user/repos"
             : `/orgs/${encodeURIComponent(owner)}/repos`;
         const created = await api.json<RepositoryResponse>(endpoint, connection.accessToken, {
@@ -359,13 +364,10 @@ export const createExtendedRepositoryTool = (
       if (mode === "workflow" && context.args.branch !== undefined) {
         throw mcpBadRequest("branch is only valid when mode is branch");
       }
-      const sourcePath = context.args.path === undefined ? "/" : context.args.path;
-      if (sourcePath !== "/" && sourcePath !== "/docs") {
-        throw mcpBadRequest("path must be / or /docs");
-      }
       if (mode === "workflow" && context.args.path !== undefined) {
         throw mcpBadRequest("path is only valid when mode is branch");
       }
+      const sourcePath = normalizePagesPath(context.args.path);
       const customDomain = normalizeCustomDomain(context.args.customDomain);
       const enforceHttps = normalizeOptionalBoolean(
         context.args.enforceHttps,
@@ -388,7 +390,7 @@ export const createExtendedRepositoryTool = (
           : { build_type: "workflow" };
 
       if (current) {
-        await api.json(`/repos/${repoPath}/pages`, token, {
+        await api.json<unknown>(`/repos/${repoPath}/pages`, token, {
           method: "PUT",
           body: {
             ...sourceBody,
@@ -398,13 +400,13 @@ export const createExtendedRepositoryTool = (
           signal: context.signal,
         });
       } else {
-        await api.json(`/repos/${repoPath}/pages`, token, {
+        await api.json<unknown>(`/repos/${repoPath}/pages`, token, {
           method: "POST",
           body: sourceBody,
           signal: context.signal,
         });
         if (customDomain !== undefined || enforceHttps !== undefined) {
-          await api.json(`/repos/${repoPath}/pages`, token, {
+          await api.json<unknown>(`/repos/${repoPath}/pages`, token, {
             method: "PUT",
             body: {
               ...(customDomain !== undefined ? { cname: customDomain } : {}),
