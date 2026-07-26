@@ -11,10 +11,12 @@ export type SkillPackageOrigin = "built-in" | "user" | "external";
  */
 export type SkillExecutionManifest = {
   context: SkillExecutionContextMode;
-  agent?: "subAgent";
+  /** Optional named execution profile. Runtime always normalizes the actual
+   * worker to one product-level subAgent for the active Skill. */
+  agent?: string;
   allowedTools: string[];
   runtimeBindings: string[];
-  workspaceBound: boolean;
+  workspaceBound?: boolean;
 };
 
 export type SkillManifest = {

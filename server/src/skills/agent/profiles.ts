@@ -101,6 +101,7 @@ const cloneExecution = (execution: SkillExecutionManifest): SkillExecutionManife
   agent: "subAgent",
   allowedTools: [...execution.allowedTools],
   runtimeBindings: [...execution.runtimeBindings],
+  workspaceBound: execution.workspaceBound ?? false,
 });
 
 const resolveExecution = (input: {
@@ -130,7 +131,7 @@ const resolveExecution = (input: {
       ...input.declared.runtimeBindings,
     ]),
     workspaceBound:
-      compatibility.workspaceBound || input.declared.workspaceBound,
+      Boolean(compatibility.workspaceBound) || Boolean(input.declared.workspaceBound),
   });
 };
 
@@ -154,7 +155,7 @@ export const resolveSubAgentExecutionProfile = (
     engine: "pi-agent-core",
     allowedHarnessToolIds: [...execution.allowedTools],
     runtimeBindings: execution.runtimeBindings.map(toRuntimeBinding),
-    workspaceBound: execution.workspaceBound,
+    workspaceBound: execution.workspaceBound ?? false,
   };
 };
 

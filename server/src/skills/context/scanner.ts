@@ -80,13 +80,20 @@ const unique = (values: Array<string | null | undefined>): string[] => [
   ...new Set(values.filter((value): value is string => Boolean(value))),
 ];
 
-const parseList = (value: string | undefined) =>
-  unique(
-    value
-      ?.split(",")
-      .map((item) => item.trim())
-      .filter(Boolean) ?? [],
+const parseList = (value: string | undefined) => {
+  if (!value?.trim()) return [];
+  const normalized = value.trim();
+  const body =
+    normalized.startsWith("[") && normalized.endsWith("]")
+      ? normalized.slice(1, -1)
+      : normalized;
+  return unique(
+    body
+      .split(",")
+      .map((item) => stripQuotes(item).trim())
+      .filter(Boolean),
   );
+};
 
 const parseBoolean = (value: string | undefined, fallback: boolean) => {
   if (!value) return fallback;
@@ -173,13 +180,22 @@ const resolveExecution = (input: {
   origin: SkillPackageOrigin;
 }): SkillExecutionManifest => {
   const declaredTools = parseList(
-    input.frontmatter.allowedTools || input.frontmatter.allowedToolIds || input.frontmatter.tools,
+    input.frontmatter["execution.allowedTools"] ||
+      input.frontmatter.allowedTools ||
+      input.frontmatter.allowedToolIds ||
+      input.frontmatter.tools,
   );
   const declaredRuntimes = parseList(
-    input.frontmatter.runtimeBindings ||
+    input.frontmatter["execution.runtimeBindings"] ||
+      input.frontmatter.runtimeBindings ||
       input.frontmatter.runtimeCapabilities ||
       input.frontmatter.privateRuntimes,
   );
+  const declaredAgent = String(
+    input.frontmatter["execution.agent"] || input.frontmatter.agent || "",
+  ).trim();
+  const declaredWorkspaceBound =
+    input.frontmatter["execution.workspaceBound"] || input.frontmatter.workspaceBound;
 
   // Imported user Skills are instructions, not capability grants. They always
   // receive a subAgent, but no Tool/Runtime is made visible merely because the
@@ -193,16 +209,21 @@ const resolveExecution = (input: {
           ...declaredRuntimes,
           ...(declaredRuntimes.length === 0 ? input.fallbackRuntimeCapabilities : []),
         ]);
+  const workspaceBound =
+    input.origin === "user"
+      ? false
+      : declaredWorkspaceBound
+        ? parseBoolean(declaredWorkspaceBound, runtimeBindings.length > 0)
+        : runtimeBindings.length > 0
+          ? true
+          : undefined;
 
   return {
     context: "fork",
-    agent: "subAgent",
+    agent: input.origin === "user" ? "subAgent" : declaredAgent || "subAgent",
     allowedTools,
     runtimeBindings,
-    workspaceBound:
-      input.origin === "user"
-        ? false
-        : parseBoolean(input.frontmatter.workspaceBound, runtimeBindings.length > 0),
+    ...(workspaceBound !== undefined ? { workspaceBound } : {}),
   };
 };
 
