@@ -111,7 +111,17 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win
+          $logPath = Join-Path $env:RUNNER_TEMP 'release-payload-build.log'
+          & pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win *> $logPath
+          $exitCode = $LASTEXITCODE
+
+          if ($exitCode -ne 0) {
+            Write-Host '=== Release payload failure tail ==='
+            Get-Content -LiteralPath $logPath -Tail 220
+            exit $exitCode
+          }
+
+          Get-Content -LiteralPath $logPath -Tail 80
 
       - name: Publish payload summary
         shell: pwsh
