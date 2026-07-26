@@ -90,4 +90,23 @@
 剩余事项：{{remainingItems | 无}}
 ```
 
-结果中的“已完成”只能包含已有回读或运行证据的事项。未执行、失败或无法确认的步骤必须单独列出。
+存在部分成功、阻塞或失败时，改用分步状态：
+
+```text
+completed
+{{completedSteps | 无}}
+
+blocked
+{{blockedSteps | 无}}
+
+failed
+{{failedSteps | 无}}
+
+not_run
+{{notRunSteps | 无}}
+
+恢复入口
+{{resumeFrom | 无}}
+```
+
+结果中的“已完成”或 `completed` 只能包含已有回读或运行证据的事项。未执行、失败或无法确认的步骤必须单独列出；恢复入口必须指向第一个未完成步骤，不得要求从头重跑。
