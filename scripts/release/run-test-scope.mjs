@@ -33,11 +33,18 @@ const validationRoot = path.join(
 );
 const reportDir = path.join(validationRoot, "reports", scope);
 const coverageDir = path.join(workspaceDir, "coverage");
-const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const pnpmExecutable =
+  process.platform === "win32"
+    ? process.env.ComSpec || process.env.COMSPEC || "cmd.exe"
+    : "pnpm";
 
 function runProcess(commandArgs, { timeout = 0, env = process.env } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(pnpmExecutable, commandArgs, {
+    const pnpmArguments =
+      process.platform === "win32"
+        ? ["/d", "/s", "/c", "pnpm.cmd", ...commandArgs]
+        : commandArgs;
+    const child = spawn(pnpmExecutable, pnpmArguments, {
       cwd: workspaceDir,
       stdio: "inherit",
       env,
