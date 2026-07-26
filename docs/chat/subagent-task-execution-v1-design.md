@@ -7,7 +7,7 @@ A generic subAgent owns the local execution loop for one bounded, independently 
 
 ```text
 Main Planner
-  -> delegate_task(TaskSpec)
+  -> use_tool(delegate_task, TaskSpec)
   -> generic subAgent: plan / use tools / observe / repair
   -> structured TaskResult + Evidence / Artifact
   -> Main Planner: accept, replan or finish
@@ -49,12 +49,12 @@ V1 has one generic task subAgent runtime.
 - no recursive delegation (`maxDepth = 1`);
 - no parallel workers;
 - no model-selected agent class;
-- no new Main Planner graph redesign.
+- no new Main Planner action union or broad graph redesign.
 
 ### 3.3 No regex routing and no business hard-coding
 
-Planner emits a structured `delegate_task` action.
-Runtime validates fields by object shape and enum values.
+Planner sees `delegate_task` as a runtime protocol tool and emits the existing structured `use_tool` action.
+Runtime validates its arguments by object shape and enum values.
 Runtime must not infer delegation, completion or failure from natural-language keyword matching.
 
 Fixed protocol fields are allowed and required; hard-coded business mappings are not.
@@ -64,8 +64,7 @@ Fixed protocol fields are allowed and required; hard-coded business mappings are
 At dispatch time, the generic subAgent receives the current governed `ToolExposure` snapshot.
 Its available Harness tools are derived from that snapshot, not from a static code list.
 
-The generic worker cannot register tools, widen permissions or bypass Policy.
-It must not receive a generic delegation tool, preventing recursive subAgent creation.
+`delegate_task` is added only to Main Planner's protocol surface. It is not registered as a Harness tool and is removed before constructing the child tool surface. The generic worker therefore cannot register tools, widen permissions, bypass Policy or recursively delegate.
 
 V1 refresh boundary: ToolExposure is resolved by Main runtime before each delegated task. A running task keeps its frozen tool surface so prompt/tool schemas do not mutate mid-run. A later Planner decision receives the refreshed Harness exposure.
 
@@ -73,10 +72,13 @@ V1 refresh boundary: ToolExposure is resolved by Main runtime before each delega
 
 ### 4.1 Planner action
 
+V1 follows the community “agent as tool” pattern while preserving Mira's existing Planner contract:
+
 ```ts
-type DelegateTaskAction = {
-  type: "delegate_task";
-  task: {
+type DelegateTaskPlannerAction = {
+  type: "use_tool";
+  toolId: "delegate_task";
+  args: {
     goal: string;
     acceptanceCriteria: string[];
   };
@@ -84,11 +86,22 @@ type DelegateTaskAction = {
 };
 ```
 
+The existing direct-tool compatibility form is also accepted and normalized by the current Planner parser:
+
+```json
+{
+  "type": "delegate_task",
+  "goal": "...",
+  "acceptanceCriteria": ["..."]
+}
+```
+
 Validation rules:
 
 - `goal` is non-empty;
 - `acceptanceCriteria` contains 1-8 non-empty items;
-- extra fields are ignored only by the existing structured-output compatibility layer; invalid required fields enter the existing schema-replan path.
+- invalid required fields enter the existing schema-replan path;
+- no task type, business keyword or Agent profile is inferred.
 
 ### 4.2 Runtime result
 
@@ -116,7 +129,7 @@ The task worker uses an ephemeral Skill-shaped execution context only as an adap
 
 - id: runtime-owned constant identifying generic task execution, not a business type;
 - body: generic worker rules plus TaskSpec goal and acceptance criteria;
-- execution.allowedTools: current exposed Harness tool ids;
+- execution.allowedTools: current exposed Harness tool ids after removing `delegate_task`;
 - resources/runtime bindings: empty;
 - workspace binding: inherited from the current run context and enforced by individual Harness tools.
 
@@ -124,19 +137,19 @@ This adapter is not persisted as a user Skill and is not discoverable by Skill m
 
 ## 6. Graph integration
 
-Add one node and one action route:
+Add one node and one protocol-tool route:
 
 ```text
 nextActionPlanner
-  -> delegateTask
+  -> genericTaskSubAgent
   -> evidenceStage
   -> nextActionPlanner
 ```
 
 Special boundaries:
 
-- approval pauses from `delegateTask` through the existing approval node;
-- resumed generic checkpoints are detected in PrepareContext and re-enter `delegateTask` without asking Planner to recreate the task;
+- approval pauses from `genericTaskSubAgent` through the existing approval node;
+- resumed generic checkpoints are detected in PrepareContext and resume the exact worker transcript without asking Planner to recreate the task;
 - `needs_input` is frozen as Parent `ask_user` after evidence commit;
 - generic completion never creates a finalization packet by itself.
 
@@ -156,15 +169,16 @@ Do not expose hidden chain-of-thought.
 
 ## 8. V1 acceptance criteria
 
-1. Planner parser and validator accept valid `delegate_task` and reject malformed task packets through the existing structured replan contract.
-2. Graph routes `delegate_task` to the generic node.
-3. Generic node executes with the current dynamic Harness exposure and cannot delegate recursively.
-4. Completed result is committed as Evidence and Planner runs again.
-5. `needs_input` reaches Parent `ask_user` without Main Planner taking over local execution.
-6. Approval freezes exact invocation plus checkpoint and resumes the same transcript.
-7. Recoverable and terminal results preserve the current C contract.
-8. Existing Skill subAgent tests and existing Planner/tool paths remain valid.
-9. New focused tests cover parser/validation, routing, dynamic tool surface, completion, needs-input and approval resume.
+1. Main Planner receives a structured planner-only `delegate_task` tool surface without changing the existing action union.
+2. Invalid task packets enter the existing schema-replan contract.
+3. Graph routes `delegate_task` to the generic node.
+4. Generic node executes with the current dynamic Harness exposure and cannot delegate recursively.
+5. Completed result is committed as Evidence and Planner runs again.
+6. `needs_input` reaches Parent `ask_user` without Main Planner taking over local execution.
+7. Approval freezes exact invocation plus checkpoint and resumes the same transcript.
+8. Recoverable and terminal results preserve the current C contract.
+9. Existing Skill subAgent tests and existing Planner/tool paths remain valid.
+10. Focused tests cover protocol validation, routing, dynamic tool surface, completion, needs-input and approval handoff.
 
 ## 9. Explicitly out of scope
 
