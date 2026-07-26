@@ -1,0 +1,169 @@
+name: Release Factory V2 Validation
+
+on:
+  push:
+    branches:
+      - feature/release-factory-v2
+  workflow_dispatch:
+
+concurrency:
+  group: release-factory-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-payload:
+    name: Build shared payload in hostile Windows path
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
+      LOCAL_MODEL_RAW_ROOT: 'D:\Mira 构建验证\binary-cache\local-models'
+      LOCAL_MODEL_ALLOW_NETWORK: '1'
+      CI: 'true'
+    steps:
+      - name: Checkout source snapshot
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Stage repository into hostile Windows path
+        shell: pwsh
+        run: |
+          $validationParent = Split-Path -Parent $env:MIRA_VALIDATION_ROOT
+          if (Test-Path -LiteralPath $validationParent) {
+            Remove-Item -LiteralPath $validationParent -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $env:MIRA_VALIDATION_ROOT | Out-Null
+
+          $sourceArchive = Join-Path $env:RUNNER_TEMP 'mira-release-factory-source.zip'
+          if (Test-Path -LiteralPath $sourceArchive) {
+            Remove-Item -LiteralPath $sourceArchive -Force
+          }
+
+          git archive --format=zip --output=$sourceArchive HEAD
+          Expand-Archive -LiteralPath $sourceArchive -DestinationPath $env:MIRA_VALIDATION_ROOT -Force
+
+          Write-Host "Validation root: $env:MIRA_VALIDATION_ROOT"
+          Get-ChildItem -LiteralPath $env:MIRA_VALIDATION_ROOT | Select-Object -First 10
+
+      - name: Cache Terminal Dev Runtime
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\terminal-dev'
+          key: windows-release-factory-terminal-${{ hashFiles('scripts/terminal-runtime.lock.json') }}
+
+      - name: Cache Piper Runtime
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\piper'
+          key: windows-release-factory-piper-${{ hashFiles('scripts/prepare-piper-runtime.mjs') }}
+
+      - name: Cache local model sources
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\binary-cache\local-models'
+          key: windows-release-factory-models-${{ hashFiles('scripts/prepare-local-model-packs.mjs') }}
+          restore-keys: |
+            windows-release-factory-models-
+
+      - name: Install workspace dependencies in hostile path
+        shell: pwsh
+        run: |
+          pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
+          npm ci --prefix "$env:MIRA_VALIDATION_ROOT\mira-clipper-ext" --ignore-scripts
+
+      - name: Configure clipper extension signing key
+        shell: pwsh
+        env:
+          MIRA_CLIPPER_CRX_PROD_PEM: ${{ secrets.MIRA_CLIPPER_CRX_PROD_PEM }}
+        run: |
+          $keyRoot = Join-Path $env:MIRA_VALIDATION_ROOT 'mira-clipper-ext\.keys'
+          New-Item -ItemType Directory -Force -Path $keyRoot | Out-Null
+          [System.IO.File]::WriteAllText(
+            (Join-Path $keyRoot 'mira-clipper-prod.pem'),
+            $env:MIRA_CLIPPER_CRX_PROD_PEM,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+      - name: Build and verify shared release payload
+        shell: pwsh
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win
+
+      - name: Publish payload summary
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:MIRA_VALIDATION_ROOT '.artifacts\release-payload\windows-x64\manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          @"
+          ### Shared Windows Payload
+
+          - Version: `$($manifest.version)`
+          - Commit: `$($manifest.gitCommit)`
+          - Files: `$($manifest.totalFiles)`
+          - Bytes: `$($manifest.totalBytes)`
+          - Source path: hostile Windows path with Chinese, spaces, and `&`
+          - Publishing: disabled
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload frozen shared payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-payload\windows-x64'
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 6
+
+  verify-downloaded-payload:
+    name: Verify downloaded payload in independent job
+    needs: build-windows-payload
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download frozen shared payload
+        uses: actions/download-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: .artifacts/release-payload/windows-x64
+
+      - name: Verify every payload file and SHA-256
+        run: node scripts/release/verify-payload.mjs
+
+      - name: Confirm validation-only behavior
+        shell: pwsh
+        run: |
+          @"
+          ### Release Factory Safety Gate
+
+          - Windows payload build passed
+          - Cross-job artifact transfer passed
+          - Per-file SHA-256 verification passed
+          - No tag created
+          - No GitHub Release created
+          - No Cloudflare R2 upload executed
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
