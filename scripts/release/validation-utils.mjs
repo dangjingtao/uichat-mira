@@ -34,6 +34,7 @@ function resolveGitCommit() {
 
 export function isValidationReleaseEligible(validation) {
   return (
+    validation?.environment?.status === "passed" &&
     validation?.typecheck?.status === "passed" &&
     validation?.tests?.client?.status === "passed" &&
     validation?.tests?.server?.status === "passed"
@@ -91,7 +92,7 @@ export function copyOfficialReports(scope, sourceDir) {
 export function writeValidationManifest(validation) {
   const packageJson = readRootPackage();
   const manifest = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     product: packageJson.name,
     version: packageJson.version,
     platform: "windows",
@@ -120,7 +121,7 @@ export function readAndVerifyValidationManifest(
   }
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  if (manifest.schemaVersion !== 2) {
+  if (manifest.schemaVersion !== 3) {
     throw new Error(
       `Unsupported release validation schema: ${manifest.schemaVersion ?? "missing"}`,
     );
@@ -158,6 +159,12 @@ export function readAndVerifyValidationManifest(
   if (manifest.releaseEligible !== expectedEligibility) {
     throw new Error(
       `Validation eligibility mismatch: expected ${expectedEligibility}, got ${manifest.releaseEligible}.`,
+    );
+  }
+
+  if (manifest.validation?.environment?.status !== "passed") {
+    throw new Error(
+      `Release validation environment did not pass: ${manifest.validation?.environment?.detail ?? "unknown environment failure"}.`,
     );
   }
 
