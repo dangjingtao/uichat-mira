@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-mira/electron",
-  "version": "0.99.2",
+  "version": "0.99.4",
   "private": true,
   "description": "Electron shell for UIChat Mira",
   "main": "main.cjs",

@@ -2196,8 +2196,6 @@ const settingsPending = {
         database: "Database",
         clientTests: "Client Tests",
         serverTests: "Server Tests",
-        docs: "Dev Docs",
-        apiDocs: "API Docs",
       },
       logs: {
         title: "Runtime Logs",
@@ -2247,15 +2245,6 @@ const settingsPending = {
         failed: "Failed",
         duration: "Duration",
         failedTests: "Failed Tests",
-      },
-      docs: {
-        title: "Developer Docs",
-        description: "Internal project documentation and notes for developers.",
-      },
-      apiDocs: {
-        title: "API Docs",
-        description:
-          "Backend OpenAPI documentation for checking contracts and integration.",
       },
     },
   },

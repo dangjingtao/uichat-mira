@@ -143,7 +143,6 @@ const allowBackendReuse = process.env.UI_CHAT_ALLOW_BACKEND_REUSE === "1";
 const builtinAvatarRoot = path.resolve(process.cwd(), "static", "avatars");
 const clientCoverageRoot = path.resolve(process.cwd(), "client-coverage");
 const serverCoverageRoot = path.resolve(process.cwd(), "server-coverage");
-const docsSiteRoot = path.resolve(process.cwd(), "docs-site");
 const swaggerLogoPath = path.resolve(process.cwd(), "static", "logo.png");
 const imageGenerationArtifactRoot = path.resolve(
   process.cwd(),
@@ -636,48 +635,6 @@ const setupPlugins = async () => {
       setHeaders(response) {
         response.setHeader("Cache-Control", "private, no-cache");
       },
-    });
-  }
-
-  if (fsSync.existsSync(docsSiteRoot)) {
-    await app.register(fastifyStatic, {
-      root: docsSiteRoot,
-      prefix: "/docs/",
-      decorateReply: false,
-      wildcard: false,
-      index: ["index.html"],
-      setHeaders(response) {
-        response.setHeader("Cache-Control", "private, no-cache");
-      },
-    });
-
-    app.get("/docs", async (_request, reply) => {
-      return reply.sendFile("index.html");
-    });
-
-    app.get("/docs/*", async (request, reply) => {
-      const docsPath = (request.params as { "*": string })["*"] ?? "";
-      const normalizedPath = path
-        .normalize(docsPath)
-        .replace(/^(\.\.[/\\])+/, "");
-      const candidatePath = path.join(docsSiteRoot, normalizedPath);
-      const withinRoot =
-        candidatePath === docsSiteRoot ||
-        candidatePath.startsWith(`${docsSiteRoot}${path.sep}`);
-
-      if (!withinRoot) {
-        reply.code(403);
-        return reply.send("Forbidden");
-      }
-
-      const existingPath = fsSync.existsSync(candidatePath)
-        ? candidatePath
-        : null;
-      if (existingPath && fsSync.statSync(existingPath).isFile()) {
-        return reply.sendFile(normalizedPath);
-      }
-
-      return reply.sendFile("index.html");
     });
   }
 

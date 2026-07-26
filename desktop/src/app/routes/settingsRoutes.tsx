@@ -32,8 +32,6 @@ import DevelopmentLogsPage from "@/features/Settings/pages/Development/pages/Log
 import DevelopmentDatabasePage from "@/features/Settings/pages/Development/pages/Database/index";
 import DevelopmentClientTestsPage from "@/features/Settings/pages/Development/pages/ClientTests/index";
 import DevelopmentServerTestsPage from "@/features/Settings/pages/Development/pages/ServerTests/index";
-import DevelopmentDocsPage from "@/features/Settings/pages/Development/pages/Docs/index";
-import DevelopmentApiDocsPage from "@/features/Settings/pages/Development/pages/ApiDocs/index";
 import McpSettings from "@/features/Settings/pages/Mcp/index";
 import IntegrationsSettings from "@/features/Settings/pages/Integrations/index";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
@@ -233,14 +231,6 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "server-tests",
         element: <DevelopmentServerTestsPage />,
-      },
-      {
-        path: "docs",
-        element: <DevelopmentDocsPage />,
-      },
-      {
-        path: "api-docs",
-        element: <DevelopmentApiDocsPage />,
       },
       {
         path: "base-information",

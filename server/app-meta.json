@@ -38,11 +38,11 @@
         {
           "version": "0.99.2",
           "commit": {
-            "hash": "c5c8441e13cbabf653ef765eaa0484d4d3385669",
-            "shortHash": "c5c8441",
-            "message": "ci: avoid full desktop builds on dev pushes",
-            "author": "DangJingtao",
-            "date": "2026-07-26T09:53:47+08:00"
+            "hash": "9af0d07c885b290bd4201054e8beace61ad57d23",
+            "shortHash": "9af0d07",
+            "message": "chore: redact Ark API key in test report",
+            "author": "Tomz",
+            "date": "2026-07-26T10:34:57+08:00"
           }
         },
         {

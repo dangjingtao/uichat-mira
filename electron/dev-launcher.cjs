@@ -224,13 +224,11 @@ async function main() {
   const backendHost = runtimeConfig.backend.host;
   const backendPort = runtimeConfig.backend.port;
   const desktopPort = runtimeConfig.dev.desktopPort;
-  const docsSitePort = runtimeConfig.dev.docsSitePort;
   const backendHealthUrl = `http://${backendHost}:${backendPort}/health`;
 
   const workspaceRoot = path.resolve(__dirname, "..");
   const serverDir = path.join(workspaceRoot, "server");
   const desktopDir = path.join(workspaceRoot, "desktop");
-  const docsSiteDir = path.join(workspaceRoot, "packages", "docs-site");
   const { writeAppMetaJsons } = await import(
     pathToFileURL(path.join(workspaceRoot, "scripts", "app-meta-generator.js")).href
   );
@@ -241,12 +239,10 @@ async function main() {
   ]);
 
   const desktopAlreadyRunning = await isTcpPortOpen("localhost", desktopPort);
-  const docsSiteAlreadyRunning = await isTcpPortOpen("127.0.0.1", docsSitePort);
   const backendAlreadyHealthy = await isBackendHealthy(backendHealthUrl);
 
   let backendReady = Promise.resolve();
   let desktopReady = Promise.resolve();
-  let docsSiteReady = Promise.resolve();
 
   if (backendAlreadyHealthy) {
     console.log(`Reusing existing backend at ${backendHealthUrl}`);
@@ -270,31 +266,17 @@ async function main() {
     }).ready;
   }
 
-  if (docsSiteAlreadyRunning) {
-    console.log(`Reusing existing docs-site dev server on tcp://127.0.0.1:${docsSitePort}`);
-  } else {
-    console.log("Starting docs-site dev server...");
-    docsSiteReady = spawnManagedProcess("docs-site", docsSiteDir, "pnpm dev", {
-      readyWhen: (_text, combined) =>
-        combined.includes(`http://127.0.0.1:${docsSitePort}`),
-    }).ready;
-  }
-
   if (!desktopAlreadyRunning) {
     console.log("Waiting for desktop dev server readiness signal...");
-  }
-
-  if (!docsSiteAlreadyRunning) {
-    console.log("Waiting for docs-site dev server readiness signal...");
   }
 
   if (!backendAlreadyHealthy) {
     console.log("Waiting for backend readiness signal...");
   }
 
-  await Promise.all([desktopReady, backendReady, docsSiteReady]);
+  await Promise.all([desktopReady, backendReady]);
 
-  console.log("Desktop, docs-site and backend are ready. Launching Electron...");
+  console.log("Desktop and backend are ready. Launching Electron...");
   const electronChild = spawn(electronBinary, ["."], {
     cwd: __dirname,
     stdio: "inherit",

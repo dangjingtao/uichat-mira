@@ -162,7 +162,6 @@ if (skipTests) {
 
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });
-execSync("pnpm docs:build", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm prepare:terminal-runtime", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm prepare:piper-runtime", { cwd: projectRoot, stdio: "inherit" });
 
@@ -181,12 +180,6 @@ if (!skipTests) {
     "server",
   );
 }
-copyPath(
-  path.join(projectRoot, "packages", "docs-site", "dist"),
-  path.join(serverBundleArtifactsRoot, "docs-site"),
-  "staged docs site",
-);
-
 copyPath(
   path.join(projectRoot, "desktop", "dist"),
   desktopArtifactsRoot,

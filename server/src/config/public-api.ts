@@ -21,7 +21,6 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/microapps/tts/ref-audios", match: "prefix" },
   { path: "/artifacts/image-generation", match: "prefix" },
   { path: "/assets/avatars", match: "prefix" },
-  { path: "/docs", match: "prefix" },
   { path: "/client-coverage", match: "prefix" },
   { path: "/server-coverage", match: "prefix" },
   // WebSocket clients authenticate in the first hello message because browser WebSocket cannot set Authorization headers.

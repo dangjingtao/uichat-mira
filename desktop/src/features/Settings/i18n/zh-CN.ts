@@ -2155,8 +2155,6 @@ const settingsPending = {
         database: "数据库",
         clientTests: "客户端测试",
         serverTests: "服务端测试",
-        docs: "开发文档",
-        apiDocs: "接口文档",
       },
       logs: {
         title: "运行日志",
@@ -2205,14 +2203,6 @@ const settingsPending = {
         failed: "失败",
         duration: "耗时",
         failedTests: "失败的测试",
-      },
-      docs: {
-        title: "开发文档",
-        description: "面向开发者的内部项目文档与说明。",
-      },
-      apiDocs: {
-        title: "接口文档",
-        description: "后端 OpenAPI 接口文档，用于对照接口契约与联调。",
       },
     },
   },

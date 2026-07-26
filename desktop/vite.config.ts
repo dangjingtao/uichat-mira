@@ -9,7 +9,6 @@ const require = createRequire(import.meta.url);
 const runtimeConfig = require("../runtime.config.cjs");
 const apiProxyPrefix = runtimeConfig.dev.apiProxyPrefix;
 const backendOrigin = `http://${runtimeConfig.backend.host}:${runtimeConfig.backend.port}`;
-const docsSiteOrigin = `http://127.0.0.1:${runtimeConfig.dev.docsSitePort}`;
 
 const mimeTypes: Record<string, string> = {
   ".html": "text/html",
@@ -112,14 +111,6 @@ export default defineConfig({
       },
       "/artifacts": {
         target: backendOrigin,
-        changeOrigin: true,
-      },
-      "/api-docs": {
-        target: backendOrigin,
-        changeOrigin: true,
-      },
-      "/docs": {
-        target: docsSiteOrigin,
         changeOrigin: true,
       },
       "/server-coverage": {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { DatabaseZap, FileCode2, FileText, FlaskConical, ScrollText } from "lucide-react";
+import { DatabaseZap, FlaskConical, ScrollText } from "lucide-react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import SettingsPageLayout from "@/features/Settings/components/SettingsPageLayout";
@@ -10,8 +10,6 @@ const TAB_VALUES = [
   "database",
   "client-tests",
   "server-tests",
-  "docs",
-  "api-docs",
 ] as const;
 
 type TabValue = (typeof TAB_VALUES)[number];
@@ -36,12 +34,6 @@ export default function DevelopmentSettings() {
     }
     if (pathname.includes("/development/server-tests")) {
       return "server-tests";
-    }
-    if (pathname.includes("/development/docs")) {
-      return "docs";
-    }
-    if (pathname.includes("/development/api-docs")) {
-      return "api-docs";
     }
     return "logs";
   }, [pathname]);
@@ -81,24 +73,6 @@ export default function DevelopmentSettings() {
           <span className="flex items-center gap-1.5">
             <FlaskConical className="h-4 w-4" />
             {t("settings.development.tabs.serverTests")}
-          </span>
-        ),
-      },
-      {
-        value: "docs" as const,
-        label: (
-          <span className="flex items-center gap-1.5">
-            <FileText className="h-4 w-4" />
-            {t("settings.development.tabs.docs")}
-          </span>
-        ),
-      },
-      {
-        value: "api-docs" as const,
-        label: (
-          <span className="flex items-center gap-1.5">
-            <FileCode2 className="h-4 w-4" />
-            {t("settings.development.tabs.apiDocs")}
           </span>
         ),
       },

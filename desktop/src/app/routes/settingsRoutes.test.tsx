@@ -62,12 +62,6 @@ vi.mock("@/features/Settings/pages/Development/pages/ClientTests", () => ({
 vi.mock("@/features/Settings/pages/Development/pages/ServerTests", () => ({
   default: () => null,
 }));
-vi.mock("@/features/Settings/pages/Development/pages/Docs", () => ({
-  default: () => null,
-}));
-vi.mock("@/features/Settings/pages/Development/pages/ApiDocs", () => ({
-  default: () => null,
-}));
 vi.mock("@/features/Settings/pages/Tools/index", () => ({
   default: () => null,
 }));
