@@ -18,15 +18,18 @@ jobs:
       - name: Checkout diagnostic branch
         uses: actions/checkout@v4
 
-      - name: Download failed job log and extract failure tail
+      - name: Download failed job log and latest factory status
         env:
           GH_TOKEN: ${{ github.token }}
           FAILED_JOB_ID: '89769278798'
+          TARGET_SHA: '592545ab0384fab30dade7b5a8241ec7fac8988d'
         shell: bash
         run: |
           set -euo pipefail
           gh api "/repos/${GITHUB_REPOSITORY}/actions/jobs/${FAILED_JOB_ID}/logs" > failed-job.log
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_SHA}&per_page=20" > latest-runs.json
           python - <<'PY'
+          import json
           from pathlib import Path
 
           source = Path('failed-job.log')
@@ -63,13 +66,36 @@ jobs:
           target = Path('diagnostics/v0.99.5-job-89769278798.txt')
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_text('\n'.join(output), encoding='utf-8')
+
+          runs_payload = json.loads(Path('latest-runs.json').read_text(encoding='utf-8'))
+          runs = runs_payload.get('workflow_runs', [])
+          status_lines = [
+              'Target SHA: 592545ab0384fab30dade7b5a8241ec7fac8988d',
+              f'Run count: {len(runs)}',
+              '',
+          ]
+          for run in runs:
+              status_lines.extend([
+                  f"run_id: {run.get('id')}",
+                  f"name: {run.get('name')}",
+                  f"event: {run.get('event')}",
+                  f"status: {run.get('status')}",
+                  f"conclusion: {run.get('conclusion')}",
+                  f"head_branch: {run.get('head_branch')}",
+                  f"html_url: {run.get('html_url')}",
+                  '',
+              ])
+          Path('diagnostics/latest-release-factory-status.txt').write_text(
+              '\n'.join(status_lines),
+              encoding='utf-8',
+          )
           PY
 
-      - name: Commit diagnostic excerpt
+      - name: Commit diagnostic snapshot
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add diagnostics/v0.99.5-job-89769278798.txt
-          git commit -m 'chore: capture v0.99.5 failed job diagnostics [skip ci]'
+          git add diagnostics/v0.99.5-job-89769278798.txt diagnostics/latest-release-factory-status.txt
+          git commit -m 'chore: refresh release diagnostics [skip ci]'
           git push
