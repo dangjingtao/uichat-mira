@@ -9,7 +9,7 @@ on:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
   statuses: write
 
 jobs:
@@ -18,6 +18,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: wip/release-factory-speed
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v3
         with:
@@ -38,9 +41,19 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'release-merge-probe',
-              description: 'Client merge probe is running',
+              description: 'Testing status-file separation for Vitest merge',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
+
+      - name: Patch status extension in workspace
+        shell: pwsh
+        run: |
+          $path = 'scripts\release\run-test-scope.mjs'
+          $text = Get-Content -LiteralPath $path -Raw
+          $text = $text.Replace('`${scope}-${safeShard}.status.json`', '`${scope}-${safeShard}.status`')
+          $text = $text.Replace('.endsWith(".status.json")', '.endsWith(".status")')
+          [System.IO.File]::WriteAllText((Resolve-Path $path), $text, [System.Text.UTF8Encoding]::new($false))
+          node --check $path
 
       - run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/desktop...
 
@@ -53,7 +66,14 @@ jobs:
           github-token: ${{ github.token }}
           run-id: 30222148715
 
-      - name: Capture merge command diagnostics
+      - name: Rename prior status files outside Vitest JSON set
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath '.artifacts\release-validation\windows-x64\shards\client' -Filter '*.status.json' | ForEach-Object {
+            Rename-Item -LiteralPath $_.FullName -NewName ($_.Name -replace '\.status\.json$', '.status')
+          }
+
+      - name: Merge existing client shards
         id: merge
         continue-on-error: true
         shell: pwsh
@@ -61,6 +81,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path 'merge-probe' | Out-Null
           node scripts/release/run-test-scope.mjs --scope=client --merge-dir=.artifacts/release-validation/windows-x64/shards/client --expected-shards=2 *> 'merge-probe\merge-output.txt'
           $exitCode = $LASTEXITCODE
+          $reportReady = (Test-Path -LiteralPath '.artifacts\release-validation\windows-x64\reports\client\test-report.json') -and (Test-Path -LiteralPath '.artifacts\release-validation\windows-x64\reports\client\coverage-report.json')
           $files = @(Get-ChildItem -LiteralPath '.artifacts\release-validation\windows-x64' -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
             @{
               path = [System.IO.Path]::GetRelativePath((Resolve-Path '.artifacts\release-validation\windows-x64'), $_.FullName)
@@ -69,12 +90,29 @@ jobs:
           })
           @{
             exitCode = $exitCode
+            reportReady = $reportReady
             files = $files
           } | ConvertTo-Json -Depth 5 | Out-File -LiteralPath 'merge-probe\diagnostic.json' -Encoding utf8
+          if (Test-Path -LiteralPath '.artifacts\release-validation\windows-x64\reports\client') {
+            Copy-Item -LiteralPath '.artifacts\release-validation\windows-x64\reports\client' -Destination 'merge-probe\client-report' -Recurse -Force
+          }
           Get-Content -LiteralPath 'merge-probe\merge-output.txt' -Tail 80
-          exit 0
+          if (-not $reportReady) { exit 1 }
 
-      - name: Upload merge diagnostics
+      - name: Commit tested status extension fix
+        if: steps.merge.outcome == 'success'
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/release/run-test-scope.mjs
+          if (-not (git diff --cached --quiet)) {
+            git commit -m 'fix(release): keep shard status outside Vitest blob JSON set'
+            git push origin HEAD:wip/release-factory-speed
+          }
+
+      - name: Upload merge diagnostics and reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: client-merge-probe-${{ github.sha }}
@@ -83,16 +121,21 @@ jobs:
           retention-days: 1
           compression-level: 0
 
-      - name: Publish captured result
+      - name: Publish merge result
+        if: always()
         uses: actions/github-script@v7
+        env:
+          MERGE_OUTCOME: ${{ steps.merge.outcome }}
         with:
           script: |
+            const passed = process.env.MERGE_OUTCOME === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
-              state: 'success',
+              state: passed ? 'success' : 'failure',
               context: 'release-merge-probe',
-              description: 'Client merge diagnostics captured',
+              description: passed ? 'Client shard merge produced fresh reports' : 'Client shard merge still failed',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
+            if (!passed) core.setFailed('Client shard merge did not produce reports');
