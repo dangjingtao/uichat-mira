@@ -8,7 +8,7 @@ on:
       - '.github/workflows/artifact-upload-probe.yml'
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 jobs:
@@ -17,6 +17,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: wip/release-factory-speed
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v3
         with:
@@ -37,9 +40,45 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'artifact-upload-probe',
-              description: 'Real shard artifact probe is running',
+              description: 'Testing Windows shard launcher',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
+
+      - name: Patch Windows pnpm launcher in workspace
+        shell: pwsh
+        run: |
+          $path = 'scripts\release\run-test-scope.mjs'
+          $text = Get-Content -LiteralPath $path -Raw
+          $old = @'
+          const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+          '@.Trim()
+          $new = @'
+          const pnpmExecutable =
+            process.platform === "win32"
+              ? process.env.ComSpec || process.env.COMSPEC || "cmd.exe"
+              : "pnpm";
+          '@.Trim()
+          if (-not $text.Contains($old)) {
+            throw 'Expected pnpm executable declaration was not found.'
+          }
+          $text = $text.Replace($old, $new)
+
+          $oldSpawn = @'
+              const child = spawn(pnpmExecutable, commandArgs, {
+          '@.Trim()
+          $newSpawn = @'
+              const pnpmArguments =
+                process.platform === "win32"
+                  ? ["/d", "/s", "/c", "pnpm.cmd", ...commandArgs]
+                  : commandArgs;
+              const child = spawn(pnpmExecutable, pnpmArguments, {
+          '@.Trim()
+          if (-not $text.Contains($oldSpawn)) {
+            throw 'Expected pnpm spawn declaration was not found.'
+          }
+          $text = $text.Replace($oldSpawn, $newSpawn)
+          [System.IO.File]::WriteAllText((Resolve-Path $path), $text, [System.Text.UTF8Encoding]::new($false))
+          node --check $path
 
       - name: Install client test dependencies
         run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/desktop...
@@ -79,6 +118,18 @@ jobs:
           Compress-Archive -Path "$source\*" -DestinationPath 'artifact-probe\client-shard.zip' -CompressionLevel Fastest -Force
           Copy-Item -LiteralPath $source -Destination 'artifact-probe\raw-shard' -Recurse -Force
           Get-Content -LiteralPath 'artifact-probe\diagnostic.json'
+
+      - name: Commit tested launcher fix
+        if: steps.package.outcome == 'success'
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/release/run-test-scope.mjs
+          if (-not (git diff --cached --quiet)) {
+            git commit -m 'fix(release): launch pnpm through cmd on Windows'
+            git push origin HEAD:wip/release-factory-speed
+          }
 
       - name: Upload diagnostic only
         id: diagnostic-upload
@@ -128,14 +179,14 @@ jobs:
         with:
           script: |
             const summary = `shard=${process.env.SHARD_OUTCOME}, package=${process.env.PACKAGE_OUTCOME}, diagnostic=${process.env.DIAGNOSTIC_UPLOAD}, zip=${process.env.ZIP_UPLOAD}, raw=${process.env.RAW_UPLOAD}`;
-            const transportPassed = process.env.DIAGNOSTIC_UPLOAD === 'success' && process.env.ZIP_UPLOAD === 'success';
+            const passed = process.env.PACKAGE_OUTCOME === 'success' && process.env.DIAGNOSTIC_UPLOAD === 'success' && process.env.ZIP_UPLOAD === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
-              state: transportPassed ? 'success' : 'failure',
+              state: passed ? 'success' : 'failure',
               context: 'artifact-upload-probe',
               description: summary.slice(0, 140),
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
-            if (!transportPassed) core.setFailed(summary);
+            if (!passed) core.setFailed(summary);
