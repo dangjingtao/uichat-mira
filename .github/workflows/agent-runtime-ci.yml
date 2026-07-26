@@ -48,4 +48,23 @@ jobs:
         run: pnpm --filter @ui-chat-mira/server typecheck
 
       - name: Run full Agent regression suite
-        run: pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__
+        id: agent-tests
+        continue-on-error: true
+        run: >-
+          pnpm --filter @ui-chat-mira/server test --
+          src/agent/__tests__
+          --reporter=json
+          --outputFile=agent-test-report.json
+
+      - name: Upload Agent regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-test-report
+          path: server/agent-test-report.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce Agent regression result
+        if: steps.agent-tests.outcome == 'failure'
+        run: exit 1
