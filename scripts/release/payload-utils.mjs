@@ -95,7 +95,18 @@ function readRootPackage() {
   );
 }
 
-function assertValidationContract(validation, { allowSkippedTests }) {
+function isReleaseEligibleValidation(validation) {
+  return (
+    validation?.typecheck?.status === "passed" &&
+    validation?.tests?.client?.status === "passed" &&
+    validation?.tests?.server?.status === "passed"
+  );
+}
+
+function assertValidationContract(
+  validation,
+  { allowSkippedTests, allowFailedTests },
+) {
   if (validation?.typecheck?.status !== "passed") {
     throw new Error("Payload validation is missing a passed typecheck result.");
   }
@@ -105,14 +116,18 @@ function assertValidationContract(validation, { allowSkippedTests }) {
     if (!result) {
       throw new Error(`Payload validation is missing ${scope} test results.`);
     }
+    if (result.status === "passed") {
+      continue;
+    }
     if (result.status === "skipped" && allowSkippedTests) {
       continue;
     }
-    if (result.status !== "passed") {
-      throw new Error(
-        `Payload validation requires passed ${scope} tests; received ${result.status ?? "missing"}.`,
-      );
+    if (result.status === "failed" && allowFailedTests) {
+      continue;
     }
+    throw new Error(
+      `Payload validation requires passed ${scope} tests; received ${result.status ?? "missing"}.`,
+    );
   }
 }
 
@@ -130,13 +145,14 @@ export function writePayloadManifest(validation) {
     });
 
   const manifest = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     product: packageJson.name,
     version: packageJson.version,
     platform: "windows",
     architecture: "x64",
     gitCommit: resolveGitCommit(),
     generatedAt: new Date().toISOString(),
+    releaseEligible: isReleaseEligibleValidation(validation),
     validation,
     totalFiles: files.length,
     totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
@@ -148,13 +164,17 @@ export function writePayloadManifest(validation) {
   return manifest;
 }
 
-export function verifyPayload({ allowSkippedTests = false } = {}) {
+export function verifyPayload({
+  allowSkippedTests = false,
+  allowFailedTests = false,
+  requireReleaseEligible,
+} = {}) {
   if (!fs.existsSync(payloadManifestPath)) {
     throw new Error(`Missing release payload manifest: ${payloadManifestPath}`);
   }
 
   const manifest = JSON.parse(fs.readFileSync(payloadManifestPath, "utf8"));
-  if (manifest.schemaVersion !== 2) {
+  if (manifest.schemaVersion !== 3) {
     throw new Error(
       `Unsupported payload manifest schema: ${manifest.schemaVersion ?? "missing"}`,
     );
@@ -188,7 +208,25 @@ export function verifyPayload({ allowSkippedTests = false } = {}) {
     );
   }
 
-  assertValidationContract(manifest.validation, { allowSkippedTests });
+  const expectedEligibility = isReleaseEligibleValidation(manifest.validation);
+  if (manifest.releaseEligible !== expectedEligibility) {
+    throw new Error(
+      `Payload eligibility mismatch: expected ${expectedEligibility}, got ${manifest.releaseEligible}.`,
+    );
+  }
+
+  const mustBeReleaseEligible =
+    requireReleaseEligible ?? (!allowSkippedTests && !allowFailedTests);
+  if (mustBeReleaseEligible && !manifest.releaseEligible) {
+    throw new Error(
+      "Payload is diagnostic-only because release validation did not fully pass.",
+    );
+  }
+
+  assertValidationContract(manifest.validation, {
+    allowSkippedTests,
+    allowFailedTests,
+  });
 
   const actualFiles = listFilesRecursive(payloadRoot).filter(
     (file) => file.relativePath !== "manifest.json",
@@ -241,7 +279,7 @@ export function verifyPayload({ allowSkippedTests = false } = {}) {
   }
 
   console.log(
-    `Verified release payload: ${manifest.totalFiles} files, ${manifest.totalBytes} bytes, manifest schema ${manifest.schemaVersion}`,
+    `Verified release payload: ${manifest.totalFiles} files, ${manifest.totalBytes} bytes, releaseEligible=${manifest.releaseEligible}`,
   );
   return manifest;
 }
