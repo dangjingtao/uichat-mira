@@ -1,4 +1,5 @@
 import { END } from "@langchain/langgraph";
+import { GENERIC_TASK_DELEGATE_TOOL_ID } from "../delegation/contract.js";
 import type { AgentGraphStateType } from "./state";
 
 const hasFrozenPendingToolCall = (
@@ -40,12 +41,34 @@ export const routeAfterNextAction = (state: AgentGraphStateType) => {
     case "ask_user":
       return "generate";
     case "use_tool":
-      return "toolCallNormalize";
+      return state.nextAction.toolId === GENERIC_TASK_DELEGATE_TOOL_ID
+        ? "genericTaskSubAgent"
+        : "toolCallNormalize";
     case "error":
       return "error";
     default:
       return "error";
   }
+};
+
+export const routeAfterGenericTaskSubAgent = (state: AgentGraphStateType) => {
+  if (state.pendingEvidenceObservation) {
+    return "evidenceStage";
+  }
+
+  if (state.schemaReplanDiagnostics) {
+    return "nextActionPlanner";
+  }
+
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  if (state.pendingApproval) {
+    return "approval";
+  }
+
+  return "error";
 };
 
 export const routeAfterToolCallNormalize = (state: AgentGraphStateType) => {
