@@ -99,10 +99,11 @@ jobs:
           - Version: `$($manifest.version)`
           - Commit: `$($manifest.gitCommit)`
           - Release eligible: `$($manifest.releaseEligible)`
+          - Environment: `$($manifest.validation.environment.status)`
           - Typecheck: `$($manifest.validation.typecheck.status)`
           - Client tests: `$($manifest.validation.tests.client.status)` (`$($manifest.validation.tests.client.failedTests)` / `$($manifest.validation.tests.client.totalTests)` failed)
           - Server tests: `$($manifest.validation.tests.server.status)` (`$($manifest.validation.tests.server.failedTests)` / `$($manifest.validation.tests.server.totalTests)` failed)
-          - Source path: hostile Windows path with Chinese, spaces, and `&`
+          - Expensive packaging after failure: `disabled`
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
       - name: Upload validation evidence
@@ -116,16 +117,14 @@ jobs:
           compression-level: 6
 
   build-windows-payload:
-    name: Build payload from frozen validation evidence
+    name: Build payload from passed validation evidence
     needs: validate-windows-release
-    if: ${{ always() && (needs.validate-windows-release.result == 'success' || needs.validate-windows-release.result == 'failure') }}
     runs-on: windows-2022
     timeout-minutes: 75
     env:
       MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
       LOCAL_MODEL_RAW_ROOT: 'D:\Mira 构建验证\binary-cache\local-models'
       LOCAL_MODEL_ALLOW_NETWORK: '1'
-      VALIDATION_RESULT: ${{ needs.validate-windows-release.result }}
       CI: 'true'
     steps:
       - name: Checkout source snapshot
@@ -194,7 +193,7 @@ jobs:
           pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
           npm ci --prefix "$env:MIRA_VALIDATION_ROOT\mira-clipper-ext" --ignore-scripts
 
-      - name: Download frozen validation evidence
+      - name: Download passed validation evidence
         uses: actions/download-artifact@v4
         with:
           name: release-validation-windows-x64-${{ github.sha }}
@@ -217,13 +216,7 @@ jobs:
         shell: pwsh
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          if ($env:VALIDATION_RESULT -eq 'success') {
-            pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:validated
-          } else {
-            Write-Host 'Product validation failed; constructing a non-releasable diagnostic payload.'
-            pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:diagnostic
-          }
+        run: pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:validated
 
       - name: Publish payload summary
         shell: pwsh
@@ -238,9 +231,6 @@ jobs:
           - Release eligible: `$($manifest.releaseEligible)`
           - Files: `$($manifest.totalFiles)`
           - Bytes: `$($manifest.totalBytes)`
-          - Typecheck: `$($manifest.validation.typecheck.status)`
-          - Client tests: `$($manifest.validation.tests.client.status)`
-          - Server tests: `$($manifest.validation.tests.server.status)`
           - Tests repeated during packaging: `no`
           - Publishing: disabled
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
@@ -256,14 +246,9 @@ jobs:
 
   verify-downloaded-payload:
     name: Verify downloaded payload in independent job
-    needs:
-      - validate-windows-release
-      - build-windows-payload
-    if: ${{ always() && needs.build-windows-payload.result == 'success' }}
+    needs: build-windows-payload
     runs-on: windows-2022
     timeout-minutes: 20
-    env:
-      MIRA_RELEASE_ALLOW_FAILED_TESTS: ${{ needs.validate-windows-release.result != 'success' }}
     steps:
       - name: Checkout verifier
         uses: actions/checkout@v4
@@ -284,14 +269,9 @@ jobs:
 
   package-electron-from-payload:
     name: Package Electron from frozen payload
-    needs:
-      - validate-windows-release
-      - verify-downloaded-payload
-    if: ${{ always() && needs.verify-downloaded-payload.result == 'success' }}
+    needs: verify-downloaded-payload
     runs-on: windows-2022
     timeout-minutes: 35
-    env:
-      MIRA_RELEASE_ALLOW_FAILED_TESTS: ${{ needs.validate-windows-release.result != 'success' }}
     steps:
       - name: Checkout Electron consumer
         uses: actions/checkout@v4
@@ -342,14 +322,9 @@ jobs:
 
   package-tauri-from-payload:
     name: Package Tauri from frozen payload
-    needs:
-      - validate-windows-release
-      - verify-downloaded-payload
-    if: ${{ always() && needs.verify-downloaded-payload.result == 'success' }}
+    needs: verify-downloaded-payload
     runs-on: windows-2022
     timeout-minutes: 60
-    env:
-      MIRA_RELEASE_ALLOW_FAILED_TESTS: ${{ needs.validate-windows-release.result != 'success' }}
     steps:
       - name: Checkout Tauri consumer
         uses: actions/checkout@v4
@@ -428,13 +403,9 @@ jobs:
             echo '- Publishing: disabled in this workflow'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "$VALIDATION_RESULT" != 'success' ]]; then
-            echo 'Release blocked: product validation did not pass. Diagnostic packages may still be available.' >&2
-            exit 1
-          fi
-          for result in "$PAYLOAD_RESULT" "$VERIFY_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
+          for result in "$VALIDATION_RESULT" "$PAYLOAD_RESULT" "$VERIFY_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
             if [[ "$result" != 'success' ]]; then
-              echo 'Release blocked: one or more packaging stages did not pass.' >&2
+              echo 'Release blocked: validation or packaging did not fully pass.' >&2
               exit 1
             fi
           done
