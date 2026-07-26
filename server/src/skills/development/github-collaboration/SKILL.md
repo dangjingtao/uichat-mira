@@ -7,6 +7,10 @@ category: development
 visibility: public
 source: Mira
 status: draft
+executionContext: fork
+agent: subAgent
+allowedTools: github_repository, github_issue, github_pull_request, github_actions
+workspaceBound: false
 ---
 
 # Draft status
