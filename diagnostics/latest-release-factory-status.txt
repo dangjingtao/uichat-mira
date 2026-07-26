@@ -1,0 +1,10 @@
+Target SHA: 592545ab0384fab30dade7b5a8241ec7fac8988d
+Run count: 1
+
+run_id: 30194393634
+name: Release Factory V2 Validation
+event: push
+status: in_progress
+conclusion: None
+head_branch: feature/release-factory-v2
+html_url: https://github.com/dangjingtao/uichat-mira/actions/runs/30194393634
