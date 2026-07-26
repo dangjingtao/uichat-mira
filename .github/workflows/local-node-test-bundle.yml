@@ -1,0 +1,45 @@
+name: Local Node Test Bundle
+
+on:
+  pull_request:
+    branches:
+      - tmp/local-node-test-base-20260726
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pack checkout with node_modules
+        shell: bash
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude='**/coverage' \
+            --exclude='**/dist' \
+            -czf /tmp/uichat-mira-local-node-test.tgz .
+
+      - name: Upload local test bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: uichat-mira-local-node-test
+          path: /tmp/uichat-mira-local-node-test.tgz
+          retention-days: 1
+          compression-level: 0
