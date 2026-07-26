@@ -1,4 +1,11 @@
 import "@testing-library/jest-dom/vitest";
+import i18n from "@/shared/i18n";
+
+// Release validation runs on hosted Windows runners where Node exposes an
+// English navigator language. UI parser assertions in this suite intentionally
+// verify the product's Chinese default copy, so make the test locale explicit
+// instead of inheriting runner locale.
+await i18n.changeLanguage("zh-CN");
 
 if (typeof DataTransfer === "undefined") {
   class DataTransferPolyfill {
