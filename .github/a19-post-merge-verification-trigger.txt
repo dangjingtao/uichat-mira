@@ -1,0 +1,1 @@
+Post-merge MiraDocs diagnostics trigger with tailed output
