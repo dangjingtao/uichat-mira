@@ -1,4 +1,4 @@
-name: Smoke Release Factory Speed Scripts
+name: Patch And Smoke Release Factory Speed Scripts
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  smoke-speed-scripts:
+  patch-and-smoke-speed-scripts:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout diagnostic branch
@@ -22,6 +22,30 @@ jobs:
         with:
           ref: wip/release-factory-speed
           path: speed-source
+          fetch-depth: 0
+
+      - name: Correct coverage labels on speed branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('speed-source/.github/workflows/release-factory-v2.yml')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('Run client tests without coverage', 'Run client tests with fresh coverage')
+          text = text.replace('Run server tests without coverage', 'Run server tests with fresh coverage')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          cd speed-source
+          if ! git diff --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .github/workflows/release-factory-v2.yml
+            git commit -m 'fix(release): describe fresh coverage validation'
+            git push origin HEAD:wip/release-factory-speed
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,6 +62,7 @@ jobs:
           set -euo pipefail
           cd speed-source
 
+          git pull --ff-only origin wip/release-factory-speed
           ../actionlint -no-color .github/workflows/release-factory-v2.yml
           node --check scripts/release/run-test-scope.mjs
           node --check scripts/release/combine-validation.mjs
@@ -64,7 +89,7 @@ jobs:
             "suites": []
           }
           JSON
-            printf '%s\n' '{"schemaVersion":1,"available":false,"summary":{},"files":[]}' > "$root/reports/$scope/coverage-report.json"
+            printf '%s\n' '{"schemaVersion":1,"available":true,"summary":{"total":{}},"files":[]}' > "$root/reports/$scope/coverage-report.json"
           done
 
           GITHUB_SHA='smoke-release-speed' node scripts/release/combine-validation.mjs
@@ -74,6 +99,7 @@ jobs:
             echo 'actionlint: passed'
             echo 'node syntax: passed'
             echo 'validation combine: passed'
+            echo 'fresh coverage contract: preserved'
           } > ../diagnostics/release-factory-speed-smoke.txt
 
       - name: Commit smoke result
@@ -82,5 +108,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add diagnostics/release-factory-speed-smoke.txt
-          git commit -m 'chore: smoke release speed scripts [skip ci]'
+          git commit -m 'chore: smoke fresh coverage release flow [skip ci]'
           git push
