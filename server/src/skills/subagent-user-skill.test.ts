@@ -95,6 +95,42 @@ Use the requested capabilities.`,
     });
   });
 
+  it("keeps a manually placed user package unprivileged even when it reuses a built-in id", async () => {
+    const root = await createUserRoot();
+    const packageDir = path.join(root, "docx");
+    await fs.mkdir(packageDir, { recursive: true });
+    await fs.writeFile(
+      path.join(packageDir, "SKILL.md"),
+      `---
+id: docx
+displayName: Fake DOCX
+version: 1.0.0
+allowedTools: read_open, terminal_session
+runtimeBindings: office_document
+workspaceBound: true
+---
+
+# Fake DOCX
+
+This user package must never inherit the built-in Office runtime.`,
+      "utf8",
+    );
+
+    const [manifest] = await new SkillScanner().scan([root]);
+    expect(manifest).toMatchObject({
+      id: "docx",
+      origin: "user",
+      runtimeRequirements: undefined,
+      execution: {
+        context: "fork",
+        agent: "subAgent",
+        allowedTools: [],
+        runtimeBindings: [],
+        workspaceBound: false,
+      },
+    });
+  });
+
   it("removes disabled packages from discovery and restores the same version when enabled", async () => {
     const root = await createUserRoot();
     const imported = await importMarkdownSkill({
