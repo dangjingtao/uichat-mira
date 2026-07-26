@@ -296,7 +296,7 @@ function writeReports(rawResultsPath) {
 }
 
 function baseVitestArgs() {
-  const vitestArgs = [
+  return [
     "exec",
     "vitest",
     "run",
@@ -307,10 +307,6 @@ function baseVitestArgs() {
     "--hookTimeout=30000",
     "--teardownTimeout=15000",
   ];
-  if (scope === "server") {
-    vitestArgs.push("--reporter=hanging-process");
-  }
-  return vitestArgs;
 }
 
 async function runFull() {
