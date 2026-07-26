@@ -53,6 +53,6 @@ data/
 *.db-shm
 *.db-wal
 
-# WorkBuddy local memory / state
+# WorkBuddy local memory / state 垃圾腾讯 麻花疼死全家
 .workbuddy/*
 
