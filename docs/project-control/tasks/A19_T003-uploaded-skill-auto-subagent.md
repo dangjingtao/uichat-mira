@@ -1,6 +1,6 @@
 # A19_T003 — 用户上传 Skill 自动获得计划并实例化 subAgent
 
-- 状态：READY
+- 状态：IMPLEMENTED — VERIFICATION PENDING
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 施工分支：`feature/subagent-skill-runtime-v1`
@@ -41,9 +41,10 @@
 - profile 由通用 resolver 动态派生，不维护用户 Skill 手工映射表。
 - Skill 的说明书 / 工作方法作为 subAgent 的任务计划与执行约束。
 - 用户 Skill 与内置 Skill 走同一 subAgent runner、审批、Evidence、Trace 和 UChat 合同。
-- 能力缺失时返回标准 `capability` / `resource` / `user_input` requirement。
+- 能力缺失时返回标准 `capability` / `resource` / `user_input` Requirement。
 - 卸载或禁用 Skill 后不得再匹配或实例化。
 - Skill 版本升级必须可识别，运行实例绑定明确版本。
+- 用户 Skill 不得覆盖或继承官方 / 外部 Skill 的 id、来源或私有 Runtime。
 
 ### 非目标
 
@@ -53,180 +54,213 @@
 - 不做在线 Skill 市场、评分、支付或自动更新。
 - 不做多 Skill 协同编排。
 - 不让 subAgent 继续创建下一级 Agent。
-- 不为兼容任意格式而放弃包校验。
+- 不承诺把任意一段普通提示词自动变成高质量专业 Skill；只补齐最低可执行合同。
 
-## Skill 包最低安装合同
+## 最低 Skill Package 合同
 
-上传 Skill 至少应提供：
-
-```text
-<skill-package>/
-├─ SKILL.md
-├─ references/        # 可选，渐进披露
-├─ templates/         # 可选
-└─ assets/            # 可选，受大小和类型限制
-```
-
-`SKILL.md` 至少包含：
-
-- 稳定 `id`；
-- `version`；
-- `displayName` / 名称；
-- 描述和适用范围；
-- 明确的工作方法 / 执行计划；
-- Completion Criteria；
-- 能力与资源需求说明；
-- 失败、缺口和用户输入处理规则。
-
-兼容现有 frontmatter 格式时应做规范化，但不得根据自由文本静默授予能力。
-
-## 自动派生合同
-
-安装阶段：
+上传包至少要能规范化为：
 
 ```text
-上传
-→ 解包到受管目录
-→ 路径/文件类型/大小校验
-→ 解析 SKILL.md
-→ 规范化 SkillDefinition
-→ 校验资源 URI 与引用
-→ 记录版本和来源
-→ 注册到 Skill Registry / Matcher
+<skill-id>/
+└─ SKILL.md
 ```
 
-运行阶段：
+`SKILL.md` 至少包含或由安装器补齐：
+
+- 稳定 `id`
+- SemVer `version`
+- 显示名称与描述
+- 何时使用 / 不适用范围
+- 执行计划或工作方法
+- 安全边界
+- 完成标准
+
+安装器保留作者原正文，只追加缺失的合同段落，不任意改写专业内容。
+
+## 权限合同
+
+用户 Skill 的 frontmatter 即使声明：
+
+```yaml
+allowedTools: terminal_session, github_repository
+runtimeBindings: office_document
+workspaceBound: true
+```
+
+Scanner 仍必须把它规范化为：
+
+```ts
+{
+  origin: "user",
+  execution: {
+    context: "fork",
+    agent: "subAgent",
+    allowedTools: [],
+    runtimeBindings: [],
+    workspaceBound: false
+  }
+}
+```
+
+后续若产品提供显式受管授权 / binding 流程，可以另行满足能力 Requirement；Markdown 本身永远不是权限来源。
+
+## 安装与注册流程
 
 ```text
-用户任务
-→ Matcher 选择一个 primary Skill
-→ Resolver 派生 SubAgentExecutionProfile
-→ 按当前真实授权绑定工具 / Runtime
-→ new SubAgent(runId, skillVersion)
-→ 注入说明书和渐进资源
-→ 执行、发布 Working State / Trace
-→ Evidence / Artifact / Requirement / Failure
+上传 Markdown
+→ 文件大小 / 格式 / SemVer 校验
+→ 保留正文并补齐最低执行说明
+→ 写入受管 staging 目录
+→ 原子 rename 到用户 Skill 根目录
+→ Registry invalidate + rescan
+→ 进入匹配索引
+→ 命中后动态派生 profile
+→ new 单一 subAgent
 ```
 
-约束：
+安装过程中若失败，不得留下半个可发现包。
 
-1. 一个已安装 Skill 只有一个逻辑 subAgent profile。
-2. 每次命中创建新的 run 实例，不常驻后台养一个进程。
-3. run 必须绑定 `skillId + version`，审批恢复不可静默切换版本。
-4. Skill 声明的是需求，不是权限；最终能力以 Harness/Policy/安装状态为准。
-5. 上传包不能覆盖内置 Skill、其他用户 Skill 或系统路径。
-6. 包内引用必须受安装根目录约束，禁止 traversal、绝对路径和外部任意读取。
+## id 与来源隔离
 
-## 现有 Skill 规范对齐
+- 用户根目录中的文件永远视为 `origin: user`。
+- 即使用户手工放入 `id: docx`，也不得获得 built-in Office fallback Runtime。
+- 默认扫描顺序中系统 / 外部 Skill 优先于用户 Skill。
+- 导入前检查当前非用户 Skill id；冲突时回滚用户包并拒绝安装。
+- 已禁用用户 Skill 在重新启用时若 id 已被系统占用，必须拒绝启用。
 
-本任务可以修订现有 Skill 包作为兼容样本，但必须遵守：
+## 禁用 / 启用
 
-- 先检查现有专业内容是否已经满足合同；
-- 只补缺失的身份、计划、边界、Evidence 和 Completion Criteria；
-- 不为了模板一致而大面积改写；
-- GitHub Skill 已完成，优先作为合格样本，不重做其业务方法；
-- 文枢、MiraDocs、备孕等 Skill 的专业逻辑不得被通用安装器稀释；
-- 对不合格包给出清晰校验错误，不静默猜测。
-
-## 施工范围
-
-优先检查或修改：
-
-- Skill upload / import / install route
-- package scanner / loader / validation
-- SkillDefinition normalization
-- Skill Registry / matcher index refresh
-- SubAgentExecutionProfile resolver
-- Skill version binding 与 checkpoint
-- 安装目录和资源 URI 边界
-- 安装、禁用、卸载后的缓存刷新
-- 服务端测试、安装 fixture 与最小 smoke
-
-UChat 只复用 A19_T002 合同，本任务不再次重做展示组件。
-
-## 简单烟测用例
-
-### Smoke 1：上传纯说明书 Skill
-
-准备一个最小测试 Skill：
+第一版采用受管目录状态：
 
 ```text
-id: uploaded-summary-review
-version: 1.0.0
-目标：读取用户提供的文本，按说明书完成结构化审阅。
-计划：读取输入 → 检查结构 → 提出问题 → 输出 Evidence。
+<category>/<skill-id>/SKILL.md
+→ disable
+<category>/.disabled-<skill-id>/SKILL.md
 ```
 
-1. 上传并安装。
-2. 断言 Registry 出现该 Skill，版本和来源正确。
-3. 发起匹配任务。
-4. 断言无需修改代码即创建一个 subAgent run。
-5. 断言 subAgent 获得说明书和允许的只读能力并完成任务。
+Scanner 忽略点目录，因此禁用后不会匹配；启用后恢复同一 id 与版本。
 
-### Smoke 2：能力缺失不越权
+## 简单 Smoke
 
-1. 上传一个声明需要 GitHub 写入的测试 Skill，但不给 GitHub 授权或写工具。
-2. 触发任务。
-3. 断言 profile 不自动增加 GitHub ToolExposure。
-4. 断言 subAgent 返回 capability requirement，而不是伪造完成。
+### Smoke A：纯说明书 Skill
 
-### Smoke 3：恶意包拒绝
+上传：
 
-分别上传包含以下内容的 fixture：
+```markdown
+# 决策复盘教练
 
-- `../` 路径引用；
-- 绝对路径；
-- 未知二进制 / 安装脚本；
-- 缺失 id 或 version；
-- 重复覆盖已安装 Skill id；
-- 超出大小限制的资源。
+帮助用户复盘一个产品决策，并找出关键错误假设。
+```
 
-断言安装失败，错误原因明确，Registry 无残留半安装记录。
+检查：
 
-### Smoke 4：版本与恢复
+- 作者正文保留；
+- 缺失的适用范围、执行计划、安全边界和完成标准被补齐；
+- 安装后 Registry 可发现；
+- 自动派生唯一 subAgent profile；
+- 不需要修改主仓代码。
 
-1. 安装 Skill `1.0.0`，运行到审批 checkpoint。
-2. 安装或准备 `1.1.0`。
-3. 恢复旧任务。
-4. 断言旧 run 仍绑定 `1.0.0`，不会静默切换说明书。
-5. 新任务命中当前启用版本。
+### Smoke B：恶意权限声明
 
-### Smoke 5：禁用 / 卸载
+上传声明 shell、GitHub、Office Runtime 的 Skill。
 
-1. 安装并成功匹配测试 Skill。
-2. 禁用后再次发起同类任务，断言不再匹配。
-3. 卸载后断言 Registry、资源索引和 profile resolver 均无残留。
+检查：
+
+- 安装可以作为说明书完成；
+- Scanner 输出零工具、零 Runtime、非 workspace-bound；
+- 执行时不会获得声明能力；
+- 需要能力时返回 Requirement。
+
+### Smoke C：冒充 built-in id
+
+在用户根目录放入 `id: docx` 或通过导入尝试复用官方 Skill id。
+
+检查：
+
+- origin 保持 `user`；
+- 不获得 `office_document`；
+- 默认 Registry 仍以官方 docx 为准；
+- 正常导入入口拒绝冲突并清理刚写入包。
+
+### Smoke D：禁用与恢复
+
+导入一个 `1.2.3` Skill，禁用后再启用。
+
+检查：
+
+- 禁用后不再被 Scanner 发现；
+- 不再匹配或实例化；
+- 启用后恢复同一 id / version；
+- 若 id 在禁用期间变成系统保留 id，则拒绝启用。
+
+### Smoke E：确定性脚本
+
+```bash
+pnpm --filter @ui-chat-mira/server smoke:subagent-skill
+```
+
+检查输出：
+
+- `automaticProfile: true`
+- `unauthorizedToolGrant: false`
+- `disableEnableRoundTrip: true`
+
+## 必须覆盖的测试
+
+- 导入保留作者正文并补齐缺失合同。
+- 非 SemVer 版本拒绝且不留下目录。
+- Markdown 声明不能授予 Tool / Runtime。
+- 任意用户 Skill 自动派生一个 profile。
+- 用户根目录中的 built-in 同名包保持无权限。
+- 禁用后不发现，启用后恢复版本。
+- staging 原子写入失败不产生半包。
+- 系统 id 冲突导入回滚。
+- 卸载或禁用后 Registry / Provider cache 失效。
+- checkpoint 绑定明确 Skill id / version。
 
 ## 验收标准
 
-- 用户 Skill 安装成功后无需改代码即可获得一个逻辑 subAgent。
-- Skill 说明书和计划成为 subAgent 的执行依据。
-- 动态 profile 不依赖手工 Skill ID 映射。
-- 上传 Skill 与内置 Skill 共用统一 runner、Trace、审批、Evidence 和 Artifact 合同。
-- 自动实例化不扩大 ToolExposure，不绕过 Policy。
-- 包路径、版本、资源、禁用和卸载边界可靠。
-- 安装失败不会留下可匹配的半成品。
-- 单测、集成测试、smoke、server typecheck 通过。
+- 用户上传 Skill 不需要专用接线代码即可获得唯一 subAgent。
+- Skill 说明书成为执行计划，不成为权限来源。
+- 用户 Skill 无法覆盖官方 Skill 或继承其 Runtime。
+- 禁用、启用、卸载和版本绑定行为明确。
+- 同一 Runtime、审批、Evidence、Trace 和 UChat 合同适用于用户 Skill。
+- 单测、typecheck 与 smoke 实际通过后才可把本卡改为 DONE。
 
 ## 施工红线
 
-1. 不从 SKILL.md 自由文本解析并自动授予工具权限。
-2. 不执行任意安装脚本、二进制或未受管 Runtime。
-3. 不允许用户 Skill 覆盖系统 Skill 或逃逸安装目录。
-4. 不为某个上传 Skill添加 Main Agent / Graph 特判。
-5. 不允许一个 Skill 创建多个或嵌套 subAgent。
-6. 不把安装成功等同于任务可完成；缺能力必须返回 requirement。
-7. 不为“兼容”静默修复严重缺失的 Skill 说明书。
-8. 如现有安装合同不足，先记录合同缺口，不绕开校验。
+1. 不执行未知二进制、安装脚本或任意依赖安装。
+2. 不相信上传包声明的 Tool / Runtime 权限。
+3. 不允许用户 Skill 抢占官方 id。
+4. 不为每个用户 Skill生成专用代码文件或 Registry 映射。
+5. 不在 Main Agent / Graph 中增加 Skill id 特判。
+6. 不把失败安装留在 Scanner 可发现目录。
+7. 不让 subAgent 创建下一级 Agent。
 
-## 交付要求
+## 实现记录
 
-完成后提供：
+已落地：
 
-- 支持的 Skill 包格式与示例；
-- 安装校验错误清单；
-- 自动 profile 派生说明；
-- 权限与能力绑定说明；
-- 版本、禁用、卸载和恢复测试结果；
-- 一个可重复执行的上传 Skill smoke fixture；
-- 一个聚焦提交，不夹带 Skill 市场或无关 UI 功能。
+- Markdown 导入大小、SemVer 与空文件校验。
+- 保留作者正文，按缺失情况追加最低执行说明。
+- staging 写入 + 原子 rename。
+- Scanner 自动标记用户来源并派生 subAgent execution manifest。
+- 用户声明的 Tool / Runtime / workspace 不授予权限。
+- 通用 profile resolver 自动生成唯一 subAgent profile。
+- 用户 Skill 与内置 Skill 复用同一 runner、Trace 和 UChat 合同。
+- 新增禁用 / 启用服务端路由与桌面 API。
+- 禁用目录退出匹配索引，启用恢复原版本。
+- 系统 Skill id 冲突导入回滚；重新启用时再次检查。
+- 用户根目录 built-in 同名包无法继承 built-in fallback Runtime。
+- 增加用户 Skill 权限隔离、禁用恢复和确定性 smoke。
+
+尚未在当前执行环境运行：
+
+- server Vitest
+- routes 集成测试
+- `smoke:subagent-skill`
+- server / desktop typecheck
+- `pnpm check`
+- 真实 UI 上传、禁用、启用和会话命中 smoke
+
+在上述验证完成前，本卡保持 `IMPLEMENTED — VERIFICATION PENDING`。
