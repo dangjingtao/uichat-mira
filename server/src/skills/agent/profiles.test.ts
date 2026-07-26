@@ -65,6 +65,24 @@ describe("resolveSubAgentExecutionProfile", () => {
     ]);
   });
 
+  it("merges the Office read surface into a Scanner-derived runtime declaration", () => {
+    const profile = resolveSubAgentExecutionProfile({
+      id: "docx",
+      execution: {
+        context: "fork",
+        agent: "subAgent",
+        allowedTools: [],
+        runtimeBindings: ["office_document"],
+        workspaceBound: true,
+      },
+    });
+
+    expect(profile.allowedHarnessToolIds).toEqual(["read_open", "read_extract"]);
+    expect(profile.runtimeBindings).toEqual([
+      expect.objectContaining({ id: "office_document", status: "ready" }),
+    ]);
+  });
+
   it("marks unknown private runtimes pending instead of granting execution", () => {
     const profile = resolveSubAgentExecutionProfile({
       id: "custom-runtime-skill",
