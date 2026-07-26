@@ -18,8 +18,15 @@ if (process.platform !== "win32") {
   );
 }
 
+const allowFailedTests = ["1", "true"].includes(
+  process.env.MIRA_RELEASE_ALLOW_FAILED_TESTS?.trim().toLowerCase() ?? "",
+);
+
 runPnpm(["version:sync"], { cwd: projectRoot });
-const manifest = verifyPayload();
+const manifest = verifyPayload({
+  allowFailedTests,
+  requireReleaseEligible: !allowFailedTests,
+});
 
 const tauriRoot = path.join(projectRoot, "tauri");
 const resourcesRoot = path.join(tauriRoot, "resources");
@@ -113,10 +120,11 @@ if (installers.length === 0) {
 }
 
 const packageSummary = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   consumer: "tauri",
   payloadVersion: manifest.version,
   payloadCommit: manifest.gitCommit,
+  releaseEligible: manifest.releaseEligible,
   outputs: outputs.map((file) => ({
     path: file.relativePath,
     bytes: fs.statSync(file.fullPath).size,
@@ -128,5 +136,5 @@ fs.writeFileSync(
 );
 
 console.log(
-  `Tauri package ready from frozen payload: ${installers.length} installer(s).`,
+  `Tauri package ready from frozen payload: ${installers.length} installer(s), releaseEligible=${manifest.releaseEligible}.`,
 );
