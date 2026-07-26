@@ -1,4 +1,4 @@
-name: Restore Release R2 Contract
+name: Export Release Factory Workflow
 
 on:
   push:
@@ -8,170 +8,56 @@ on:
       - '.github/workflows/restore-release-r2.yml'
 
 permissions:
-  contents: write
+  contents: read
+  statuses: write
 
 jobs:
-  patch:
+  export:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/release-factory-v2
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Restore dev R2 release contract
-        shell: bash
-        env:
-          PUBLISH_BLOCK_B64: 'CiAgcHVibGlzaC1yZWxlYXNlLWFzc2V0czoKICAgIG5hbWU6IFB1Ymxpc2ggR2l0SHViIFJlbGVhc2UgYW5kIENsb3VkZmxhcmUgUjIKICAgIG5lZWRzOgogICAgICAtIHBhY2thZ2UtZWxlY3Ryb24tZnJvbS1wYXlsb2FkCiAgICAgIC0gcGFja2FnZS10YXVyaS1mcm9tLXBheWxvYWQKICAgIGlmOiBzdGFydHNXaXRoKGdpdGh1Yi5yZWYsICdyZWZzL3RhZ3MvdicpIHx8IGdpdGh1Yi5yZWYgPT0gJ3JlZnMvaGVhZHMvcHJvZCcKICAgIHJ1bnMtb246IHVidW50dS1sYXRlc3QKICAgIHRpbWVvdXQtbWludXRlczogMjUKICAgIHBlcm1pc3Npb25zOgogICAgICBjb250ZW50czogd3JpdGUKICAgIHN0ZXBzOgogICAgICAtIG5hbWU6IENoZWNrb3V0IHJlbGVhc2UgbWV0YWRhdGEKICAgICAgICB1c2VzOiBhY3Rpb25zL2NoZWNrb3V0QHY0CiAgICAgICAgd2l0aDoKICAgICAgICAgIGZldGNoLWRlcHRoOiAwCgogICAgICAtIG5hbWU6IFJlc29sdmUgYW5kIHZhbGlkYXRlIHJlbGVhc2UgdGFnCiAgICAgICAgaWQ6IHJlbGVhc2VfbWV0YQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBwYWNrYWdlX3ZlcnNpb249JChub2RlIC1wICJyZXF1aXJlKCcuL3BhY2thZ2UuanNvbicpLnZlcnNpb24iKQogICAgICAgICAgZXhwZWN0ZWRfdGFnPSJ2JHtwYWNrYWdlX3ZlcnNpb259IgoKICAgICAgICAgIGlmIFtbICIke0dJVEhVQl9SRUZ9IiA9PSByZWZzL3RhZ3MvdiogXV07IHRoZW4KICAgICAgICAgICAgdGFnPSIke0dJVEhVQl9SRUZfTkFNRX0iCiAgICAgICAgICAgIGlmIFsgIiR0YWciICE9ICIkZXhwZWN0ZWRfdGFnIiBdOyB0aGVuCiAgICAgICAgICAgICAgZWNobyAiVGFnICR7dGFnfSBkb2VzIG5vdCBtYXRjaCBwYWNrYWdlLmpzb24gdmVyc2lvbiAke3BhY2thZ2VfdmVyc2lvbn0uIiA+JjIKICAgICAgICAgICAgICBleGl0IDEKICAgICAgICAgICAgZmkKICAgICAgICAgIGVsc2UKICAgICAgICAgICAgdGFnPSIkZXhwZWN0ZWRfdGFnIgogICAgICAgICAgICBpZiBnaXQgcmV2LXBhcnNlIC1xIC0tdmVyaWZ5ICJyZWZzL3RhZ3MvJHt0YWd9IiA+L2Rldi9udWxsOyB0aGVuCiAgICAgICAgICAgICAgdGFnX3NoYT0kKGdpdCByZXYtbGlzdCAtbiAxICIkdGFnIikKICAgICAgICAgICAgICBpZiBbICIkdGFnX3NoYSIgIT0gIiRHSVRIVUJfU0hBIiBdOyB0aGVuCiAgICAgICAgICAgICAgICBlY2hvICJSZWxlYXNlIHRhZyAke3RhZ30gYWxyZWFkeSBwb2ludHMgdG8gJHt0YWdfc2hhfSwgZXhwZWN0ZWQgJHtHSVRIVUJfU0hBfS4gQnVtcCBwYWNrYWdlLmpzb24gb3IgZml4IHRoZSB0YWcgZXhwbGljaXRseS4iID4mMgogICAgICAgICAgICAgICAgZXhpdCAxCiAgICAgICAgICAgICAgZmkKICAgICAgICAgICAgICBlY2hvICJSZWxlYXNlIHRhZyAke3RhZ30gYWxyZWFkeSBleGlzdHMgb24gdGhpcyBjb21taXQ7IGNvbnRpbnVpbmcgcmV0cnkuIgogICAgICAgICAgICBmaQogICAgICAgICAgZmkKCiAgICAgICAgICBlY2hvICJ0YWc9JHt0YWd9IiA+PiAiJEdJVEhVQl9PVVRQVVQiCgogICAgICAtIG5hbWU6IENyZWF0ZSByZWxlYXNlIHRhZyBpZiBtaXNzaW5nCiAgICAgICAgaWY6IGdpdGh1Yi5yZWYgPT0gJ3JlZnMvaGVhZHMvcHJvZCcKICAgICAgICBlbnY6CiAgICAgICAgICBSRUxFQVNFX1RBRzogJHt7IHN0ZXBzLnJlbGVhc2VfbWV0YS5vdXRwdXRzLnRhZyB9fQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBpZiBnaXQgcmV2LXBhcnNlIC1xIC0tdmVyaWZ5ICJyZWZzL3RhZ3MvJHtSRUxFQVNFX1RBR30iID4vZGV2L251bGw7IHRoZW4KICAgICAgICAgICAgZWNobyAiVGFnICR7UkVMRUFTRV9UQUd9IGFscmVhZHkgZXhpc3RzIG9uIHRoaXMgY29tbWl0OyByZXVzaW5nIGl0LiIKICAgICAgICAgICAgZXhpdCAwCiAgICAgICAgICBmaQogICAgICAgICAgZ2l0IGNvbmZpZyB1c2VyLm5hbWUgImdpdGh1Yi1hY3Rpb25zW2JvdF0iCiAgICAgICAgICBnaXQgY29uZmlnIHVzZXIuZW1haWwgIjQxODk4MjgyK2dpdGh1Yi1hY3Rpb25zW2JvdF1AdXNlcnMubm9yZXBseS5naXRodWIuY29tIgogICAgICAgICAgZ2l0IHRhZyAiJFJFTEVBU0VfVEFHIiAiJEdJVEhVQl9TSEEiCiAgICAgICAgICBnaXQgcHVzaCBvcmlnaW4gInJlZnMvdGFncy8ke1JFTEVBU0VfVEFHfSIKCiAgICAgIC0gbmFtZTogRG93bmxvYWQgRWxlY3Ryb24gcGFja2FnZQogICAgICAgIHVzZXM6IGFjdGlvbnMvZG93bmxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogcmVsZWFzZS1mYWN0b3J5LWVsZWN0cm9uLSR7eyBnaXRodWIuc2hhIH19CiAgICAgICAgICBwYXRoOiByZWxlYXNlLWFzc2V0cy9lbGVjdHJvbgoKICAgICAgLSBuYW1lOiBEb3dubG9hZCBUYXVyaSBwYWNrYWdlCiAgICAgICAgdXNlczogYWN0aW9ucy9kb3dubG9hZC1hcnRpZmFjdEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBuYW1lOiByZWxlYXNlLWZhY3RvcnktdGF1cmktJHt7IGdpdGh1Yi5zaGEgfX0KICAgICAgICAgIHBhdGg6IHJlbGVhc2UtYXNzZXRzL3RhdXJpCgogICAgICAtIG5hbWU6IEZsYXR0ZW4gcmVsZWFzZSBhc3NldHMKICAgICAgICBzaGVsbDogYmFzaAogICAgICAgIHJ1bjogfAogICAgICAgICAgbWtkaXIgLXAgZGlzdAogICAgICAgICAgZmluZCByZWxlYXNlLWFzc2V0cyAtdHlwZSBmIFwoIC1uYW1lICcqLmV4ZScgLW8gLW5hbWUgJyouYmxvY2ttYXAnIC1vIC1uYW1lICcqLm1zaScgXCkgLXByaW50MCB8CiAgICAgICAgICAgIHdoaWxlIElGUz0gcmVhZCAtciAtZCAnJyBmaWxlOyBkbwogICAgICAgICAgICAgIHJlbGF0aXZlX3BhdGg9IiR7ZmlsZSNyZWxlYXNlLWFzc2V0cy99IgogICAgICAgICAgICAgIHNhZmVfbmFtZT0kKHByaW50ZiAnJXMnICIkcmVsYXRpdmVfcGF0aCIgfCB0ciAnL1xcICcgJ19fXycpCiAgICAgICAgICAgICAgY3AgIiRmaWxlIiAiZGlzdC8ke3NhZmVfbmFtZX0iCiAgICAgICAgICAgIGRvbmUKICAgICAgICAgIHRlc3QgLW4gIiQoZmluZCBkaXN0IC1tYXhkZXB0aCAxIC10eXBlIGYgLXByaW50IC1xdWl0KSIKICAgICAgICAgIGxzIC1sYWggZGlzdC8KCiAgICAgIC0gbmFtZTogQ3JlYXRlIG9yIHVwZGF0ZSBHaXRIdWIgUmVsZWFzZQogICAgICAgIHVzZXM6IHNvZnRwcm9wcy9hY3Rpb24tZ2gtcmVsZWFzZUB2MgogICAgICAgIHdpdGg6CiAgICAgICAgICB0YWdfbmFtZTogJHt7IHN0ZXBzLnJlbGVhc2VfbWV0YS5vdXRwdXRzLnRhZyB9fQogICAgICAgICAgZmlsZXM6IGRpc3QvKgogICAgICAgICAgZ2VuZXJhdGVfcmVsZWFzZV9ub3RlczogdHJ1ZQoKICAgICAgLSBuYW1lOiBWYWxpZGF0ZSBSMiBzZWNyZXRzCiAgICAgICAgZW52OgogICAgICAgICAgUjJfQUNDRVNTX0tFWV9JRDogJHt7IHNlY3JldHMuUjJfQUNDRVNTX0tFWV9JRCB9fQogICAgICAgICAgUjJfU0VDUkVUX0FDQ0VTU19LRVk6ICR7eyBzZWNyZXRzLlIyX1NFQ1JFVF9BQ0NFU1NfS0VZIH19CiAgICAgICAgICBSMl9BQ0NPVU5UX0lEOiAke3sgc2VjcmV0cy5SMl9BQ0NPVU5UX0lEIH19CiAgICAgICAgICBSMl9CVUNLRVQ6ICR7eyBzZWNyZXRzLlIyX0JVQ0tFVCB9fQogICAgICAgICAgUjJfUFVCTElDX0JBU0VfVVJMOiAke3sgc2VjcmV0cy5SMl9QVUJMSUNfQkFTRV9VUkwgfX0KICAgICAgICBzaGVsbDogYmFzaAogICAgICAgIHJ1bjogfAogICAgICAgICAgbWlzc2luZz0wCiAgICAgICAgICBmb3IgbmFtZSBpbiBSMl9BQ0NFU1NfS0VZX0lEIFIyX1NFQ1JFVF9BQ0NFU1NfS0VZIFIyX0FDQ09VTlRfSUQgUjJfQlVDS0VUIFIyX1BVQkxJQ19CQVNFX1VSTDsgZG8KICAgICAgICAgICAgaWYgWyAteiAiJHshbmFtZTotfSIgXTsgdGhlbgogICAgICAgICAgICAgIGVjaG8gIjo6ZXJyb3I6Ok1pc3NpbmcgcmVxdWlyZWQgcmVsZWFzZSBzZWNyZXQ6ICR7bmFtZX0iCiAgICAgICAgICAgICAgbWlzc2luZz0xCiAgICAgICAgICAgIGZpCiAgICAgICAgICBkb25lCiAgICAgICAgICBbICIkbWlzc2luZyIgLWVxIDAgXQoKICAgICAgLSBuYW1lOiBVcGxvYWQgcmVsZWFzZSBhc3NldHMgdG8gQ2xvdWRmbGFyZSBSMgogICAgICAgIGVudjoKICAgICAgICAgIEFXU19BQ0NFU1NfS0VZX0lEOiAke3sgc2VjcmV0cy5SMl9BQ0NFU1NfS0VZX0lEIH19CiAgICAgICAgICBBV1NfU0VDUkVUX0FDQ0VTU19LRVk6ICR7eyBzZWNyZXRzLlIyX1NFQ1JFVF9BQ0NFU1NfS0VZIH19CiAgICAgICAgICBBV1NfUkVUUllfTU9ERTogc3RhbmRhcmQKICAgICAgICAgIEFXU19NQVhfQVRURU1QVFM6IDUKICAgICAgICAgIFIyX0FDQ09VTlRfSUQ6ICR7eyBzZWNyZXRzLlIyX0FDQ09VTlRfSUQgfX0KICAgICAgICAgIFIyX0JVQ0tFVDogJHt7IHNlY3JldHMuUjJfQlVDS0VUIH19CiAgICAgICAgICBSMl9QVUJMSUNfQkFTRV9VUkw6ICR7eyBzZWNyZXRzLlIyX1BVQkxJQ19CQVNFX1VSTCB9fQogICAgICAgIHNoZWxsOiBiYXNoCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBlbmRwb2ludD0iaHR0cHM6Ly8ke1IyX0FDQ09VTlRfSUR9LnIyLmNsb3VkZmxhcmVzdG9yYWdlLmNvbSIKICAgICAgICAgIGxhdGVzdF9wcmVmaXg9Im1pcmEvbGF0ZXN0IgogICAgICAgICAgbGVnYWN5X3ByZXZpb3VzX3ByZWZpeD0ibWlyYS9wcmV2aW91cyIKCiAgICAgICAgICBhd3MgczMgcm0gInMzOi8vJHtSMl9CVUNLRVR9LyR7bGVnYWN5X3ByZXZpb3VzX3ByZWZpeH0vIiBcCiAgICAgICAgICAgIC0tcmVjdXJzaXZlIFwKICAgICAgICAgICAgLS1lbmRwb2ludC11cmwgIiRlbmRwb2ludCIgXAogICAgICAgICAgICAtLW9ubHktc2hvdy1lcnJvcnMgfHwgdHJ1ZQoKICAgICAgICAgIGZvciBhdHRlbXB0IGluIDEgMiAzOyBkbwogICAgICAgICAgICBpZiBhd3MgczMgc3luYyBkaXN0LyAiczM6Ly8ke1IyX0JVQ0tFVH0vJHtsYXRlc3RfcHJlZml4fS8iIFwKICAgICAgICAgICAgICAtLWRlbGV0ZSBcCiAgICAgICAgICAgICAgLS1lbmRwb2ludC11cmwgIiRlbmRwb2ludCIgXAogICAgICAgICAgICAgIC0tb25seS1zaG93LWVycm9yczsgdGhlbgogICAgICAgICAgICAgIGJyZWFrCiAgICAgICAgICAgIGZpCgogICAgICAgICAgICBpZiBbICIkYXR0ZW1wdCIgLWVxIDMgXTsgdGhlbgogICAgICAgICAgICAgIGVjaG8gIlIyIHVwbG9hZCBmYWlsZWQgYWZ0ZXIgJHthdHRlbXB0fSBhdHRlbXB0cy4iID4mMgogICAgICAgICAgICAgIGV4aXQgMQogICAgICAgICAgICBmaQoKICAgICAgICAgICAgc2xlZXAgJCgoYXR0ZW1wdCAqIDEwKSkKICAgICAgICAgIGRvbmUKCiAgICAgICAgICBwdWJsaWNfYmFzZT0iJHtSMl9QVUJMSUNfQkFTRV9VUkwlL30iCiAgICAgICAgICB7CiAgICAgICAgICAgIGVjaG8gIiMjIyBDbG91ZGZsYXJlIFIyIgogICAgICAgICAgICBlY2hvICJVcGxvYWRlZCBjdXJyZW50IHJlbGVhc2UgYXNzZXRzIHRvOiAke3B1YmxpY19iYXNlfS8ke2xhdGVzdF9wcmVmaXh9LyIKICAgICAgICAgICAgZWNobyAiUmV0ZW50aW9uOiBsYXRlc3QgcmVsZWFzZSBvbmx5IgogICAgICAgICAgfSA+PiAiJEdJVEhVQl9TVEVQX1NVTU1BUlkiCgo='
+      - name: Publish running status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'release-r2-export',
+              description: 'Exporting current Release Factory workflow',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
+      - name: Stage workflow file
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          import base64
-          import os
-          from pathlib import Path
+          mkdir -p export
+          cp .github/workflows/release-factory-v2.yml export/release-factory-v2.yml
 
-          path = Path('.github/workflows/release-factory-v2.yml')
-          text = path.read_text(encoding='utf-8')
+      - name: Upload workflow source
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-factory-source-${{ github.sha }}
+          path: export/release-factory-v2.yml
+          if-no-files-found: error
+          retention-days: 1
 
-          old_trigger = """  push:
-    branches:
-      - feature/release-factory-v2
-"""
-          new_trigger = """  push:
-    branches:
-      - feature/release-factory-v2
-      - prod
-    tags:
-      - 'v*'
-"""
-          if old_trigger not in text and new_trigger not in text:
-              raise SystemExit('Release trigger anchor not found')
-          text = text.replace(old_trigger, new_trigger, 1)
-
-          old_secret = """      HF_TOKEN:
-        required: false
-"""
-          new_secret = """      HF_TOKEN:
-        required: false
-      R2_ACCESS_KEY_ID:
-        required: false
-      R2_SECRET_ACCESS_KEY:
-        required: false
-      R2_ACCOUNT_ID:
-        required: false
-      R2_BUCKET:
-        required: false
-      R2_PUBLIC_BASE_URL:
-        required: false
-"""
-          if 'R2_ACCESS_KEY_ID:' not in text:
-              if old_secret not in text:
-                  raise SystemExit('Workflow-call secret anchor not found')
-              text = text.replace(old_secret, new_secret, 1)
-
-          publish_block = base64.b64decode(os.environ['PUBLISH_BLOCK_B64']).decode('utf-8')
-          if '  publish-release-assets:' not in text:
-              anchor = '  release-readiness:\n'
-              if anchor not in text:
-                  raise SystemExit('Readiness job anchor not found')
-              text = text.replace(anchor, publish_block + anchor, 1)
-
-          old_needs = """      - package-electron-from-payload
-      - package-tauri-from-payload
-"""
-          new_needs = """      - package-electron-from-payload
-      - package-tauri-from-payload
-      - publish-release-assets
-"""
-          readiness_pos = text.index('  release-readiness:')
-          prefix, readiness = text[:readiness_pos], text[readiness_pos:]
-          if '      - publish-release-assets\n' not in readiness:
-              if old_needs not in readiness:
-                  raise SystemExit('Readiness needs anchor not found')
-              readiness = readiness.replace(old_needs, new_needs, 1)
-
-          old_env = """          TAURI_RESULT: ${{ needs.package-tauri-from-payload.result }}
-"""
-          new_env = """          TAURI_RESULT: ${{ needs.package-tauri-from-payload.result }}
-          PUBLISH_RESULT: ${{ needs.publish-release-assets.result }}
-          PUBLISH_REQUIRED: ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/prod' }}
-"""
-          if 'PUBLISH_RESULT:' not in readiness:
-              if old_env not in readiness:
-                  raise SystemExit('Readiness env anchor not found')
-              readiness = readiness.replace(old_env, new_env, 1)
-
-          old_loop = '          for result in "$VALIDATION_RESULT" "$PAYLOAD_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do\n'
-          first = readiness.find(old_loop)
-          if first < 0:
-              raise SystemExit('Readiness result loop anchor not found')
-          loop_end_marker = "          done\n\n"
-          loop_end = readiness.find(loop_end_marker, first)
-          if loop_end < 0:
-              raise SystemExit('Readiness result loop end not found')
-          loop_end += len(loop_end_marker)
-          replacement = """          for result in "$VALIDATION_RESULT" "$PAYLOAD_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
-            if [[ "$result" != 'success' ]]; then
-              state='failure'
-              description='Release Factory V2 is not release-ready'
-              break
-            fi
-          done
-          if [[ "$PUBLISH_REQUIRED" == 'true' && "$PUBLISH_RESULT" != 'success' ]]; then
-            state='failure'
-            description='Release publishing to GitHub and R2 failed'
-          fi
-
-"""
-          readiness = readiness[:first] + replacement + readiness[loop_end:]
-
-          old_summary = """            echo "- Tauri: ${TAURI_RESULT}"
-            echo '- Tests: fresh for this commit'
-"""
-          new_summary = """            echo "- Tauri: ${TAURI_RESULT}"
-            echo "- GitHub Release + R2: ${PUBLISH_RESULT} (required=${PUBLISH_REQUIRED})"
-            echo '- Tests: fresh for this commit'
-"""
-          if 'GitHub Release + R2:' not in readiness:
-              if old_summary not in readiness:
-                  raise SystemExit('Readiness summary anchor not found')
-              readiness = readiness.replace(old_summary, new_summary, 1)
-
-          last = readiness.rfind(old_loop)
-          if last < 0:
-              raise SystemExit('Final readiness enforcement loop not found')
-          final_end = readiness.find('          done\n', last)
-          if final_end < 0:
-              raise SystemExit('Final readiness enforcement loop end not found')
-          final_end += len('          done\n')
-          final_replacement = """          for result in "$VALIDATION_RESULT" "$PAYLOAD_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
-            [[ "$result" == 'success' ]] || exit 1
-          done
-          if [[ "$PUBLISH_REQUIRED" == 'true' ]]; then
-            [[ "$PUBLISH_RESULT" == 'success' ]] || exit 1
-          fi
-"""
-          readiness = readiness[:last] + final_replacement + readiness[final_end:]
-
-          path.write_text(prefix + readiness, encoding='utf-8')
-          PY
-
-      - name: Validate workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-          ./actionlint -no-color .github/workflows/release-factory-v2.yml
-          grep -q 'Upload release assets to Cloudflare R2' .github/workflows/release-factory-v2.yml
-          grep -q 'publish-release-assets' .github/workflows/release-factory-v2.yml
-
-      - name: Commit R2 release contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/release-factory-v2.yml
-          git commit -m 'fix(release): restore GitHub and R2 publishing contract'
-          git push origin HEAD:feature/release-factory-v2
+      - name: Publish success status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              context: 'release-r2-export',
+              description: 'Release Factory workflow exported',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
