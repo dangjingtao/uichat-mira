@@ -23,12 +23,14 @@ export type SkillManifest = {
   description: string;
   version: string;
   entry: string;
-  origin: SkillPackageOrigin;
+  /** Optional only for legacy in-memory fixtures; scanner output always sets it. */
+  origin?: SkillPackageOrigin;
   source?: string;
   category?: string;
   license?: string;
   runtimeRequirements?: string[];
-  execution: SkillExecutionManifest;
+  /** Optional only for legacy in-memory fixtures; scanner output always sets it. */
+  execution?: SkillExecutionManifest;
 };
 
 export type SkillContent = {
@@ -84,8 +86,10 @@ export type SkillContext = {
     version: string;
     name: string;
     body: string;
-    origin: SkillPackageOrigin;
-    execution: SkillExecutionManifest;
+    /** Optional only for legacy persisted messages and test fixtures. */
+    origin?: SkillPackageOrigin;
+    /** Optional only for legacy persisted messages and test fixtures. */
+    execution?: SkillExecutionManifest;
   };
   resources: SkillResource[];
   disclosedResources: Array<{
