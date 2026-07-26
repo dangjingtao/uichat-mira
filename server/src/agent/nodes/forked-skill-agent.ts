@@ -201,17 +201,10 @@ const buildParentApprovalPatch = (input: {
 
 const tracePhase = (
   type: Extract<SubAgentRuntimeEvent, { kind: "trace" }>["event"]["type"],
-) => {
-  if (type === "tool.failed" || type === "subagent.failed") return "error" as const;
-  if (
-    type === "subagent.started" ||
-    type === "subagent.resumed" ||
-    type === "tool.started"
-  ) {
-    return "start" as const;
-  }
-  return "done" as const;
-};
+) =>
+  type === "tool.failed" || type === "subagent.failed"
+    ? ("error" as const)
+    : ("done" as const);
 
 const traceNodeType = (
   type: Extract<SubAgentRuntimeEvent, { kind: "trace" }>["event"]["type"],
@@ -266,6 +259,20 @@ const publishSubAgentRuntimeEvent = async (input: {
   });
 };
 
+const safelyPublishSubAgentRuntimeEvent = async (input: {
+  parentRunId: string;
+  event: SubAgentRuntimeEvent;
+  emit?: EmitAgentExecutionNode;
+}) => {
+  try {
+    await publishSubAgentRuntimeEvent(input);
+  } catch {
+    // Observability must never become a second control plane for subAgent work.
+    // The final observation still contains the bounded trace snapshot so a
+    // transient SSE/persistence failure cannot change execution semantics.
+  }
+};
+
 export const forkedSkillAgentNode = async (
   state: AgentNodeState,
   emit?: EmitAgentExecutionNode,
@@ -277,6 +284,7 @@ export const forkedSkillAgentNode = async (
 
   const profile = resolveSubAgentExecutionProfile(primary);
   const checkpoint = getReplayCheckpoint(state, skillId);
+  const exposedHarnessToolIds = state.toolExposure?.exposedTools ?? [];
   await emitStepNode(emit, {
     runId: state.runId,
     nodeId: "agent-forked-skill-agent",
@@ -292,6 +300,7 @@ export const forkedSkillAgentNode = async (
       engine: profile.engine,
       mode: profile.mode,
       allowedHarnessToolIds: profile.allowedHarnessToolIds,
+      exposedHarnessToolIds,
       runtimeBindings: profile.runtimeBindings,
       workspaceBound: profile.workspaceBound,
       workspaceRoot: state.workspaceRoot ?? null,
@@ -333,12 +342,13 @@ export const forkedSkillAgentNode = async (
     goal: state.question?.trim() || state.goal.text,
     skillContext,
     workspaceRoot: state.workspaceRoot ?? undefined,
+    exposedHarnessToolIds,
     userId: state.userId,
     threadId: state.threadId,
     approvedInvocations: getReplayApprovedInvocations(state),
     checkpoint,
     onRuntimeEvent: (event) =>
-      publishSubAgentRuntimeEvent({
+      safelyPublishSubAgentRuntimeEvent({
         parentRunId: state.runId,
         event,
         emit,
