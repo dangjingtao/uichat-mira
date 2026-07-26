@@ -1,0 +1,75 @@
+name: Diagnose v0.99.5 Failed Job
+
+on:
+  push:
+    branches:
+      - diagnostic/release-v0.99.5-job-89769278798
+    paths:
+      - '.github/workflows/diagnose-v0.99.5-job.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  extract-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Download failed job log and extract failure tail
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAILED_JOB_ID: '89769278798'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/jobs/${FAILED_JOB_ID}/logs" > failed-job.log
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('failed-job.log')
+          text = source.read_text(encoding='utf-8-sig', errors='replace')
+          lines = text.splitlines()
+
+          keywords = (
+              '##[error]',
+              'error:',
+              'error ',
+              'failed',
+              'ERR_PNPM',
+              'ELIFECYCLE',
+              'Command failed',
+              'throw new Error',
+          )
+          matches = []
+          for index, line in enumerate(lines, start=1):
+              lowered = line.lower()
+              if any(keyword.lower() in lowered for keyword in keywords):
+                  matches.append(f'{index}: {line}')
+
+          output = [
+              'Source job: 89769278798',
+              f'Total lines: {len(lines)}',
+              '',
+              '=== Error-like lines ===',
+              *(matches[-120:] or ['No error-like lines matched.']),
+              '',
+              '=== Final 260 lines ===',
+              *lines[-260:],
+              '',
+          ]
+          target = Path('diagnostics/v0.99.5-job-89769278798.txt')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_text('\n'.join(output), encoding='utf-8')
+          PY
+
+      - name: Commit diagnostic excerpt
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add diagnostics/v0.99.5-job-89769278798.txt
+          git commit -m 'chore: capture v0.99.5 failed job diagnostics [skip ci]'
+          git push
