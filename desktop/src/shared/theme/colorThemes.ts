@@ -41,6 +41,7 @@ type SemanticThemeValues = {
   surface: {
     primary: string;
     auth: string;
+    soft: string;
     secondary: string;
     tertiary: string;
     elevated: string;
@@ -143,6 +144,7 @@ const buildSemanticVariables = (values: SemanticThemeValues) => ({
   "--color-secondary": hexToRgbTriplet(values.secondary),
   "--color-surface-primary": hexToRgbTriplet(values.surface.primary),
   "--color-surface-auth": hexToRgbTriplet(values.surface.auth),
+  "--color-surface-soft": hexToRgbTriplet(values.surface.soft),
   "--color-surface-secondary": hexToRgbTriplet(values.surface.secondary),
   "--color-surface-tertiary": hexToRgbTriplet(values.surface.tertiary),
   "--color-surface-elevated": hexToRgbTriplet(values.surface.elevated),
@@ -283,6 +285,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#fcfbf9",
           auth: "#faf9f5",
+          soft: "#f5f0e8",
           secondary: "#f8f8f6",
           tertiary: "#f7f7f5",
           elevated: "#fdfbf8",
@@ -329,6 +332,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#181614",
           auth: "#201d1a",
+          soft: "#33302b",
           secondary: "#201d1a",
           tertiary: "#2a2724",
           elevated: "#1c1917",
@@ -383,6 +387,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#fdfdff",
           auth: "#f5f5fa",
+          soft: "#f1f1f8",
           secondary: "#f6f6f8",
           tertiary: "#f5f5f7",
           elevated: "#f8f8fd",
@@ -429,6 +434,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#18161b",
           auth: "#201d23",
+          soft: "#312c34",
           secondary: "#201d23",
           tertiary: "#29252d",
           elevated: "#1c191f",
@@ -483,6 +489,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#fdfffd",
           auth: "#f5faf5",
+          soft: "#f1f8f1",
           secondary: "#f6f8f6",
           tertiary: "#f5f7f5",
           elevated: "#f8fdf8",
@@ -529,6 +536,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#171b16",
           auth: "#1d231c",
+          soft: "#2f352e",
           secondary: "#1d231c",
           tertiary: "#262f26",
           elevated: "#1a201a",
@@ -583,6 +591,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#fffefd",
           auth: "#f2f6f8",
+          soft: "#f1f5f7",
           secondary: "#f3f7f9",
           tertiary: "#edf2f5",
           elevated: "#f9fbfc",
@@ -629,6 +638,7 @@ export const themePresets: ThemePreset[] = [
         surface: {
           primary: "#171a1c",
           auth: "#1d2326",
+          soft: "#2e363a",
           secondary: "#1d2326",
           tertiary: "#262f33",
           elevated: "#1a1f21",

@@ -4,6 +4,7 @@ export type AppMetaSource = {
   name?: string;
   displayName?: string;
   version?: string;
+  license?: string;
   description?: string;
   author?: string;
   repository?: {
@@ -21,6 +22,7 @@ export const appPackageMeta = {
   name: rootPackage.name ?? "ui-chat-mira",
   displayName: rootPackage.appMeta?.displayName ?? rootPackage.displayName ?? "UIChat Mira",
   version: rootPackage.version ?? "0.0.0",
+  license: rootPackage.license ?? "",
   description:
     rootPackage.description ??
     "An intelligent agent cabin that starts with a chat and returns to your side.",

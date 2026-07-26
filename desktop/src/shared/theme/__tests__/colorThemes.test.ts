@@ -13,6 +13,7 @@ const EXPECTED_VARIABLES = [
   "--color-cloudy",
   "--color-pampas",
   "--color-surface-primary",
+  "--color-surface-soft",
   "--color-text-primary",
   "--color-icon-primary",
   "--color-success",
@@ -55,6 +56,12 @@ describe("colorThemes", () => {
     const dark = getThemeVariables("warm-neutral", "dark");
 
     expect(light["--color-primary"]).not.toBe(dark["--color-primary"]);
+  });
+
+  it("暖中性浅色主题使用明确的 soft surface token", () => {
+    const vars = getThemeVariables("warm-neutral", "light");
+
+    expect(vars["--color-surface-soft"]).toBe("245 240 232");
   });
 
   it("不同主题生成不同 primary 变量", () => {

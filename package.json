@@ -4,13 +4,14 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.0",
+  "license": "MIT",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
     "type": "git",
     "url": "https://github.com/dangjingtao/uichat-mira.git"
   },
-  "homepage": "https://github.com/dangjingtao/uichat-mira",
+  "homepage": "https://tomz.io",
   "appMeta": {
     "displayName": "UIChat Mira",
     "links": [
@@ -25,9 +26,9 @@
         "href": "https://github.com/dangjingtao/uichat-mira"
       },
       {
-        "label": "项目主页",
-        "value": "https://github.com/dangjingtao/uichat-mira",
-        "href": "https://github.com/dangjingtao/uichat-mira"
+        "label": "官方文档",
+        "value": "https://tomz.io",
+        "href": "https://tomz.io"
       },
       {
         "label": "组件文档",

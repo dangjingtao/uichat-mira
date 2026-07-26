@@ -44,6 +44,7 @@ void i18n.use(initReactI18next).init({
         "settings.model.config.chooseModel": "Choose Model",
         "settings.model.config.openEditor": "Edit Params",
         "settings.model.config.viewDetails": "View Details",
+        "settings.model.config.moreActionsAriaLabel": "More actions for {{model}}",
         "settings.model.config.editInDialogHint": "Edit in dialog",
         "settings.model.config.viewInDialogHint": "View in dialog",
       },
@@ -83,10 +84,31 @@ describe("ModelConfig", () => {
     expect(screen.queryByText("Temperature")).not.toBeInTheDocument();
     expect(screen.queryByText("Configured")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Configured")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose Model" })).toBeInTheDocument();
+    const summary = screen.getByTestId("model-config-summary");
+    expect(summary).not.toHaveClass(
+      "border",
+      "bg-surface-secondary",
+      "rounded-ui-panel",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Choose Model" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit Params" }),
+    ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Edit Params" }));
+    await user.click(
+      screen.getByRole("button", { name: "More actions for LLM" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Edit Params" }));
 
     expect(modalMocks.showMock).toHaveBeenCalledTimes(1);
+
+    await user.click(
+      screen.getByRole("button", { name: "More actions for LLM" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Choose Model" }));
+
+    expect(modalMocks.showMock).toHaveBeenCalledTimes(2);
   });
 });

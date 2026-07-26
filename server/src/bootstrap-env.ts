@@ -47,3 +47,7 @@ export const applyWorkspaceEnvBootstrap = (startDir = process.cwd()) => {
 };
 
 applyWorkspaceEnvBootstrap();
+const { installGitHubProxyAwareGlobalFetch } = await import(
+  "@/services/github-network-fetch.js"
+);
+installGitHubProxyAwareGlobalFetch();

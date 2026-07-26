@@ -132,6 +132,59 @@ export const routeHandler =
     }
   });
 
+const isEventStreamReply = (reply: FastifyReply) => {
+  const contentType = reply.getHeader("content-type");
+  return typeof contentType === "string"
+    ? contentType.toLowerCase().startsWith("text/event-stream")
+    : Array.isArray(contentType)
+      ? contentType.some((value) =>
+          String(value).toLowerCase().startsWith("text/event-stream"),
+        )
+      : false;
+};
+
+const sendEventStreamError = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  message: string,
+) => {
+  if (!isEventStreamReply(reply)) {
+    return false;
+  }
+
+  const invocationId = `route-error:${String(request.id)}`;
+  const at = new Date().toISOString();
+  const body = [
+    {
+      type: "invocation:error",
+      invocationId,
+      message,
+      at,
+    },
+    {
+      type: "invocation:finish",
+      invocationId,
+      status: "failed",
+      at,
+    },
+  ]
+    .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+    .join("");
+
+  reply.hijack();
+  if (!reply.raw.headersSent) {
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    });
+  }
+  if (!reply.raw.writableEnded) {
+    reply.raw.end(body);
+  }
+  return true;
+};
+
 export const sendRouteError = (
   err: FastifyError,
   request: FastifyRequest,
@@ -153,15 +206,18 @@ export const sendRouteError = (
       request.log.warn(logPayload, err.logMessage ?? err.message);
     }
 
+    if (sendEventStreamError(request, reply, err.message)) {
+      return;
+    }
+
     reply
       .code(err.statusCode)
       .send(errorResponse(err.message, err.code, err.errors));
     return;
   }
 
-  const statusCode = err.statusCode && err.statusCode >= 400
-    ? err.statusCode
-    : 500;
+  const statusCode =
+    err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
   const isValidation = statusCode === 400 && Boolean(err.validation);
   const message = isValidation
     ? INVALID_REQUEST_PAYLOAD_MESSAGE
@@ -181,5 +237,10 @@ export const sendRouteError = (
     },
     message,
   );
+
+  if (sendEventStreamError(request, reply, message)) {
+    return;
+  }
+
   reply.code(statusCode).send(errorResponse(message, code, errors));
 };

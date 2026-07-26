@@ -3,10 +3,29 @@ const settingsPending = {
     about: {
       linkCopied: "链接已复制",
       linkCopyFailed: "复制链接失败",
+      linkOpenFailed: "打开链接失败",
       // Header is intentionally English; do not translate it back during i18n updates.
       miniTitle: "About",
       gitInfo: "Git 仓库信息",
       currentBranch: "当前分支",
+      projectSupport: "项目与支持",
+      developmentEnvironment: {
+        title: "开发环境套件",
+      },
+      updateCheck: {
+        action: "检查更新",
+        checking: "检查中…",
+        availableTitle: "发现新版本",
+        currentTitle: "已是最新版",
+        failureTitle: "检查更新失败",
+        failureDescription: "暂时无法读取 GitHub Tag，请稍后重试。",
+        availableDescription: "GitHub 仓库中有更新的版本 Tag。",
+        currentDescription: "当前应用版本与 GitHub 最新版本 Tag 一致。",
+        currentVersion: "当前版本",
+        latestVersion: "最新版本",
+        viewTag: "查看 GitHub Tag",
+        close: "稍后",
+      },
       fallback: {
         links: {
           author: "作者",
@@ -39,7 +58,7 @@ const settingsPending = {
       microApps: "微应用",
       evaluationCenter: "评测中心",
       development: "开发",
-      mcp: "MCP",
+      mcp: "MCP 市场",
       enterpriseIntegrations: "企业集成",
       integrations: "第三方集成",
       wecom: "企业微信",
@@ -60,6 +79,26 @@ const settingsPending = {
         refresh: "刷新",
         save: "保存",
       },
+      capabilityTags: {
+        basic: "基础",
+        mcp: "MCP",
+        skill: "技能",
+        toolkit: "工具包",
+      },
+      filters: {
+        all: "全部",
+        basic: "基础",
+        mcp: "MCP",
+        skill: "技能",
+        toolkit: "工具包",
+        unclassified: "未分类",
+      },
+      search: {
+        ariaLabel: "搜索微应用",
+        placeholder: "搜索微应用",
+        emptyTitle: "没有匹配的微应用",
+        emptyDescription: "试试其他能力分类或搜索关键词",
+      },
       capabilityBinding: {
         capabilityNames: {
           imageGeneration: "文生图",
@@ -75,7 +114,9 @@ const settingsPending = {
         title: "配置 {{capability}} 服务能力",
         description: "这里只指定当前微应用的服务商。具体配置继续使用对应工作区已有的配置。",
         unconfigured: "未配置",
+        configure: "配置",
         configureAriaLabel: "配置 {{capability}} 服务能力",
+        moreActionsAriaLabel: "{{capability}} 更多操作",
         selectProvider: "请选择服务商",
         cancel: "取消",
         confirm: "确定",
@@ -1205,8 +1246,6 @@ const settingsPending = {
       },
       package: {
         title: "工具包",
-        description:
-          "当前产品能力组下的工具以 tab 方式组织，切换后直接执行对应工具。",
         empty: "当前产品能力组下还没有工具。",
         config: "参数配置",
         argsModalTitle: "工具参数配置",
@@ -1242,8 +1281,8 @@ const settingsPending = {
       },
     },
     mcp: {
-      miniTitle: "MCP",
-      title: "MCP",
+      miniTitle: "MCP Marketplace",
+      title: "MCP 市场",
       description:
         "管理 MCP 市场、第三方 MCP server，以及后续非核心内置 MCP 包。",
       tabs: {
@@ -2118,7 +2157,6 @@ const settingsPending = {
         serverTests: "服务端测试",
         docs: "开发文档",
         apiDocs: "接口文档",
-        baseInformation: "基础信息",
       },
       logs: {
         title: "运行日志",
@@ -2175,10 +2213,6 @@ const settingsPending = {
       apiDocs: {
         title: "接口文档",
         description: "后端 OpenAPI 接口文档，用于对照接口契约与联调。",
-      },
-      baseInformation: {
-        title: "基础信息",
-        description: "应用版本、作者文档与 Git 信息。",
       },
     },
   },

@@ -383,15 +383,20 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
   const providerModelColumns = sqlite.prepare("PRAGMA table_info(provider_models)").all() as Array<{
     name: string;
   }>;
+  const hasProviderModelConnectionId = providerModelColumns.some(
+    (column) => column.name === "provider_connection_id",
+  );
   const providerModelsNeedsRebuild =
     providerModelColumns.length > 0 &&
     (providerConnectionsNeedsRebuild ||
-      !providerModelColumns.some(
-        (column) => column.name === "provider_connection_id",
-      ) ||
+      !hasProviderModelConnectionId ||
       !tableSupportsAllProviderCodes(sqlite, "provider_models"));
 
   if (providerModelsNeedsRebuild) {
+    const legacyProviderConnectionIdExpression = hasProviderModelConnectionId
+      ? "COALESCE(provider_connection_id, provider_code)"
+      : "provider_code";
+
     sqlite.exec("BEGIN");
 
     try {
@@ -422,14 +427,15 @@ const migrateProviderConnectionTables = (sqlite: ReturnType<typeof getSqlite>) =
           synced_at
         )
         SELECT
-          provider_code,
+          ${legacyProviderConnectionIdExpression},
           provider_code,
           remote_model_id,
           model_name,
           raw_payload_json,
           is_active,
           synced_at
-        FROM provider_models_legacy;
+        FROM provider_models_legacy
+        WHERE ${legacyProviderConnectionIdExpression} IS NOT NULL;
 
         DROP TABLE provider_models_legacy;
       `);

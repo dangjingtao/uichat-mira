@@ -87,4 +87,35 @@ describe("Select", () => {
     expect(handleEndAction).toHaveBeenCalledTimes(1);
     expect(handleChange).not.toHaveBeenCalled();
   });
+
+  it("allows the dropdown to grow wider than a narrow trigger", async () => {
+    const user = userEvent.setup();
+    render(
+      <div className="w-24">
+        <Select
+          value="en-US"
+          onChange={() => {}}
+          options={[
+            { value: "en-US", label: "English" },
+            { value: "zh-CN", label: "Simplified Chinese" },
+          ]}
+          compact
+        />
+      </div>,
+    );
+
+    await user.click(screen.getByRole("combobox"));
+
+    const longLabel = await screen.findByText("Simplified Chinese");
+    const viewport = document.querySelector("[data-radix-select-viewport]");
+    const content = viewport?.parentElement;
+    expect(longLabel).toHaveClass("break-words");
+    expect(longLabel).not.toHaveClass("truncate");
+    expect(viewport).toHaveClass("min-w-[var(--radix-select-trigger-width)]");
+    expect(viewport).not.toHaveClass("w-[var(--radix-select-trigger-width)]");
+    expect(content).toHaveClass(
+      "max-w-[var(--radix-select-content-available-width)]",
+    );
+    expect(content).not.toHaveClass("max-w-[var(--radix-select-trigger-width)]");
+  });
 });

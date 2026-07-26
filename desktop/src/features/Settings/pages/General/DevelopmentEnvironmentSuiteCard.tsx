@@ -2,7 +2,7 @@ import { SearchCode } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import Badge from "@/shared/ui/Badge";
-import Card from "@/shared/ui/Card";
+import SectionCard, { SectionCardRow } from "@/shared/ui/SectionCard";
 
 import gitLogo from "./assets/git.svg";
 import nodejsLogo from "./assets/nodejs.svg";
@@ -28,25 +28,15 @@ export default function DevelopmentEnvironmentSuiteCard() {
   const { t } = useTranslation();
 
   return (
-    <Card className="space-y-3">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-semibold text-text-primary">
-          {t("settings.general.developmentEnvironment.title")}
-        </h2>
-        <Badge variant="muted">Windows x64</Badge>
-      </div>
-
-      <div
-        role="list"
-        className="overflow-hidden rounded-ui-panel border border-border/70 bg-surface-secondary/60"
-      >
-        {runtimeTools.map((tool, index) => (
-          <div
+    <SectionCard
+      title={t("settings.about.developmentEnvironment.title")}
+      meta={<Badge variant="muted">Windows x64</Badge>}
+    >
+      <div role="list" className="divide-y divide-border">
+        {runtimeTools.map((tool) => (
+          <SectionCardRow
             key={tool.name}
             role="listitem"
-            className={`flex items-center justify-between gap-4 px-3.5 py-3 ${
-              index > 0 ? "border-t border-border/70" : ""
-            }`}
           >
             <div className="flex min-w-0 items-center gap-2">
               {tool.logo ? (
@@ -69,9 +59,9 @@ export default function DevelopmentEnvironmentSuiteCard() {
             <span className="shrink-0 font-mono text-xs tabular-nums text-text-secondary">
               v{tool.version}
             </span>
-          </div>
+          </SectionCardRow>
         ))}
       </div>
-    </Card>
+    </SectionCard>
   );
 }

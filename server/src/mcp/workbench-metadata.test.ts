@@ -17,6 +17,22 @@ const createBrowserTool = (id: string): McpToolDefinition => ({
   },
 });
 
+const createGitHubTool = (id: string): McpToolDefinition => ({
+  id,
+  title: id,
+  description: id,
+  domain: "github",
+  source: "internal",
+  mode: "sync",
+  inputSchema: {},
+  tags: ["github"],
+  capabilities: {
+    sideEffect: "network",
+    requiresApproval: false,
+    networkAccess: true,
+  },
+});
+
 describe("withWorkbenchMetadata", () => {
   it("projects different capability-owned product groups for the same runtime domain", () => {
     const definitions = [
@@ -70,5 +86,45 @@ describe("withWorkbenchMetadata", () => {
         ownershipDefinitions,
       )[0]?.workbench?.groupId,
     ).toBe("browser_computer_use");
+  });
+
+  it("groups exactly four GitHub domain tools and supplies operation drafts", () => {
+    const projected = withWorkbenchMetadata([
+      createGitHubTool("github_repository"),
+      createGitHubTool("github_issue"),
+      createGitHubTool("github_pull_request"),
+      createGitHubTool("github_actions"),
+    ]);
+
+    expect(projected.every((tool) => tool.workbench?.groupId === "github")).toBe(true);
+    expect(projected[0]?.workbench).toMatchObject({
+      groupLabel: "GitHub",
+      groupOrder: 50,
+      icon: "github",
+      defaultArgs: {
+        operation: "get",
+        repository: "owner/repository",
+        includeReadme: true,
+        commitLimit: 5,
+      },
+    });
+    expect(projected[1]?.workbench?.defaultArgs).toMatchObject({
+      operation: "list",
+      repository: "owner/repository",
+      state: "open",
+      limit: 20,
+    });
+    expect(projected[2]?.workbench?.defaultArgs).toMatchObject({
+      operation: "list",
+      repository: "owner/repository",
+      state: "open",
+      limit: 20,
+    });
+    expect(projected[3]?.workbench?.defaultArgs).toEqual({
+      operation: "list_runs",
+      repository: "owner/repository",
+      limit: 20,
+      page: 1,
+    });
   });
 });

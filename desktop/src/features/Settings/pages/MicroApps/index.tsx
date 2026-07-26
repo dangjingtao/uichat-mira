@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, AudioLines, BookOpen, Boxes, BrainCircuit, FileText, Image, Mail, MonitorSmartphone, Newspaper, PlugZap, Settings, StickyNote } from "lucide-react";
+import Github from "./GithubIcon";
+import NotionIcon from "./NotionIcon";
+import { AudioLines, BookOpen, Boxes, BrainCircuit, ChevronRight, FileText, Image, Mail, MonitorSmartphone, MoreHorizontal, Newspaper, PlugZap, Search, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import Alert from "@/shared/ui/Alert";
+import Badge from "@/shared/ui/Badge";
 import Card from "@/shared/ui/Card";
-import { Skeleton } from "@/shared/ui";
+import DropdownMenu from "@/shared/ui/DropdownMenu";
+import { Button, IconButton, Result, Skeleton, TextInput } from "@/shared/ui";
 import { message } from "@/shared/ui/Message";
 import {
   getIntegrationInstances,
@@ -31,16 +35,19 @@ const featuredStudioEntries = [
     key: "jianXing",
     route: "/settings/micro-apps/jian-xing",
     capability: undefined,
+    capabilityTags: ["toolkit"],
   },
   {
     key: "notion",
     route: "/settings/micro-apps/notion",
     capability: undefined,
+    capabilityTags: ["basic"],
   },
   {
     key: "officeSuite",
     route: "/settings/micro-apps/office-suite",
     capability: undefined,
+    capabilityTags: ["skill"],
     title: "文枢",
     description: "Word、Excel 与 PowerPoint 的本地处理与调试工作台。",
     actionLabel: "打开",
@@ -49,42 +56,58 @@ const featuredStudioEntries = [
     key: "evolvingKnowledge",
     route: "/settings/micro-apps/evolving-knowledge-studio",
     capability: undefined,
+    capabilityTags: [],
   },
   {
     key: "newsHub",
     route: "/settings/micro-apps/news-hub",
     capability: undefined,
+    capabilityTags: ["mcp"],
   },
   {
     key: "mailCenter",
     route: "/settings/micro-apps/mail-center",
     capability: undefined,
+    capabilityTags: ["mcp"],
   },
   {
     key: "computerUse",
     route: "/settings/micro-apps/computer-use-studio",
     capability: undefined,
+    capabilityTags: ["toolkit"],
   },
   {
     key: "imageGeneration",
     route: "/settings/micro-apps/image-generation-studio",
     capability: "imageGeneration",
+    capabilityTags: ["basic"],
   },
   {
     key: "ttsStudio",
     route: "/settings/micro-apps/tts-studio",
     capability: "tts",
+    capabilityTags: ["basic"],
   },
   {
     key: "codeGraph",
     route: "/settings/micro-apps/codegraph-studio",
     capability: undefined,
+    capabilityTags: ["toolkit"],
+  },
+  {
+    key: "github",
+    route: "/settings/micro-apps/github",
+    capability: undefined,
+    capabilityTags: ["toolkit"],
+    title: "GitHub",
+    description: "连接 GitHub，选择 Mira 可以使用的项目，并查看仓库协作与交付状态。",
+    actionLabel: "进入 GitHub",
   },
 ] as const;
 
 const featuredStudioIcons = {
   jianXing: PlugZap,
-  notion: StickyNote,
+  notion: NotionIcon,
   officeSuite: FileText,
   evolvingKnowledge: BrainCircuit,
   newsHub: Newspaper,
@@ -93,10 +116,34 @@ const featuredStudioIcons = {
   imageGeneration: Image,
   ttsStudio: AudioLines,
   codeGraph: Boxes,
+  github: Github,
 } as const;
+
+const capabilityFilters = [
+  "all",
+  "basic",
+  "mcp",
+  "skill",
+  "toolkit",
+  "unclassified",
+] as const;
+
+type CapabilityFilter = (typeof capabilityFilters)[number];
+
+const matchesCapabilityFilter = (
+  tags: readonly string[],
+  filter: CapabilityFilter,
+) => {
+  if (filter === "all") return true;
+  if (filter === "unclassified") return tags.length === 0;
+  return tags.includes(filter);
+};
 
 export default function MicroAppsSettings() {
   const { t } = useTranslation();
+  const [activeFilter, setActiveFilter] = useState<CapabilityFilter>("all");
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [microApps, setMicroApps] = useState<MicroAppRecord[]>([]);
   const [capabilityBindings, setCapabilityBindings] = useState<MicroAppCapabilityBinding[]>([]);
@@ -122,6 +169,34 @@ export default function MicroAppsSettings() {
   useEffect(() => {
     void load();
   }, []);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleStudioEntries = featuredStudioEntries.filter((entry) => {
+    if (!matchesCapabilityFilter(entry.capabilityTags, activeFilter)) return false;
+    if (!normalizedQuery) return true;
+
+    const key = `settings.microApps.studioEntries.${entry.key}` as const;
+    const title = "title" in entry ? entry.title : t(`${key}.title`);
+    const description =
+      "description" in entry ? entry.description : t(`${key}.description`);
+    const tagText = entry.capabilityTags
+      .map((tag) => t(`settings.microApps.capabilityTags.${tag}`))
+      .join(" ");
+
+    return `${title} ${description} ${tagText}`
+      .toLocaleLowerCase()
+      .includes(normalizedQuery);
+  });
+  const showDynamicMicroApps = activeFilter === "all" || activeFilter === "basic";
+  const visibleMicroApps = showDynamicMicroApps
+    ? microApps.filter((microApp) => {
+        if (!normalizedQuery) return true;
+        return `${microApp.name} ${microApp.type} ${t(microAppSummaryKey(microApp))} ${t("settings.microApps.capabilityTags.basic")}`
+          .toLocaleLowerCase()
+          .includes(normalizedQuery);
+      })
+    : [];
+  const hasVisibleMicroApps = visibleStudioEntries.length > 0 || visibleMicroApps.length > 0;
 
   if (loading) {
     return (
@@ -158,18 +233,20 @@ export default function MicroAppsSettings() {
             </Card>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Card key={index} className="p-5">
-                <div className="space-y-4">
+          <div
+            data-testid="micro-apps-loading-grid"
+            className="grid grid-cols-2 gap-4 pb-6 xl:grid-cols-3"
+          >
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Card key={index} padding="none" className="min-h-[132px] overflow-hidden">
+                <div className="p-4">
                   <div className="flex items-start gap-3">
-                    <Skeleton.Circle size={36} className="shrink-0" />
+                    <Skeleton.Circle size={44} className="shrink-0" />
                     <div className="min-w-0 flex-1 space-y-2">
                       <Skeleton height={18} width="52%" />
-                      <Skeleton height={12} width="34%" />
                     </div>
                   </div>
-                  <Skeleton.Text lines={4} lastLineWidth="62%" />
+                  <div className="mt-4"><Skeleton.Text lines={2} lastLineWidth="62%" /></div>
                 </div>
               </Card>
             ))}
@@ -184,16 +261,79 @@ export default function MicroAppsSettings() {
       miniTitle={t("settings.microApps.page.miniTitle")}
       title={t("settings.microApps.page.title")}
       description={t("settings.microApps.page.description")}
-      contentClassName="space-y-6 pt-6"
+      contentClassName="pt-6"
+      scrollBody={false}
     >
-      {microApps.length === 0 ? (
-        <Alert variant="info" title={t("settings.microApps.states.emptyTitle")}>
-          {t("settings.microApps.states.emptyDescription")}
-        </Alert>
-      ) : null}
+      <div className="flex min-h-0 flex-1 flex-col gap-6">
+        {microApps.length === 0 ? (
+          <Alert variant="info" title={t("settings.microApps.states.emptyTitle")}>
+            {t("settings.microApps.states.emptyDescription")}
+          </Alert>
+        ) : null}
 
-      <div data-testid="micro-apps-studio-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {featuredStudioEntries.map((entry) => {
+        <div className="flex min-w-0 shrink-0 items-center gap-3">
+          <div
+            data-testid="micro-apps-capability-filters"
+            className="stable-scrollbar min-w-0 flex-1 overflow-x-auto pb-1"
+          >
+            <div className="flex gap-1">
+              {capabilityFilters.map((filter) => (
+                <Button
+                  key={filter}
+                  type="button"
+                  size="xs"
+                  variant={activeFilter === filter ? "secondary" : "ghost"}
+                  aria-pressed={activeFilter === filter}
+                  className="shrink-0"
+                  onClick={() => setActiveFilter(filter)}
+                >
+                  {t(`settings.microApps.filters.${filter}`)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            data-testid="micro-apps-search-control"
+            className={`h-8 shrink-0 overflow-hidden transition-[width] duration-200 ease-out ${searchOpen ? "w-40" : "w-8"}`}
+          >
+            {searchOpen ? (
+              <TextInput
+                autoFocus
+                ariaLabel={t("settings.microApps.search.ariaLabel")}
+                compact
+                placeholder={t("settings.microApps.search.placeholder")}
+                value={query}
+                onChange={setQuery}
+                onBlur={() => {
+                  if (!query.trim()) setSearchOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") return;
+                  setQuery("");
+                  setSearchOpen(false);
+                }}
+              />
+            ) : (
+              <IconButton
+                ariaLabel={t("settings.microApps.search.ariaLabel")}
+                size="sm"
+                styleType="filled"
+                onClick={() => setSearchOpen(true)}
+              >
+                <Search size={17} />
+              </IconButton>
+            )}
+          </div>
+        </div>
+
+        <div
+          data-testid="micro-apps-results-scroll"
+          className="stable-scrollbar min-h-0 flex-1 overflow-y-auto"
+        >
+          {hasVisibleMicroApps ? (
+          <div data-testid="micro-apps-studio-grid" className="grid grid-cols-2 gap-4 pb-6 xl:grid-cols-3">
+        {visibleStudioEntries.map((entry) => {
           const key = `settings.microApps.studioEntries.${entry.key}` as const;
           const EntryIcon = featuredStudioIcons[entry.key];
           const capability = entry.capability as MicroAppCapabilityCode | undefined;
@@ -208,108 +348,167 @@ export default function MicroAppsSettings() {
             "description" in entry ? entry.description : t(`${key}.description`);
           const actionLabel =
             "actionLabel" in entry ? entry.actionLabel : t(`${key}.actions.open`);
+          const openCapabilityConfiguration = () => {
+            if (!capability) return;
+            openCapabilityBindingModal({
+              capability,
+              title: t("settings.microApps.capabilityBinding.title", {
+                capability: capabilityName,
+              }),
+              currentBinding: binding,
+              onSaved: (nextBinding) => {
+                setCapabilityBindings((current) => [
+                  ...current.filter(
+                    (item) => item.capabilityCode !== capability,
+                  ),
+                  nextBinding,
+                ]);
+              },
+            });
+          };
 
           return (
-            <Card key={entry.route} className="border-border bg-primary/5 p-5">
-              <div className="flex h-full flex-col gap-4 lg:justify-between">
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        data-testid={`studio-entry-icon-${entry.key}`}
-                        className="flex h-9 w-9 items-center justify-center text-icon-secondary"
-                      >
-                        <EntryIcon className="h-4.5 w-4.5" />
-                      </span>
-                      <div className="text-base font-semibold text-text-primary">
-                        {entryTitle}
-                      </div>
-                    </div>
-                    <div className="text-sm leading-6 text-text-secondary">
-                      {entryDescription}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Link
-                    to={entry.route}
-                    className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-ui-control border border-primary/20 bg-transparent px-4 text-sm font-medium text-primary transition-all duration-150 ease-out hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+            <Card
+              key={entry.route}
+              interactive
+              padding="none"
+              data-testid={`studio-entry-card-${entry.key}`}
+              className="group/card relative min-h-[132px] overflow-hidden"
+            >
+              <Link
+                to={entry.route}
+                aria-label={`${actionLabel}：${entryTitle}`}
+                className={`group block h-full w-full p-4 text-left ${capability ? "pr-14" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    data-testid={`studio-entry-icon-${entry.key}`}
+                    className="shrink-0 text-icon-secondary"
                   >
-                    {actionLabel}
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                  {capability ? (
-                    <button
-                      type="button"
-                      aria-label={t("settings.microApps.capabilityBinding.configureAriaLabel", {
-                        capability: capabilityName,
-                      })}
-                      title={t("settings.microApps.capabilityBinding.configureAriaLabel", {
-                        capability: capabilityName,
-                      })}
-                      data-testid={`studio-entry-settings-${entry.key}`}
-                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-ui-control border border-primary/20 bg-transparent text-primary transition-all duration-150 ease-out hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
-                      onClick={() =>
-                        openCapabilityBindingModal({
-                          capability,
-                          title: t("settings.microApps.capabilityBinding.title", {
-                            capability: capabilityName,
-                          }),
-                          currentBinding: binding,
-                          onSaved: (nextBinding) => {
-                            setCapabilityBindings((current) => [
-                              ...current.filter(
-                                (item) => item.capabilityCode !== capability,
-                              ),
-                              nextBinding,
-                            ]);
-                          },
-                        })
-                      }
-                    >
-                      <Settings className="h-4 w-4" />
-                    </button>
+                    <EntryIcon
+                      className={entry.key === "github" ? "h-7 w-7" : "h-[22px] w-[22px]"}
+                    />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pt-0.5">
+                    <h4 className="min-w-0 truncate text-sm font-semibold text-text-primary">
+                      {entryTitle}
+                    </h4>
+                    {entry.capabilityTags.map((tag) => (
+                      <span
+                        key={tag}
+                        data-testid={`studio-entry-capability-${entry.key}-${tag}`}
+                        className="inline-flex shrink-0"
+                      >
+                        <Badge
+                          variant="neutral"
+                          size="sm"
+                          outline
+                          className="!px-1.5 !py-0 text-[10px] leading-4"
+                        >
+                          {t(`settings.microApps.capabilityTags.${tag}`)}
+                        </Badge>
+                      </span>
+                    ))}
+                  </div>
+                  {!capability ? (
+                    <ChevronRight className="h-[17px] w-[17px] shrink-0 text-text-tertiary transition-transform group-hover:translate-x-0.5" />
                   ) : null}
                 </div>
-              </div>
+                <p className="mt-4 line-clamp-2 text-xs leading-5 text-text-secondary">
+                  {entryDescription}
+                </p>
+              </Link>
+
+              {capability ? (
+                <div className="absolute right-3 top-3">
+                  <DropdownMenu
+                    align="end"
+                    sideOffset={4}
+                    trigger={
+                      <button
+                        type="button"
+                        aria-label={t("settings.microApps.capabilityBinding.moreActionsAriaLabel", {
+                          capability: capabilityName,
+                        })}
+                        title={t("settings.microApps.capabilityBinding.moreActionsAriaLabel", {
+                          capability: capabilityName,
+                        })}
+                        data-testid={`studio-entry-menu-${entry.key}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-ui-control bg-surface-secondary text-icon-tertiary opacity-100 transition-all hover:text-icon-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 md:pointer-events-none md:opacity-0 md:group-focus-within/card:pointer-events-auto md:group-focus-within/card:opacity-100 md:group-hover/card:pointer-events-auto md:group-hover/card:opacity-100"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    }
+                    items={[
+                      {
+                        id: "configure",
+                        label: t("settings.microApps.capabilityBinding.configure"),
+                        leadingIcon: <Settings className="h-4 w-4" />,
+                      },
+                    ]}
+                    onSelect={(item) => {
+                      if (item.id === "configure") openCapabilityConfiguration();
+                    }}
+                  />
+                </div>
+              ) : null}
             </Card>
           );
         })}
 
-        {microApps.map((microApp) => {
+        {visibleMicroApps.map((microApp) => {
           return (
             <Link
               key={microApp.id}
               to={`/settings/micro-apps/${microApp.id}`}
-              className="block"
+              className="group block"
               data-testid={`micro-app-card-${microApp.id}`}
             >
-              <Card interactive className="h-full border-border bg-primary/5 p-5">
-                <div className="flex h-full flex-col gap-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-9 w-9 items-center justify-center text-icon-secondary">
-                          <BookOpen className="h-4.5 w-4.5" />
-                        </span>
-                        <div>
-                          <div className="text-base font-semibold text-text-primary">{microApp.name}</div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-sm leading-6 text-text-secondary">
-                          {t(microAppSummaryKey(microApp))}
-                        </div>
-                      </div>
+              <Card interactive padding="none" className="h-full min-h-[132px] overflow-hidden">
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 text-icon-secondary">
+                      <BookOpen className="h-[22px] w-[22px]" />
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 pt-0.5">
+                      <h4 className="min-w-0 truncate text-sm font-semibold text-text-primary">
+                        {microApp.name}
+                      </h4>
+                      <span
+                        data-testid={`micro-app-capability-${microApp.id}-basic`}
+                        className="inline-flex shrink-0"
+                      >
+                        <Badge
+                          variant="neutral"
+                          size="sm"
+                          outline
+                          className="!px-1.5 !py-0 text-[10px] leading-4"
+                        >
+                          {t("settings.microApps.capabilityTags.basic")}
+                        </Badge>
+                      </span>
                     </div>
+                    <ChevronRight className="h-[17px] w-[17px] shrink-0 text-text-tertiary transition-transform group-hover:translate-x-0.5" />
                   </div>
-
+                  <p className="mt-4 line-clamp-2 text-xs leading-5 text-text-secondary">
+                    {t(microAppSummaryKey(microApp))}
+                  </p>
                 </div>
               </Card>
             </Link>
           );
         })}
+          </div>
+          ) : (
+            <Result
+              size="sm"
+              icon={<Search className="h-4 w-4" />}
+              title={t("settings.microApps.search.emptyTitle")}
+              description={t("settings.microApps.search.emptyDescription")}
+              className="pb-6"
+            />
+          )}
+        </div>
       </div>
     </SettingsPageLayout>
   );

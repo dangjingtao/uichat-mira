@@ -3,11 +3,13 @@ import Divider from "@/shared/ui/Divider";
 export default function Header({
   miniTitle,
   title,
+  titleMeta,
   description,
   slot,
 }: {
   miniTitle: string;
   title: string;
+  titleMeta?: React.ReactNode;
   description?: string;
   slot?: React.ReactNode;
 }) {
@@ -18,9 +20,12 @@ export default function Header({
       </div>
       <div className="flex w-full items-start gap-3 sm:gap-4">
         <div className="min-w-0 flex-1 space-y-1">
-          <h3 className="font-serif text-xl font-bold text-text-primary">
-            {title}
-          </h3>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h3 className="font-serif text-xl font-bold text-text-primary">
+              {title}
+            </h3>
+            {titleMeta ? <div className="shrink-0">{titleMeta}</div> : null}
+          </div>
           {description ? (
             <p className="max-w-2xl text-sm leading-6 text-text-secondary">
               {description}

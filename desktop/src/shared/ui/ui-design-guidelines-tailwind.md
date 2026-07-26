@@ -120,6 +120,7 @@
 - `surface-primary`：页面主卡片、输入容器、主体内容底
 - `surface-auth`：登录页、欢迎区、纸感更强的品牌入口背景
 - `surface-secondary`：次一级分区、hover 弱反馈、列表背景切换
+- `surface-soft`：轻微区隔的分区底色；默认暖中性浅色值为 `#F5F0E8`，适合导航选中态等低强度强调
 - `surface-tertiary`：更强一点的区分层，适合禁用轨道、弱分层容器
 - `surface-elevated`：浮层、下拉、Tooltip、Modal 内容承托
 
@@ -206,6 +207,7 @@
 | --- | --- |
 | 页面主背景 / 主容器 | `bg-surface-primary` |
 | 登录页 / 欢迎区主底 | `bg-surface-auth` |
+| 轻微区隔 / 导航选中 | `bg-surface-soft text-text-primary` |
 | 次级容器 / hover | `bg-surface-secondary` |
 | 浮层 / 下拉 / Tooltip | `bg-surface-elevated border-border` |
 | 主标题 / 正文 | `text-text-primary` |
@@ -213,7 +215,7 @@
 | placeholder / 弱提示 | `text-text-tertiary` |
 | 普通边框 | `border-border` |
 | 主按钮 | `bg-primary text-white hover:bg-primary-hover` |
-| 选中项 / 轻强调 | `bg-primary/10 text-primary` |
+| 品牌选中 / 轻强调 | `bg-primary/10 text-primary` |
 | 危险提示 | `border-danger-border bg-danger-soft text-danger-text` |
 | 成功状态 | `border-success-border bg-success-soft text-success-text` |
 | 警告提示 | `border-warning-border bg-warning-soft text-warning-text` |
@@ -385,8 +387,10 @@
 - 输入区优先 `surface-primary`
 - 配置页允许更紧凑密度，但不要牺牲可读性
 - 表单优先复用 `shared/ui` 组件，不要在业务页重复写同一套输入框、文本域、按钮或卡片类名
+- `Select` 触发器可以按布局收窄，但下拉面板必须允许按选项内容扩展，并受可用视口宽度约束
 - 默认设计应相对紧凑，慎用大圆角、厚阴影和大面积卡片堆叠
 - 普通配置面板、浅底分组、虚线空态优先复用共享 `Card` 变体，不要在页面里重复拼装 `rounded + border + bg + shadow`
+- 带标题栏和多行配置的信息组优先使用 `SectionCard + SectionCardRow`：外层只保留一层 `rounded-ui-panel + border + surface`，内容行依靠分隔线组织，不再嵌套第二层卡片壳；分组级操作使用 `SectionCard.action`
 - 工作台类页面允许左右分栏，但左右两侧都应控制信息密度，避免噪音堆积
 - 布尔开关优先使用共享 `Switch`
 - 行内二级操作优先使用共享 `IconButton`

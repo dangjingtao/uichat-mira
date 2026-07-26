@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   Check,
   ChevronRight,
+  Download,
   File,
   FileSpreadsheet,
   FileText,
@@ -104,16 +104,14 @@ const formatMetadataValue = (value: unknown) => {
 
 type SkillView = SkillCatalogItem & {
   icon: SkillIconKind;
-  usePath?: string;
 };
 
 const toSkillView = (skill: SkillCatalogItem): SkillView => {
   const presentation = getSkillPresentation(skill.id);
-  return { ...skill, icon: presentation.icon, usePath: presentation.usePath };
+  return { ...skill, icon: presentation.icon };
 };
 
 export default function SkillsSettings() {
-  const navigate = useNavigate();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [activeCategory, setActiveCategory] = useState("精选技能");
   const [query, setQuery] = useState("");
@@ -203,35 +201,23 @@ export default function SkillsSettings() {
     }
   };
 
-  const useSkill = async (skill: SkillDetail) => {
-    let current = skill;
-    if (["not-installed", "broken"].includes(skill.runtime.status)) {
-      setInstallingSkillId(skill.id);
-      showNotice(skill.runtime.status === "broken" ? "正在修复技能运行环境…" : "正在安装技能运行环境…");
-      try {
-        current = await installSkillRuntime(skill.id);
-        setSelectedSkill(current);
-        await loadCatalog();
-        if (current.runtime.status !== "available") {
-          showNotice(current.runtime.error || "运行环境仍不可用");
-          return;
-        }
-        showNotice("技能运行环境已就绪");
-      } catch (error) {
-        showNotice(error instanceof Error ? error.message : "技能运行环境安装失败");
-        return;
-      } finally {
-        setInstallingSkillId(null);
-      }
+  const installSkill = async (skill: SkillDetail) => {
+    setInstallingSkillId(skill.id);
+    showNotice(skill.runtime.status === "broken" ? "正在修复技能运行环境…" : "正在安装技能运行环境…");
+    try {
+      const installed = await installSkillRuntime(skill.id);
+      setSelectedSkill(installed);
+      await loadCatalog();
+      showNotice(
+        installed.runtime.status === "available"
+          ? "技能运行环境已就绪"
+          : installed.runtime.error || "运行环境仍不可用",
+      );
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "技能运行环境安装失败");
+    } finally {
+      setInstallingSkillId(null);
     }
-
-    const presentation = getSkillPresentation(current.id);
-    if (presentation.usePath) {
-      setSelectedSkill(null);
-      navigate(presentation.usePath);
-      return;
-    }
-    showNotice(`可在聊天中使用 $${current.id} 显式触发「${current.name}」`);
   };
 
   const handleSkillChanged = async (skill: SkillDetail) => {
@@ -338,7 +324,7 @@ export default function SkillsSettings() {
           installing={installingSkillId === selectedSkill.id}
           deleting={deletingSkillId === selectedSkill.id}
           onClose={() => setSelectedSkill(null)}
-          onUse={() => void useSkill(selectedSkill)}
+          onInstall={() => void installSkill(selectedSkill)}
           onChanged={(skill) => void handleSkillChanged(skill)}
           onDelete={() => void handleDelete(selectedSkill)}
           onNotice={showNotice}
@@ -376,7 +362,7 @@ function SkillDetailModal({
   installing,
   deleting,
   onClose,
-  onUse,
+  onInstall,
   onChanged,
   onDelete,
   onNotice,
@@ -385,7 +371,7 @@ function SkillDetailModal({
   installing: boolean;
   deleting: boolean;
   onClose: () => void;
-  onUse: () => void;
+  onInstall: () => void;
   onChanged: (skill: SkillDetail) => void;
   onDelete: () => void;
   onNotice: (message: string) => void;
@@ -502,10 +488,12 @@ function SkillDetailModal({
                 </Button>
               </>
             ) : null}
-            <Button size="xs" variant="secondary" onClick={onUse} disabled={installing || deleting || saving}>
-              {installing ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />}
-              {installing ? "准备环境…" : "去使用"}
-            </Button>
+            {skill.runtime.status === "not-installed" || skill.runtime.status === "broken" ? (
+              <Button size="xs" variant="secondary" onClick={onInstall} disabled={installing || deleting || saving}>
+                {installing ? <LoaderCircle size={14} className="animate-spin" /> : <Download size={14} />}
+                {installing ? "准备环境…" : skill.runtime.status === "broken" ? "修复" : "安装"}
+              </Button>
+            ) : null}
             <IconButton ariaLabel="关闭" size="sm" onClick={onClose}><X size={18} /></IconButton>
           </div>
         </div>

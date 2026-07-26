@@ -31,6 +31,13 @@ const DOMAIN_METADATA: Record<string, WorkbenchPresentation> = {
     groupOrder: 40,
     icon: "terminal",
   },
+  github: {
+    groupLabel: "GitHub",
+    groupDescription:
+      "在 GitHub 官方 installation 授权范围内管理仓库、Issue、Pull Request 与 Actions。",
+    groupOrder: 50,
+    icon: "github",
+  },
 };
 
 const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
@@ -46,6 +53,38 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
   move_path: { path: "", destinationPath: "" },
   web_search: { query: "" },
   news_search: { query: "" },
+  github_repository: {
+    operation: "get",
+    repository: "owner/repository",
+    includeReadme: true,
+    includeLanguages: false,
+    includeBranches: false,
+    commitLimit: 5,
+  },
+  github_issue: {
+    operation: "list",
+    repository: "owner/repository",
+    state: "open",
+    sort: "updated",
+    direction: "desc",
+    limit: 20,
+    page: 1,
+  },
+  github_pull_request: {
+    operation: "list",
+    repository: "owner/repository",
+    state: "open",
+    sort: "updated",
+    direction: "desc",
+    limit: 20,
+    page: 1,
+  },
+  github_actions: {
+    operation: "list_runs",
+    repository: "owner/repository",
+    limit: 20,
+    page: 1,
+  },
   terminal_session: { command: "" },
 };
 
@@ -95,7 +134,9 @@ export const withWorkbenchMetadata = (
         ...(ownership?.presentation ??
           DOMAIN_METADATA[definition.domain] ??
           fallbackDomainMetadata(definition.domain)),
-        ...(DEFAULT_ARGS[definition.id] ? { defaultArgs: DEFAULT_ARGS[definition.id] } : {}),
+        ...(DEFAULT_ARGS[definition.id]
+          ? { defaultArgs: DEFAULT_ARGS[definition.id] }
+          : {}),
       },
     };
   });

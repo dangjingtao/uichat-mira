@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { RouteObject } from "react-router-dom";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
   Blend,
@@ -34,7 +34,6 @@ import DevelopmentClientTestsPage from "@/features/Settings/pages/Development/pa
 import DevelopmentServerTestsPage from "@/features/Settings/pages/Development/pages/ServerTests/index";
 import DevelopmentDocsPage from "@/features/Settings/pages/Development/pages/Docs/index";
 import DevelopmentApiDocsPage from "@/features/Settings/pages/Development/pages/ApiDocs/index";
-import DevelopmentBaseInformationPage from "@/features/Settings/pages/Development/pages/BaseInformation/index";
 import McpSettings from "@/features/Settings/pages/Mcp/index";
 import IntegrationsSettings from "@/features/Settings/pages/Integrations/index";
 import ToolsSettings from "@/features/Settings/pages/Tools/index";
@@ -49,6 +48,7 @@ import TtsStudioPage from "@/features/Settings/pages/MicroApps/Tts";
 import CodeGraphStudioPage from "@/features/Settings/pages/MicroApps/CodeGraph";
 import EvolvingKnowledgeStudioPage from "@/features/Settings/pages/MicroApps/EvolvingKnowledge";
 import NotionMicroAppPage from "@/features/Settings/pages/MicroApps/Notion";
+import GitHubMicroAppPage from "@/features/Settings/pages/MicroApps/GitHub";
 import JianXingPage from "@/features/Settings/pages/MicroApps/JianXing";
 import OfficeSuitePage from "@/features/Settings/pages/MicroApps/OfficeSuite";
 import SkillsSettings from "@/features/Settings/pages/Skills";
@@ -139,6 +139,10 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       {
         path: "notion",
         element: <NotionMicroAppPage />,
+      },
+      {
+        path: "github",
+        element: <GitHubMicroAppPage />,
       },
       {
         path: "office-suite",
@@ -240,7 +244,7 @@ const settingsRouteTree: SettingsRouteConfig[] = [
       },
       {
         path: "base-information",
-        element: <DevelopmentBaseInformationPage />,
+        element: <Navigate to="/settings/about" replace />,
       },
     ],
     nav: {

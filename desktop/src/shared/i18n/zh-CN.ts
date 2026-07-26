@@ -70,7 +70,7 @@ const zhCN = {
       evaluationCenter: "知识评测中心",
       development: "开发",
       developmentLogs: "日志",
-      mcp: "MCP",
+      mcp: "MCP 市场",
       tools: "工具",
       about: "关于",
     },
@@ -582,9 +582,6 @@ const zhCN = {
       account: {
         changePassword: "修改密码",
       },
-      developmentEnvironment: {
-        title: "开发环境套件",
-      },
       proxy: {
         title: "SOCKS5 代理",
         description: "留空 Host 或 Port，就表示当前不启用代理。",
@@ -1042,6 +1039,7 @@ const zhCN = {
         chooseModel: "选择模型",
         openEditor: "编辑参数",
         viewDetails: "查看详情",
+        moreActionsAriaLabel: "{{model}} 更多操作",
         editInDialogHint: "主页只展示摘要，点击按钮后在弹窗里调整参数。",
         viewInDialogHint: "主页只展示摘要，点击按钮后在弹窗里查看当前生效配置。",
       },

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Boxes, MoreHorizontal, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/shared/ui/Button";
+import DropdownMenu from "@/shared/ui/DropdownMenu";
 import { NumberInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
@@ -613,29 +615,60 @@ const ModelConfig: React.FC<ModelConfigProps> = ({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={openModelSelector}>
-            {t("settings.model.config.chooseModel")}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={openEditor}>
-            {readOnly
-              ? t("settings.model.config.viewDetails")
-              : t("settings.model.config.openEditor")}
-          </Button>
-        </div>
-      </div>
+        <DropdownMenu
+          align="end"
+          sideOffset={4}
+          trigger={
+            <button
+              type="button"
+              aria-label={t("settings.model.config.moreActionsAriaLabel", {
+                model: t(meta.titleKey),
+              })}
+              title={t("settings.model.config.moreActionsAriaLabel", {
+                model: t(meta.titleKey),
+              })}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-ui-control text-icon-tertiary transition-colors hover:bg-surface-secondary hover:text-icon-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          }
+          items={[
+            {
+              id: "choose-model",
+              label: t("settings.model.config.chooseModel"),
+              leadingIcon: <Boxes className="h-4 w-4" />,
+            },
+            {
+              id: "open-details",
+              label: readOnly
+                ? t("settings.model.config.viewDetails")
+                : t("settings.model.config.openEditor"),
+              leadingIcon: <SlidersHorizontal className="h-4 w-4" />,
+            },
+          ]}
+          onSelect={(item) => {
+            if (item.id === "choose-model") {
+              openModelSelector();
+              return;
+            }
 
-      <div className="mt-3">
-        <SettingsStatBlock
-          label={t("settings.model.config.connectionLabel", {
-            provider: providerLabel,
-          })}
-          value={modelLabel}
-          size="sm"
+            if (item.id === "open-details") openEditor();
+          }}
         />
       </div>
 
-      <div className="mt-2 text-xs leading-5 text-text-secondary">
+      <div data-testid="model-config-summary" className="mt-3 min-w-0">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
+          {t("settings.model.config.connectionLabel", {
+            provider: providerLabel,
+          })}
+        </div>
+        <div className="mt-1 truncate text-sm font-medium text-text-primary">
+          {modelLabel}
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-border pt-2 text-xs leading-5 text-text-secondary">
         {t(meta.subtitleKey)}
       </div>
     </div>

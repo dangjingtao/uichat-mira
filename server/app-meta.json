@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/dangjingtao/uichat-mira.git"
   },
-  "homepage": "https://github.com/dangjingtao/uichat-mira",
+  "homepage": "https://tomz.io",
   "appMeta": {
     "displayName": "UIChat Mira",
     "links": [
@@ -22,9 +22,9 @@
         "href": "https://github.com/dangjingtao/uichat-mira"
       },
       {
-        "label": "项目主页",
-        "value": "https://github.com/dangjingtao/uichat-mira",
-        "href": "https://github.com/dangjingtao/uichat-mira"
+        "label": "官方文档",
+        "value": "https://tomz.io",
+        "href": "https://tomz.io"
       },
       {
         "label": "组件文档",
@@ -33,16 +33,16 @@
       }
     ],
     "git": {
-      "branch": "dev",
+      "branch": "codex/feature-20260725",
       "versions": [
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "5535a1d66efad24ed4ef4bee09ec0f05fd3221b4",
-            "shortHash": "5535a1d",
-            "message": "test(agent): smoke default Pi skill ownership path",
+            "hash": "bef2c7a78330329adee2011a29efabdcef32354c",
+            "shortHash": "bef2c7a",
+            "message": "test: lock Harness to four GitHub domain tools",
             "author": "DangJingtao",
-            "date": "2026-07-24T16:43:18+08:00"
+            "date": "2026-07-26T04:32:46+08:00"
           }
         },
         {
