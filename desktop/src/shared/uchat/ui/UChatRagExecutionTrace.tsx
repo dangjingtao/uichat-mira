@@ -240,7 +240,7 @@ export function UChatExecutionTrace({
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
               {approvalTraceState === null ? (
-                <span aria-hidden="true" className="hidden">
+                <span className="hidden text-[11px] text-text-tertiary sm:inline">
                   {t("chat.executionTrace.stepCount", {
                     completed: completedCount,
                     total: displaySteps.length,
@@ -266,7 +266,7 @@ export function UChatExecutionTrace({
           >
             <div className="min-h-0">
               <div className="mt-1 border-t border-border/50 pt-1.5">
-                {displaySteps.map((step) => {
+                {displaySteps.map((step, index) => {
                   const display = getDisplayExecutionStep(step);
                   const subAgentTrace = isSubAgentTraceStep(step);
                   const effectivePhase =
@@ -308,7 +308,7 @@ export function UChatExecutionTrace({
                       }`}
                     >
                       <div
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
                           effectivePhase === "error"
                             ? "bg-rose-500/10 text-rose-600"
                             : effectivePhase === "start"
@@ -316,11 +316,11 @@ export function UChatExecutionTrace({
                               : "bg-[rgba(var(--color-primary),0.10)] text-primary"
                         }`}
                       >
-                        <StatusIcon
-                          className={`h-3 w-3 ${
-                            effectivePhase === "start" ? "animate-spin" : ""
-                          }`}
-                        />
+                        {effectivePhase === "start" ? (
+                          <LoaderCircle className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <span>{index + 1}</span>
+                        )}
                       </div>
                       <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden">
                         <p className="shrink-0 text-[13px] font-medium text-text-primary">
@@ -335,9 +335,20 @@ export function UChatExecutionTrace({
                           </>
                         ) : null}
                       </div>
-                      {clickable ? (
-                        <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-text-tertiary" />
-                      ) : null}
+                      <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5">
+                        <StatusIcon
+                          className={`h-3.5 w-3.5 ${
+                            effectivePhase === "start"
+                              ? "animate-spin text-text-tertiary"
+                              : effectivePhase === "error"
+                                ? "text-danger-text"
+                                : "text-text-tertiary"
+                          }`}
+                        />
+                        {clickable ? (
+                          <ChevronRight className="h-3.5 w-3.5 text-text-tertiary" />
+                        ) : null}
+                      </div>
                     </button>
                   );
                 })}
