@@ -1,0 +1,38 @@
+name: A19 Merge Verification
+
+on:
+  pull_request:
+    branches:
+      - tmp/local-node-test-base-20260726
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: MiraDocs test diagnostics
+        shell: bash
+        run: |
+          set +e
+          pnpm --filter @ui-chat-mira/server test -- src/skills/miradocs-skill.test.ts --reporter=verbose --no-color > /tmp/miradocs-test.log 2>&1
+          status=$?
+          echo '----- MiraDocs Vitest tail -----'
+          tail -n 160 /tmp/miradocs-test.log
+          exit "$status"
