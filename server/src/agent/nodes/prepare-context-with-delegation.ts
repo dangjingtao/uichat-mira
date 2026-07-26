@@ -1,4 +1,7 @@
-import { withGenericTaskDelegationTool } from "../delegation/contract.js";
+import {
+  createGenericTaskResumeExposure,
+  withGenericTaskDelegationTool,
+} from "../delegation/contract.js";
 import type {
   AgentNodeState,
   EmitAgentExecutionNode,
@@ -70,7 +73,14 @@ const resumeGenericTaskSubAgent = async (
   const preparedState: AgentNodeState = { ...state, ...prepared };
   if (preparedState.errorMessage) return prepared;
 
-  const delegated = await forkedSkillAgentNode(preparedState, emit);
+  const resumeState: AgentNodeState = {
+    ...preparedState,
+    toolExposure: createGenericTaskResumeExposure({
+      currentExposure: preparedState.toolExposure,
+      pendingToolCall: state.pendingToolCall,
+    }),
+  };
+  const delegated = await forkedSkillAgentNode(resumeState, emit);
   const observation = delegated.pendingEvidenceObservation;
   if (!observation) {
     return {
@@ -82,7 +92,7 @@ const resumeGenericTaskSubAgent = async (
     };
   }
 
-  const delegatedState: AgentNodeState = { ...preparedState, ...delegated };
+  const delegatedState: AgentNodeState = { ...resumeState, ...delegated };
   const evidence = await evidenceNode(delegatedState, emit);
   const committed: Partial<AgentNodeState> = {
     ...prepared,
