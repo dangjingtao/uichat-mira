@@ -51,8 +51,7 @@ const SEMANTIC_HINTS: Record<string, Array<{ pattern: RegExp; weight: number; la
       label: "MiraDocs product",
     },
     {
-      pattern:
-        /(?:建|创建|初始化|搭建).{0,12}(?:文档站|博客站|个人博客)|(?:文档站|博客站).{0,8}(?:建|创建|初始化|搭建)/i,
+      pattern: /(?:建|创建|初始化|搭建).{0,12}(?:文档站|博客站|个人博客)/i,
       weight: 0.9,
       label: "MiraDocs site creation",
     },
