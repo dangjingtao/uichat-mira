@@ -23,6 +23,51 @@ const childEnv = skipTests
   ? { ...process.env, UICHAT_MIRA_SKIP_TESTS: "1" }
   : process.env;
 
+function readTestValidation(scope) {
+  if (skipTests) {
+    return {
+      status: "skipped",
+      totalTests: 0,
+      failedTests: 0,
+      totalSuites: 0,
+      failedSuites: 0,
+    };
+  }
+
+  const reportPath = path.join(
+    artifactsRoot,
+    "server-bundle",
+    `${scope}-coverage`,
+    "test-report.json",
+  );
+  if (!fs.existsSync(reportPath)) {
+    throw new Error(`Missing ${scope} release test report: ${reportPath}`);
+  }
+
+  const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+  const summary = report.summary ?? {};
+  const validation = {
+    status:
+      summary.success === true &&
+      Number(summary.failedTests ?? 0) === 0 &&
+      Number(summary.failedSuites ?? 0) === 0
+        ? "passed"
+        : "failed",
+    totalTests: Number(summary.totalTests ?? 0),
+    failedTests: Number(summary.failedTests ?? 0),
+    totalSuites: Number(summary.totalSuites ?? 0),
+    failedSuites: Number(summary.failedSuites ?? 0),
+  };
+
+  if (validation.status !== "passed") {
+    throw new Error(
+      `${scope} release tests failed: ${validation.failedTests} failed tests across ${validation.failedSuites} failed suites.`,
+    );
+  }
+
+  return validation;
+}
+
 console.log("=== Release Factory: build shared Windows payload ===");
 console.log(`Project root: ${projectRoot}`);
 console.log(`Payload root: ${payloadRoot}`);
@@ -32,10 +77,24 @@ runPnpm(["version:sync"], {
   cwd: projectRoot,
   env: childEnv,
 });
+runPnpm(["check"], {
+  cwd: projectRoot,
+  env: childEnv,
+});
 runPnpm(["internal:prepare:desktop-artifacts"], {
   cwd: projectRoot,
   env: childEnv,
 });
+
+const validation = {
+  typecheck: {
+    status: "passed",
+  },
+  tests: {
+    client: readTestValidation("client"),
+    server: readTestValidation("server"),
+  },
+};
 
 removePath(payloadRoot);
 fs.mkdirSync(payloadRoot, { recursive: true });
@@ -94,8 +153,8 @@ if (copiedModels) {
   );
 }
 
-const manifest = writePayloadManifest();
-verifyPayload();
+const manifest = writePayloadManifest(validation);
+verifyPayload({ allowSkippedTests: skipTests });
 
 console.log(
   `Shared Windows payload ready: ${manifest.totalFiles} files, ${manifest.totalBytes} bytes.`,
