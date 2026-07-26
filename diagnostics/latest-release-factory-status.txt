@@ -1,10 +1,11 @@
-Target SHA: 592545ab0384fab30dade7b5a8241ec7fac8988d
+Target SHA: 1fe3610646018666b3a6f2aa2af70962bcef7a49
 Run count: 1
 
-run_id: 30194393634
+run_id: 30214932209
 name: Release Factory V2 Validation
 event: push
 status: in_progress
 conclusion: None
-head_branch: feature/release-factory-v2
-html_url: https://github.com/dangjingtao/uichat-mira/actions/runs/30194393634
+url: https://github.com/dangjingtao/uichat-mira/actions/runs/30214932209
+  job 89827422191: Validate typecheck and tests in hostile Windows path | in_progress | None
+
