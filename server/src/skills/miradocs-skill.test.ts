@@ -4,10 +4,22 @@ import { describe, expect, it } from "vitest";
 import { extendedRepositorySchema } from "../mcp/tools/github-repository-extended.tool.js";
 import { SkillLoader } from "./context/loader.js";
 import { SkillMatcher } from "./context/matcher.js";
-import { SkillScanner } from "./context/scanner.js";
+import { SkillContextProvider } from "./context/provider.js";
+import { SkillRegistry, SkillScanner } from "./context/scanner.js";
 import type { SkillManifest } from "./context/types.js";
 
 const skillsRoot = path.dirname(fileURLToPath(import.meta.url));
+
+const MIRADOCS_ALLOWED_TOOLS = [
+  "read_discover",
+  "read_open",
+  "edit_file",
+  "terminal_session",
+  "web_search",
+  "github_repository",
+  "github_pull_request",
+  "github_actions",
+];
 
 const loadMiraDocsManifest = async () => {
   const manifests = await new SkillScanner().scan([skillsRoot]);
@@ -43,12 +55,41 @@ describe("MiraDocs canonical Skill", () => {
       version: "0.1.0",
       source: "Mira Lab",
       category: "工程研发",
+      execution: {
+        context: "fork",
+        agent: "miradocs",
+        allowedTools: MIRADOCS_ALLOWED_TOOLS,
+        runtimeBindings: [],
+      },
     });
     expect(manifest.description).toContain("创建 MiraDocs 站点");
     expect(manifest.description).toContain("发布博客或文档");
     expect(manifest.description).toContain("维护已有站点");
     expect(manifest.entry.replaceAll("\\", "/")).toContain(
       "/skills/development/miradocs/SKILL.md",
+    );
+  });
+
+  it("projects the fork execution allowlist into SkillContext", async () => {
+    const manifest = await loadMiraDocsManifest();
+    const registry = new SkillRegistry({
+      scan: async () => [manifest],
+    } as SkillScanner);
+    const provider = new SkillContextProvider(registry);
+
+    const context = await provider.prepare({
+      query: "帮我建一个 MiraDocs 文档站",
+      messages: [],
+    });
+
+    expect(context?.primary?.execution).toEqual({
+      context: "fork",
+      agent: "miradocs",
+      allowedTools: MIRADOCS_ALLOWED_TOOLS,
+      runtimeBindings: [],
+    });
+    expect(context?.instruction).toContain(
+      "primary.execution.allowedTools is the bounded tool requirement and allowlist",
     );
   });
 
@@ -63,6 +104,7 @@ describe("MiraDocs canonical Skill", () => {
     expect(content.body).toContain("V1 只做创建站点、发布博客或文档、维护已有站点");
     expect(content.body).toContain("不加入项目、里程碑、任务、决策或风险产品模型");
     expect(content.body).toContain("不修改 Main Agent、Planner、Agent Graph、Harness 审批或 C contract");
+    expect(content.body).toContain("execution.allowedTools");
     expect(resources.map((resource) => resource.uri).sort()).toEqual([
       "skill://miradocs/examples/conversations.md",
       "skill://miradocs/references/create-site.md",
