@@ -109,6 +109,21 @@ try {
 
 copyRequired(bundleRoot, outputRoot, "Tauri bundle outputs");
 
+if (!manifest.releaseEligible) {
+  fs.writeFileSync(
+    path.join(outputRoot, "DIAGNOSTIC_ONLY.txt"),
+    [
+      "UIChat Mira diagnostic Tauri package",
+      "",
+      "This package was produced to validate the packaging pipeline.",
+      "It is not eligible for publication because product validation did not fully pass.",
+      `Version: ${manifest.version}`,
+      `Commit: ${manifest.gitCommit}`,
+      "",
+    ].join("\n"),
+  );
+}
+
 const outputs = listFilesRecursive(outputRoot);
 const installers = outputs.filter((file) =>
   /\.(msi|exe)$/i.test(file.relativePath),
