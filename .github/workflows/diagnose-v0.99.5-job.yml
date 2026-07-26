@@ -1,4 +1,4 @@
-name: Lint Release Factory Speed Workflow
+name: Smoke Release Factory Speed Scripts
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  lint-workflow:
+  smoke-speed-scripts:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout diagnostic branch
@@ -23,28 +23,64 @@ jobs:
           ref: wip/release-factory-speed
           path: speed-source
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Install actionlint
         shell: bash
         run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
 
-      - name: Lint optimized workflow
+      - name: Run static and manifest smoke checks
         shell: bash
         run: |
-          set +e
-          ./actionlint -no-color speed-source/.github/workflows/release-factory-v2.yml > actionlint-output.txt 2>&1
-          exit_code=$?
-          set -e
-          {
-            echo "actionlint_exit_code: ${exit_code}"
-            echo
-            cat actionlint-output.txt
-          } > diagnostics/release-factory-speed-actionlint.txt
+          set -euo pipefail
+          cd speed-source
 
-      - name: Commit lint result
+          ../actionlint -no-color .github/workflows/release-factory-v2.yml
+          node --check scripts/release/run-test-scope.mjs
+          node --check scripts/release/combine-validation.mjs
+          node --check scripts/release/assemble-payload.mjs
+
+          root='.artifacts/release-validation/windows-x64'
+          mkdir -p "$root/fragments" "$root/reports/client" "$root/reports/server"
+          printf '%s\n' '{"status":"passed"}' > "$root/fragments/typecheck.json"
+          printf '%s\n' '{"status":"passed","detail":"smoke","testArtifactDirectories":"passed","pythonOfficeDependencies":"passed","pdfTextExtractor":"passed"}' > "$root/fragments/environment.json"
+          for scope in client server; do
+            cat > "$root/reports/$scope/test-report.json" <<JSON
+          {
+            "schemaVersion": 1,
+            "scope": "$scope",
+            "summary": {
+              "success": true,
+              "totalTests": 1,
+              "passedTests": 1,
+              "failedTests": 0,
+              "totalSuites": 1,
+              "passedSuites": 1,
+              "failedSuites": 0
+            },
+            "suites": []
+          }
+          JSON
+            printf '%s\n' '{"schemaVersion":1,"available":false,"summary":{},"files":[]}' > "$root/reports/$scope/coverage-report.json"
+          done
+
+          GITHUB_SHA='smoke-release-speed' node scripts/release/combine-validation.mjs
+          node -e "const m=require('fs').readFileSync('$root/validation.json','utf8'); const v=JSON.parse(m); if(!v.releaseEligible) process.exit(1);"
+
+          {
+            echo 'actionlint: passed'
+            echo 'node syntax: passed'
+            echo 'validation combine: passed'
+          } > ../diagnostics/release-factory-speed-smoke.txt
+
+      - name: Commit smoke result
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add diagnostics/release-factory-speed-actionlint.txt
-          git commit -m 'chore: lint release speed workflow [skip ci]'
+          git add diagnostics/release-factory-speed-smoke.txt
+          git commit -m 'chore: smoke release speed scripts [skip ci]'
           git push
