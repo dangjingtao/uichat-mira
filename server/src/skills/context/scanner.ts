@@ -112,12 +112,15 @@ export const resolveSkillRootCandidates = () => {
   const configured = process.env.MIRA_SKILLS_ROOT?.trim();
   const entryDir = process.argv[1] ? path.dirname(path.resolve(process.argv[1])) : null;
 
+  // System/package roots are scanned before the user root so an installed user
+  // package cannot shadow an official/external Skill identity merely by reusing
+  // its id. User packages remain fully discoverable when their id is unique.
   return unique([
     configured ? path.resolve(configured) : null,
-    resolveUserSkillsRoot(),
     entryDir ? path.join(entryDir, "skills") : null,
     path.join(process.cwd(), "src", "skills"),
     path.join(process.cwd(), "server", "src", "skills"),
+    resolveUserSkillsRoot(),
   ]);
 };
 
@@ -157,8 +160,11 @@ const resolveOrigin = (input: {
   userInstalled: boolean;
   builtIn: boolean;
 }): SkillPackageOrigin => {
-  if (input.builtIn) return "built-in";
-  return input.userInstalled ? "user" : "external";
+  // Files under the user root are always user content, even when they reuse a
+  // built-in id. Built-in fallback metadata must never grant a user package a
+  // private Runtime or system provenance.
+  if (input.userInstalled) return "user";
+  return input.builtIn ? "built-in" : "external";
 };
 
 const resolveExecution = (input: {
@@ -209,7 +215,9 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
   }
 
   const frontmatter = parseFrontmatter(manifestWindow);
-  const fallback = getBuiltInSkillPackage(candidate.directoryId);
+  const fallback = candidate.userInstalled
+    ? undefined
+    : getBuiltInSkillPackage(candidate.directoryId);
   const visibility = String(frontmatter.visibility || "").trim().toLowerCase();
 
   if (BLOCKED_VISIBILITIES.has(visibility)) return null;
