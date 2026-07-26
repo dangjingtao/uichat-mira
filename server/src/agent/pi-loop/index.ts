@@ -299,17 +299,19 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
           }
         }
 
+        const preparedAction = state.nextAction;
+
         // A completed subAgent returns a frozen Parent finalization packet from
         // prepareContext. Task-local construction is already done: go straight
         // to Generate instead of handing control back to Main Planner.
-        if (state.nextAction?.type === "answer" && state.finalizationPacket) {
+        if (preparedAction?.type === "answer" && state.finalizationPacket) {
           return finishRunWithAnswer(state, emit);
         }
 
         // needs_input is also a terminal subAgent handoff for this turn. Generate
         // already has a deterministic ask_user path, so Main Planner must not
         // rewrite the Skill/Flow-authored question or take construction ownership.
-        if (state.nextAction?.type === "ask_user") {
+        if (preparedAction?.type === "ask_user") {
           return finishRunWithAnswer(state, emit);
         }
 
