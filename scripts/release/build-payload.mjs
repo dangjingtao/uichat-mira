@@ -36,6 +36,17 @@ const externalValidationPath = configuredValidationPath
   : null;
 
 const explicitlySkipTests = process.argv.includes("--notest");
+const allowFailedValidation =
+  process.argv.includes("--allow-failed-validation") ||
+  ["1", "true"].includes(
+    process.env.MIRA_RELEASE_ALLOW_FAILED_TESTS?.trim().toLowerCase() ?? "",
+  );
+if (allowFailedValidation && !externalValidationPath) {
+  throw new Error(
+    "Diagnostic payloads require an external validation manifest.",
+  );
+}
+
 const prepareWithoutTests = explicitlySkipTests || Boolean(externalValidationPath);
 const childEnv = prepareWithoutTests
   ? { ...process.env, UICHAT_MIRA_SKIP_TESTS: "1" }
@@ -83,6 +94,7 @@ console.log(`Project root: ${projectRoot}`);
 console.log(`Payload root: ${payloadRoot}`);
 console.log(`External validation: ${externalValidationPath ?? "none"}`);
 console.log(`Explicitly skip tests: ${explicitlySkipTests}`);
+console.log(`Allow failed validation: ${allowFailedValidation}`);
 
 runPnpm(["version:sync"], {
   cwd: projectRoot,
@@ -93,10 +105,11 @@ let validation;
 if (externalValidationPath) {
   const validationManifest = readAndVerifyValidationManifest(
     externalValidationPath,
+    { allowFailedTests: allowFailedValidation },
   );
   validation = validationManifest.validation;
   console.log(
-    `Accepted release validation for ${validationManifest.version} at ${validationManifest.gitCommit}.`,
+    `Accepted release validation for ${validationManifest.version} at ${validationManifest.gitCommit}; releaseEligible=${validationManifest.releaseEligible}.`,
   );
 } else {
   runPnpm(["check"], {
@@ -184,8 +197,11 @@ if (copiedModels) {
 const manifest = writePayloadManifest(validation);
 verifyPayload({
   allowSkippedTests: explicitlySkipTests && !externalValidationPath,
+  allowFailedTests: allowFailedValidation,
+  requireReleaseEligible:
+    !explicitlySkipTests && !allowFailedValidation,
 });
 
 console.log(
-  `Shared Windows payload ready: ${manifest.totalFiles} files, ${manifest.totalBytes} bytes.`,
+  `Shared Windows payload ready: ${manifest.totalFiles} files, ${manifest.totalBytes} bytes, releaseEligible=${manifest.releaseEligible}.`,
 );
