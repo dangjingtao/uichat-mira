@@ -15,10 +15,94 @@ permissions:
   contents: read
 
 jobs:
-  build-windows-payload:
-    name: Build shared payload in hostile Windows path
+  validate-windows-release:
+    name: Validate typecheck and tests in hostile Windows path
     runs-on: windows-2022
-    timeout-minutes: 90
+    timeout-minutes: 50
+    env:
+      MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
+      CI: 'true'
+    steps:
+      - name: Checkout source snapshot
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Stage repository into hostile Windows path
+        shell: pwsh
+        run: |
+          $validationParent = Split-Path -Parent $env:MIRA_VALIDATION_ROOT
+          if (Test-Path -LiteralPath $validationParent) {
+            Remove-Item -LiteralPath $validationParent -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $env:MIRA_VALIDATION_ROOT | Out-Null
+
+          $sourceArchive = Join-Path $env:RUNNER_TEMP 'mira-release-validation-source.zip'
+          if (Test-Path -LiteralPath $sourceArchive) {
+            Remove-Item -LiteralPath $sourceArchive -Force
+          }
+
+          git archive --format=zip --output=$sourceArchive HEAD
+          Expand-Archive -LiteralPath $sourceArchive -DestinationPath $env:MIRA_VALIDATION_ROOT -Force
+          Write-Host "Validation root: $env:MIRA_VALIDATION_ROOT"
+
+      - name: Install validation dependencies
+        shell: pwsh
+        run: pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
+
+      - name: Run strict shared release validation
+        shell: pwsh
+        run: pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:validate:win
+
+      - name: Publish validation summary
+        if: always()
+        shell: pwsh
+        run: |
+          $manifestPath = Join-Path $env:MIRA_VALIDATION_ROOT '.artifacts\release-validation\windows-x64\validation.json'
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            '### Windows Release Validation`n`nValidation manifest was not produced.' |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 0
+          }
+
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          @"
+          ### Windows Release Validation
+
+          - Version: `$($manifest.version)`
+          - Commit: `$($manifest.gitCommit)`
+          - Typecheck: `$($manifest.validation.typecheck.status)`
+          - Client tests: `$($manifest.validation.tests.client.status)` (`$($manifest.validation.tests.client.failedTests)` / `$($manifest.validation.tests.client.totalTests)` failed)
+          - Server tests: `$($manifest.validation.tests.server.status)` (`$($manifest.validation.tests.server.failedTests)` / `$($manifest.validation.tests.server.totalTests)` failed)
+          - Source path: hostile Windows path with Chinese, spaces, and `&`
+          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-windows-x64-${{ github.sha }}
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-validation\windows-x64'
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
+
+  build-windows-payload:
+    name: Build payload from frozen validation evidence
+    needs: validate-windows-release
+    runs-on: windows-2022
+    timeout-minutes: 75
     env:
       MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
       LOCAL_MODEL_RAW_ROOT: 'D:\Mira 构建验证\binary-cache\local-models'
@@ -38,7 +122,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Stage repository into hostile Windows path
@@ -50,16 +134,14 @@ jobs:
           }
           New-Item -ItemType Directory -Force -Path $env:MIRA_VALIDATION_ROOT | Out-Null
 
-          $sourceArchive = Join-Path $env:RUNNER_TEMP 'mira-release-factory-source.zip'
+          $sourceArchive = Join-Path $env:RUNNER_TEMP 'mira-release-payload-source.zip'
           if (Test-Path -LiteralPath $sourceArchive) {
             Remove-Item -LiteralPath $sourceArchive -Force
           }
 
           git archive --format=zip --output=$sourceArchive HEAD
           Expand-Archive -LiteralPath $sourceArchive -DestinationPath $env:MIRA_VALIDATION_ROOT -Force
-
-          Write-Host "Validation root: $env:MIRA_VALIDATION_ROOT"
-          Get-ChildItem -LiteralPath $env:MIRA_VALIDATION_ROOT | Select-Object -First 10
+          Write-Host "Payload build root: $env:MIRA_VALIDATION_ROOT"
 
       - name: Cache Terminal Dev Runtime
         uses: actions/cache@v4
@@ -87,11 +169,17 @@ jobs:
           restore-keys: |
             windows-release-factory-models-
 
-      - name: Install workspace dependencies in hostile path
+      - name: Install packaging dependencies
         shell: pwsh
         run: |
           pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
           npm ci --prefix "$env:MIRA_VALIDATION_ROOT\mira-clipper-ext" --ignore-scripts
+
+      - name: Download frozen validation evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: release-validation-windows-x64-${{ github.sha }}
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-validation\windows-x64'
 
       - name: Configure clipper extension signing key
         shell: pwsh
@@ -106,22 +194,11 @@ jobs:
             [System.Text.UTF8Encoding]::new($false)
           )
 
-      - name: Build and verify shared release payload
+      - name: Build shared payload without repeating tests
         shell: pwsh
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          $logPath = Join-Path $env:RUNNER_TEMP 'release-payload-build.log'
-          & pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win *> $logPath
-          $exitCode = $LASTEXITCODE
-
-          if ($exitCode -ne 0) {
-            Write-Host '=== Release payload failure tail ==='
-            Get-Content -LiteralPath $logPath -Tail 220
-            exit $exitCode
-          }
-
-          Get-Content -LiteralPath $logPath -Tail 80
+        run: pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:validated
 
       - name: Publish payload summary
         shell: pwsh
@@ -138,7 +215,7 @@ jobs:
           - Typecheck: `$($manifest.validation.typecheck.status)`
           - Client tests: `$($manifest.validation.tests.client.status)`
           - Server tests: `$($manifest.validation.tests.server.status)`
-          - Source path: hostile Windows path with Chinese, spaces, and `&`
+          - Tests repeated during packaging: `no`
           - Publishing: disabled
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
@@ -163,7 +240,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Download frozen shared payload
         uses: actions/download-artifact@v4
@@ -191,7 +268,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Cache Electron builder
@@ -244,7 +321,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install Rust toolchain
