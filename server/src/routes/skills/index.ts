@@ -114,6 +114,13 @@ const resolveRuntimeSnapshot = async (skills: SkillCatalogSummary[]) =>
     ? await loadWenshuRuntimeSnapshot()
     : undefined;
 
+const getProtectedSkillIds = async () =>
+  new Set(
+    (await listSkillCatalogSummaries())
+      .filter((skill) => skill.origin !== "user")
+      .map((skill) => skill.id),
+  );
+
 const invalidateSkillDiscovery = () => {
   getDefaultSkillRegistry().invalidate();
   getDefaultSkillContextProvider().invalidate();
@@ -150,11 +157,18 @@ const skillsRoutes: FastifyPluginAsync = async (app) => {
       }
       const buffer = await upload.toBuffer();
       if (buffer.byteLength === 0) throw badRequest("Markdown 文件内容为空");
+      const protectedSkillIds = await getProtectedSkillIds();
       try {
         const imported = await importMarkdownSkill({
           fileName: upload.filename,
           content: buffer.toString("utf8"),
         });
+        if (protectedSkillIds.has(imported.id)) {
+          await deleteUserSkill(imported.entry);
+          throw new Error(
+            `Skill id ${imported.id} is reserved by a system-installed Skill`,
+          );
+        }
         invalidateSkillDiscovery();
         const detail = await getSkillCatalogDetail(imported.id);
         if (!detail) throw new Error("Imported Skill could not be rediscovered");
@@ -230,6 +244,10 @@ const skillsRoutes: FastifyPluginAsync = async (app) => {
           if (detail.origin !== "user") {
             throw badRequest("Only user-imported Skills can be disabled");
           }
+        } else if ((await getProtectedSkillIds()).has(request.params.id)) {
+          throw badRequest(
+            `Skill id ${request.params.id} is now reserved by a system-installed Skill`,
+          );
         }
 
         try {
