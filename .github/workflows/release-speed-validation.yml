@@ -77,6 +77,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+          include-hidden-files: true
       - name: Enforce shard
         if: always()
         shell: pwsh
@@ -114,6 +115,7 @@ jobs:
           path: .artifacts/release-validation/windows-x64/reports/client
           if-no-files-found: warn
           retention-days: 1
+          include-hidden-files: true
       - name: Enforce merge
         if: always()
         shell: pwsh
@@ -191,6 +193,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+          include-hidden-files: true
       - name: Enforce shard
         if: always()
         shell: pwsh
@@ -228,6 +231,7 @@ jobs:
           path: .artifacts/release-validation/windows-x64/reports/server
           if-no-files-found: warn
           retention-days: 1
+          include-hidden-files: true
       - name: Enforce merge
         if: always()
         shell: pwsh
