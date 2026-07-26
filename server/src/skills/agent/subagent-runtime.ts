@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { getWorkspaceSelection } from "@/mcp/workspace.js";
 import { loadSkillResource } from "@/skills/context/provider.js";
 import type { SkillContext } from "@/skills/context/types.js";
@@ -13,7 +14,10 @@ import type {
   SubAgentExecutionInput,
   SubAgentExecutionResult,
   SubAgentRequirement,
+  SubAgentRuntimeEvent,
   SubAgentToolBinding,
+  SubAgentTraceEvent,
+  SubAgentWorkingState,
 } from "./types.js";
 
 const createSkillResourceTool = (skillId: string): SubAgentToolBinding => ({
@@ -126,6 +130,7 @@ type PrepareSubAgentInput = {
   turnId?: string;
   approvedInvocations?: SubAgentApprovedInvocation[];
   checkpoint?: SubAgentCheckpoint;
+  onRuntimeEvent?: (event: SubAgentRuntimeEvent) => Promise<void> | void;
 };
 
 const capabilityRequirement = (skillId: string, capabilityId: string): SubAgentRequirement => ({
@@ -134,6 +139,44 @@ const capabilityRequirement = (skillId: string, capabilityId: string): SubAgentR
   description: `Skill ${skillId} requires capability ${capabilityId}, but no governed adapter is currently available to this subAgent.`,
   requiredFor: capabilityId,
 });
+
+const publishBlockedCapabilityState = async (input: {
+  skillId: string;
+  requirements: SubAgentRequirement[];
+  onRuntimeEvent?: PrepareSubAgentInput["onRuntimeEvent"];
+}) => {
+  const runId = crypto.randomUUID();
+  const timestamp = Date.now();
+  const reason = input.requirements.map((item) => item.description).join("；");
+  const state: SubAgentWorkingState = {
+    runId,
+    skillId: input.skillId,
+    phase: "blocked",
+    currentJudgement: "Skill 说明书已读取，但当前环境没有提供它声明的受管能力。",
+    currentAction: "等待所需能力可用",
+    nextAction: "启用或授权能力后重新发起任务",
+    blockingReason: reason,
+    updatedAt: timestamp,
+  };
+  const event: SubAgentTraceEvent = {
+    runId,
+    seq: 1,
+    eventId: crypto.randomUUID(),
+    skillId: input.skillId,
+    type: "input.required",
+    title: "subAgent 缺少执行能力",
+    timestamp,
+    details: {
+      requirements: input.requirements.map((item) => ({
+        kind: item.kind,
+        requiredFor: item.requiredFor,
+      })),
+    },
+  };
+  await input.onRuntimeEvent?.({ kind: "trace", event });
+  await input.onRuntimeEvent?.({ kind: "working_state", state });
+  return { runId, state, event };
+};
 
 export const prepareSubAgent = (input: PrepareSubAgentInput) => {
   const primary = input.skillContext.primary;
@@ -158,6 +201,7 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
     turnId: input.turnId,
     approvedInvocations: input.approvedInvocations,
     checkpoint: input.checkpoint,
+    onRuntimeEvent: input.onRuntimeEvent,
   };
 
   const tools: SubAgentToolBinding[] = [createSkillResourceTool(skillId)];
@@ -203,6 +247,11 @@ export const runSubAgent = async (
 
   const prepared = prepareSubAgent(input);
   if (prepared.missingCapabilities.length > 0) {
+    const published = await publishBlockedCapabilityState({
+      skillId: prepared.profile.skillId,
+      requirements: prepared.missingCapabilities,
+      onRuntimeEvent: input.onRuntimeEvent,
+    });
     return {
       status: "needs_input",
       summary: "The Skill instruction was loaded, but one or more declared capabilities are unavailable.",
@@ -213,6 +262,10 @@ export const runSubAgent = async (
         engine: "pi-agent-core",
         skillId: prepared.profile.skillId,
         toolCalls: [],
+        runId: published.runId,
+        nextSeq: 2,
+        workingState: published.state,
+        events: [published.event],
       },
     };
   }
