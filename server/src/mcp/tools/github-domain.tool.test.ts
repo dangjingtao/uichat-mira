@@ -75,33 +75,52 @@ const createFetchRouter = () =>
     if (url.pathname === "/repos/dangjingtao/uichat-mira/git/ref/heads/main") {
       return jsonResponse({ ref: "refs/heads/main", object: { sha: "base-sha" } });
     }
-    if (url.pathname === "/repos/dangjingtao/uichat-mira/git/refs" && method === "POST") {
-      return jsonResponse({ ref: "refs/heads/feature/domain", object: { sha: "base-sha" } }, 201);
-    }
-    if (url.pathname === "/repos/dangjingtao/uichat-mira/issues" && method === "POST") {
-      return jsonResponse({
-        number: 42,
-        title: "Domain tool issue",
-        body: "Created by test",
-        state: "open",
-        html_url: "https://github.com/dangjingtao/uichat-mira/issues/42",
-        user: { login: "tomz" },
-      }, 201);
-    }
-    if (url.pathname === "/repos/dangjingtao/uichat-mira/pulls" && method === "POST") {
-      return jsonResponse({
-        number: 43,
-        title: "Domain tool PR",
-        body: "Created by test",
-        state: "open",
-        html_url: "https://github.com/dangjingtao/uichat-mira/pull/43",
-        user: { login: "tomz" },
-        head: { ref: "feature/domain", sha: "head-sha" },
-        base: { ref: "main", sha: "base-sha" },
-      }, 201);
+    if (
+      url.pathname === "/repos/dangjingtao/uichat-mira/git/refs" &&
+      method === "POST"
+    ) {
+      return jsonResponse(
+        { ref: "refs/heads/feature/domain", object: { sha: "base-sha" } },
+        201,
+      );
     }
     if (
-      url.pathname === "/repos/dangjingtao/uichat-mira/actions/workflows/ci.yml/dispatches" &&
+      url.pathname === "/repos/dangjingtao/uichat-mira/issues" &&
+      method === "POST"
+    ) {
+      return jsonResponse(
+        {
+          number: 42,
+          title: "Domain tool issue",
+          body: "Created by test",
+          state: "open",
+          html_url: "https://github.com/dangjingtao/uichat-mira/issues/42",
+          user: { login: "tomz" },
+        },
+        201,
+      );
+    }
+    if (
+      url.pathname === "/repos/dangjingtao/uichat-mira/pulls" &&
+      method === "POST"
+    ) {
+      return jsonResponse(
+        {
+          number: 43,
+          title: "Domain tool PR",
+          body: "Created by test",
+          state: "open",
+          html_url: "https://github.com/dangjingtao/uichat-mira/pull/43",
+          user: { login: "tomz" },
+          head: { ref: "feature/domain", sha: "head-sha" },
+          base: { ref: "main", sha: "base-sha" },
+        },
+        201,
+      );
+    }
+    if (
+      url.pathname ===
+        "/repos/dangjingtao/uichat-mira/actions/workflows/ci.yml/dispatches" &&
       method === "POST"
     ) {
       return jsonResponse(null, 204);
@@ -162,9 +181,7 @@ describe("GitHub domain capability package", () => {
       sanitizeIssueSearchQuery(
         'crash "quoted" \\path repo:someone/private is:pr (draft)',
       ),
-    ).toBe(
-      "crash quoted path repo someone/private is pr draft in:title,body",
-    );
+    ).toBe("crash quoted path repo someone/private is pr draft in:title,body");
   });
 
   it("exposes exactly four domain tools with bounded operation schemas", () => {
@@ -185,6 +202,10 @@ describe("GitHub domain capability package", () => {
       "write_file",
       "delete_file",
       "compare_commits",
+      "create",
+      "ensure_installation_access",
+      "get_pages",
+      "configure_pages",
     ]);
     expect(operationNames(tools.githubIssueTool.definition.inputSchema)).toEqual([
       "list",
@@ -300,12 +321,10 @@ describe("GitHub domain capability package", () => {
     );
 
     const writeRequests = fetchImpl.mock.calls.filter(
-      (call: [string | URL | Request, RequestInit?]) => {
-        const [, init] = call;
-        return ["POST", "PUT", "PATCH", "DELETE"].includes(
-          init?.method ?? "GET",
-        );
-      },
+      (call: [string | URL | Request, RequestInit?]) =>
+        ["POST", "PUT", "PATCH", "DELETE"].includes(
+          call[1]?.method ?? "GET",
+        ),
     );
     expect(writeRequests).toHaveLength(0);
   });
@@ -385,14 +404,12 @@ describe("GitHub domain capability package", () => {
     });
 
     const writes = fetchImpl.mock.calls.map(
-      (call: [string | URL | Request, RequestInit?]) => {
-        const [input, init] = call;
-        return {
-          path: new URL(String(input)).pathname,
-          method: init?.method ?? "GET",
-          body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
-        };
-      },
+      (call: [string | URL | Request, RequestInit?]) => ({
+        path: new URL(String(call[0])).pathname,
+        method: call[1]?.method ?? "GET",
+        body:
+          typeof call[1]?.body === "string" ? JSON.parse(call[1].body) : null,
+      }),
     );
     expect(writes).toEqual(
       expect.arrayContaining([
@@ -410,7 +427,8 @@ describe("GitHub domain capability package", () => {
           method: "POST",
         }),
         expect.objectContaining({
-          path: "/repos/dangjingtao/uichat-mira/actions/workflows/ci.yml/dispatches",
+          path:
+            "/repos/dangjingtao/uichat-mira/actions/workflows/ci.yml/dispatches",
           method: "POST",
         }),
       ]),
