@@ -3,6 +3,7 @@ import type { GitHubConnectionRecord } from "@/db/repositories/github-connection
 import type { McpInvocationContext } from "../core/definitions.js";
 import { McpApprovalRequiredError } from "../core/errors.js";
 import { validateInvocationArgs } from "../core/schema.js";
+import { sanitizeIssueSearchQuery } from "./github-domain.api.js";
 import { createGitHubDomainTools } from "./github-domain.tool.js";
 
 const connection: GitHubConnectionRecord = {
@@ -156,6 +157,16 @@ const expectApproval = async (
 };
 
 describe("GitHub domain capability package", () => {
+  it("sanitizes Issue search punctuation without creating GitHub qualifiers", () => {
+    expect(
+      sanitizeIssueSearchQuery(
+        'crash "quoted" \\path repo:someone/private is:pr (draft)',
+      ),
+    ).toBe(
+      "crash quoted path repo someone/private is pr draft in:title,body",
+    );
+  });
+
   it("exposes exactly four domain tools with bounded operation schemas", () => {
     const { tools } = createTools();
     expect(Object.values(tools).map((tool) => tool.definition.id)).toEqual([

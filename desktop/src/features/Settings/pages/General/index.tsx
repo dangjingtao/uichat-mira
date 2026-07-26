@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle2, KeyRound, Network, Trash2 } from "lucide-react";
+import { CheckCircle2, KeyRound, Trash2 } from "lucide-react";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { useLanguagePreferences } from "@/app/providers/LanguageProvider";
 import { changePassword } from "@/shared/api";
@@ -15,7 +15,7 @@ import { useThemePreferences } from "@/app/providers/ThemeProvider";
 import type { ThemePresetId } from "@/shared/theme/colorThemes";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
-import Card from "@/shared/ui/Card";
+import SectionCard, { SectionCardRow } from "@/shared/ui/SectionCard";
 import { TextInput } from "@/shared/ui/Input";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
@@ -23,7 +23,6 @@ import { Select } from "@/shared/ui/Select";
 import Switch from "@/shared/ui/Switch";
 import SettingsNotice from "../../components/SettingsNotice";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
-import DevelopmentEnvironmentSuiteCard from "./DevelopmentEnvironmentSuiteCard";
 
 type PasswordFormState = {
   currentPassword: string;
@@ -439,128 +438,110 @@ export default function General() {
       title={t("settings.general.page.title")}
       description={t("settings.general.page.description")}
       contentClassName="space-y-4 pt-6"
+      contentMode="flow"
     >
-      <Card className="space-y-3">
-        <h2 className="text-sm font-semibold text-text-primary">
-          {t("settings.general.preferences")}
-        </h2>
-
-        <div className="overflow-hidden rounded-ui-panel border border-border/70 bg-surface-secondary/60">
-          <div className="flex items-center justify-between gap-4 px-3.5 py-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-text-primary">
-                  {session?.user.username ?? "-"}
-                </span>
-                <Badge variant="muted" className="capitalize">
-                  {session?.user.role ?? "-"}
-                </Badge>
-              </div>
-            </div>
-            <Button variant="secondary" size="sm" onClick={openPasswordModal}>
-              <KeyRound className="h-4 w-4" />
-              {t("settings.general.account.changePassword")}
-            </Button>
-          </div>
-
-          <div className="border-t border-border/70">
-            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-text-primary">
-                  {t("settings.general.language.label")}
-                </div>
-              </div>
-              <div className="w-full max-w-[168px] shrink-0">
-                <Select
-                  value={language}
-                  onChange={(value) =>
-                    void setLanguage(value as "zh-CN" | "en-US")
-                  }
-                  options={supportedLanguages.map((value) => ({
-                    value,
-                    label: t(`settings.general.language.options.${value}`),
-                  }))}
-                  compact
-                />
-              </div>
+      <SectionCard title={t("settings.general.preferences")} divided>
+        <SectionCardRow>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-text-primary">
+                {session?.user.username ?? "-"}
+              </span>
+              <Badge variant="muted" className="capitalize">
+                {session?.user.role ?? "-"}
+              </Badge>
             </div>
           </div>
+          <Button variant="secondary" size="sm" onClick={openPasswordModal}>
+            <KeyRound className="h-4 w-4" />
+            {t("settings.general.account.changePassword")}
+          </Button>
+        </SectionCardRow>
 
-          <div className="border-t border-border/70">
-            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-text-primary">
-                  {t("settings.general.theme.label")}
-                </div>
-                <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                  {themeMetadata[colorTheme]?.description}
-                </div>
-              </div>
-              <div className="w-full max-w-[168px] shrink-0">
-                <Select
-                  value={colorTheme}
-                  onChange={(value) => setColorTheme(value as ThemePresetId)}
-                  options={themePresets.map((theme) => ({
-                    value: theme.id,
-                    label: themeMetadata[theme.id].label,
-                  }))}
-                  compact
-                />
-              </div>
+        <SectionCardRow>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-text-primary">
+              {t("settings.general.language.label")}
             </div>
           </div>
+          <div className="w-full max-w-[168px] shrink-0">
+            <Select
+              value={language}
+              onChange={(value) =>
+                void setLanguage(value as "zh-CN" | "en-US")
+              }
+              options={supportedLanguages.map((value) => ({
+                value,
+                label: t(`settings.general.language.options.${value}`),
+              }))}
+              compact
+            />
+          </div>
+        </SectionCardRow>
 
-          <div className="border-t border-border/70">
-            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-text-primary">
-                  {t("settings.general.darkMode.label")}
-                </div>
-              </div>
-              <Switch
-                checked={themeMode === "dark"}
-                onChange={() =>
-                  setThemeMode(themeMode === "dark" ? "light" : "dark")
-                }
-                ariaLabel={t("settings.general.darkMode.ariaLabel")}
-              />
+        <SectionCardRow>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-text-primary">
+              {t("settings.general.theme.label")}
+            </div>
+            <div className="mt-0.5 text-xs leading-5 text-text-secondary">
+              {themeMetadata[colorTheme]?.description}
             </div>
           </div>
+          <div className="w-full max-w-[168px] shrink-0">
+            <Select
+              value={colorTheme}
+              onChange={(value) => setColorTheme(value as ThemePresetId)}
+              options={themePresets.map((theme) => ({
+                value: theme.id,
+                label: themeMetadata[theme.id].label,
+              }))}
+              compact
+            />
+          </div>
+        </SectionCardRow>
 
-          <div className="border-t border-border/70">
-            <div className="flex items-center justify-between gap-4 px-3.5 py-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-text-primary">
-                  {t("settings.general.cleanup.label")}
-                </div>
-                <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                  {t("settings.general.cleanup.description")}
-                </div>
-              </div>
-              <Button
-                variant="danger-ghost"
-                size="sm"
-                className="shrink-0 gap-1.5"
-                onClick={handleCleanupConversations}
-                disabled={isCleaningConversations}
-              >
-                <Trash2 className="h-4 w-4" />
-                {t("settings.general.cleanup.action")}
-              </Button>
+        <SectionCardRow>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-text-primary">
+              {t("settings.general.darkMode.label")}
             </div>
           </div>
-        </div>
-      </Card>
+          <Switch
+            checked={themeMode === "dark"}
+            onChange={() =>
+              setThemeMode(themeMode === "dark" ? "light" : "dark")
+            }
+            ariaLabel={t("settings.general.darkMode.ariaLabel")}
+          />
+        </SectionCardRow>
 
-      <DevelopmentEnvironmentSuiteCard />
+        <SectionCardRow>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-text-primary">
+              {t("settings.general.cleanup.label")}
+            </div>
+            <div className="mt-0.5 text-xs leading-5 text-text-secondary">
+              {t("settings.general.cleanup.description")}
+            </div>
+          </div>
+          <Button
+            variant="danger-ghost"
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={handleCleanupConversations}
+            disabled={isCleaningConversations}
+          >
+            <Trash2 className="h-4 w-4" />
+            {t("settings.general.cleanup.action")}
+          </Button>
+        </SectionCardRow>
+      </SectionCard>
 
-      <Card className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Network className="h-4 w-4 text-text-secondary" />
-          <h2 className="text-sm font-semibold text-text-primary">
-            {t("settings.general.proxy.title")}
-          </h2>
-        </div>
+      <SectionCard
+        title={t("settings.general.proxy.title")}
+        contentClassName="space-y-3 p-4"
+      >
         <p className="text-sm text-text-secondary">
           {t("settings.general.proxy.description")}
         </p>
@@ -630,7 +611,7 @@ export default function General() {
               : t("settings.general.proxy.save")}
           </Button>
         </div>
-      </Card>
+      </SectionCard>
     </SettingsPageLayout>
   );
 }

@@ -25,7 +25,7 @@ export default function RoleCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full rounded-ui-panel border p-3.5 text-left transition-colors ${
+      className={`w-full rounded-ui-panel border p-3 text-left transition-colors ${
         active
           ? "border-primary/25 bg-primary/5"
           : "border-border bg-surface-primary hover:bg-surface-secondary"

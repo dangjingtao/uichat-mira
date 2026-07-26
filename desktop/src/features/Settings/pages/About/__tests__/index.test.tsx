@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import About from "../index";
 
@@ -10,6 +12,8 @@ const runtimeMock = vi.hoisted(() => ({
   backendUrl: "http://127.0.0.1:8787",
 }));
 
+const modalShowMock = vi.hoisted(() => vi.fn());
+
 const mockAppMeta = {
   name: "ui-chat-mira",
   version: "0.7.1",
@@ -19,6 +23,10 @@ const mockAppMeta = {
   repositoryUrl: "",
   homepageUrl: "",
   links: [],
+  git: {
+    branch: "codex/about-test",
+    versions: [],
+  },
 };
 
 const getAppMetaMock = vi.fn(async () => mockAppMeta);
@@ -39,10 +47,24 @@ vi.mock("@/shared/platform/desktopRuntime", () => ({
     runtime.hostKind !== "browser",
   getDesktopRuntime: () => runtimeMock,
   getApiBaseUrl: () => "http://127.0.0.1:8787",
+  openExternalUrl: vi.fn(),
+}));
+
+vi.mock("@/shared/ui/Modal", () => ({
+  Modal: {
+    show: modalShowMock,
+    close: vi.fn(),
+  },
 }));
 
 vi.mock("@/shared/api/system", () => ({
   getAppMeta: () => getAppMetaMock(),
+}));
+
+vi.mock("../../General/DevelopmentEnvironmentSuiteCard", () => ({
+  default: () => (
+    <div data-testid="development-environment-suite">开发环境套件</div>
+  ),
 }));
 
 describe("About", () => {
@@ -51,6 +73,7 @@ describe("About", () => {
     runtimeMock.platform = "win32";
     runtimeMock.isPackaged = true;
     getAppMetaMock.mockClear();
+    modalShowMock.mockClear();
   });
 
   it("renders app meta from API in desktop shell", async () => {
@@ -90,17 +113,22 @@ describe("About", () => {
     });
   });
 
-  it("renders brand story paragraphs", async () => {
+  it("renders base information and the development suite, then opens the brand story in a modal", async () => {
     render(<About />);
 
     await waitFor(() => {
-      expect(screen.getByText("Paragraph one")).toBeInTheDocument();
-      expect(screen.getByText("Paragraph two")).toBeInTheDocument();
+      expect(screen.getByText("codex/about-test")).toBeInTheDocument();
     });
+    expect(screen.queryByText("Paragraph one")).not.toBeInTheDocument();
+    expect(screen.getByTestId("development-environment-suite")).toBeInTheDocument();
 
-    const brandStory = screen.getByTestId("about-brand-story");
-    expect(brandStory.tagName).toBe("ARTICLE");
-    expect(brandStory).toHaveClass("max-w-3xl");
+    await userEvent.click(screen.getByRole("button", { name: "品牌故事" }));
+    const brandStoryModal = modalShowMock.mock.calls[0]?.[0] as
+      | { title: string; content: ReactNode }
+      | undefined;
+    expect(brandStoryModal?.title).toBe("UIChat Mira");
+
+    render(brandStoryModal?.content);
     expect(screen.getByText("Paragraph one")).toHaveClass("text-text-primary");
     expect(screen.getByText("Paragraph two")).toHaveClass(
       "font-medium",

@@ -36,7 +36,7 @@ describe("NavItem", () => {
         </NavItem>
       </MemoryRouter>,
     );
-    expect(screen.getByRole("link")).toHaveClass("bg-primary/10");
+    expect(screen.getByRole("link")).toHaveClass("bg-surface-soft");
   });
 
   it("does not apply active class for non-matching route", () => {
@@ -48,7 +48,7 @@ describe("NavItem", () => {
       </MemoryRouter>,
     );
     const link = screen.getByRole("link");
-    expect(link).not.toHaveClass("bg-primary/10");
+    expect(link).not.toHaveClass("bg-surface-soft");
     expect(link).toHaveClass("text-text-secondary");
   });
 });

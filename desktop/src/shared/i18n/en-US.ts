@@ -69,7 +69,7 @@ const enUS = {
       evaluationCenter: "Knowledge Evaluation Center",
       development: "Development",
       developmentLogs: "Logs",
-      mcp: "MCP",
+      mcp: "MCP Marketplace",
       tools: "Tools",
       about: "About",
     },
@@ -612,9 +612,6 @@ const enUS = {
       },
       account: {
         changePassword: "Change Password",
-      },
-      developmentEnvironment: {
-        title: "Development Environment Kit",
       },
       proxy: {
         title: "SOCKS5 Proxy",

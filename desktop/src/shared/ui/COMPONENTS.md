@@ -12,6 +12,7 @@
 - `AvatarPicker`
 - `Badge`
 - `Card`
+- `SectionCard`
 - `CodeBlock`
 - `CompactAudioPlayer`
 - `CollapsiblePanel`
@@ -77,7 +78,7 @@
 | 分类 | 典型 token | 主要用途 |
 | --- | --- | --- |
 | 品牌主色 | `primary`、`primary-hover`、`primary-1~9` | 主操作、焦点、选中、轻强调 |
-| 结构层级 | `surface-primary`、`surface-secondary`、`surface-elevated`、`border` | 页面、卡片、浮层、描边 |
+| 结构层级 | `surface-primary`、`surface-soft`、`surface-secondary`、`surface-elevated`、`border` | 页面、轻微区隔、卡片、浮层、描边 |
 | 文本图标 | `text-*`、`icon-*` | 文本与图标层级 |
 | 扩展氛围 | `pampas-*`、`cloudy-*` | 柔和承托、边框灰阶、欢迎区 |
 | 状态反馈 | `success`、`warning`、`danger`、`info` 及其 `*-soft` / `*-border` / `*-text` | 校验、结果、风险反馈 |
@@ -85,6 +86,7 @@
 共享组件默认配色规则：
 
 - 主体容器优先 `surface-*`
+- 轻微区隔的分区底色使用 `surface-soft`；默认暖中性浅色值为 `#F5F0E8`
 - 正文与标题优先 `text-*`
 - 边框统一优先 `border`
 - 焦点和选中优先 `primary`
@@ -315,6 +317,31 @@
 - 尽量控制圆角和阴影的存在感，默认保持紧凑
 - 页面里的浅底信息块、虚线空态、无壳占位优先通过 `variant` 表达，不要重复手写同类容器 class
 
+## SectionCard
+
+用于设置页和信息页的单层分组面板，统一提供标题栏、可选图标/元信息、内容区和分隔行，避免在 `Card` 内再嵌套带圆角与边框的列表容器。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `title` | `React.ReactNode` | - | 标题栏主标题 |
+| `icon` | `React.ReactNode` | - | 标题前的可选图标 |
+| `meta` | `React.ReactNode` | - | 标题后的徽标或辅助信息 |
+| `action` | `React.ReactNode` | - | 标题栏右侧的紧凑操作 |
+| `divided` | `boolean` | `false` | 是否在直属内容项之间显示分隔线 |
+| `contentClassName` | `string` | `""` | 内容区布局和内边距样式 |
+
+`SectionCardRow` 用于直属配置行，支持 `div` 与 `button` 两种元素。按钮行自带键盘焦点样式，但 hover 语义由使用方按实际交互补充。
+
+### 使用建议
+
+- 同一信息组只保留 `SectionCard` 的一层边框、圆角和背景
+- 列表内容优先使用 `divided + SectionCardRow`，不要在内容区再添加 `rounded-ui-panel + border`
+- 表单内容可通过 `contentClassName="p-4"` 提供统一留白，不要求拆成行
+- `meta` 适合平台、状态或版本徽标，不承载主要操作
+- `action` 仅放置与整个分组相关的紧凑操作，优先使用小尺寸按钮或图标按钮
+
 ## Drawer
 
 用于从页面右侧滑出展示详情，适合表格行详情、运行记录复盘和保持当前列表上下文的查看场景。
@@ -511,7 +538,7 @@
 - 下拉面板通过 portal 渲染到顶层，避免在弹窗、抽屉和滚动容器中被裁切
 - 下拉浮层默认使用更高层级，避免被弹窗、抽屉和聊天悬浮区遮挡
 - 为兼容业务层空字符串值，组件内部会对 option value 做编码映射；外部仍保持原始字符串 API
-- 触发器和下拉项默认对长文本做单行截断，避免文件名或长标签把布局撑开
+- 触发器对长文本保持单行截断；下拉面板至少与触发器等宽，并可按选项内容扩展到当前可用视口宽度，避免窄触发器裁切完整选项
 
 ### 色彩约束
 
@@ -766,7 +793,8 @@ message.destroy();
 
 - 非激活态优先 `text-text-secondary`
 - hover 使用 `surface-secondary` 或 `pampas-*` 弱底
-- 激活态可以使用主色指示条或 `primary` 弱底，不建议整块高饱和主色填充
+- 激活态使用 `bg-surface-soft text-text-primary`；默认暖中性浅色背景为 `#F5F0E8`
+- 需要更强品牌指示时可以额外使用主色指示条，不建议整块高饱和主色填充
 
 ## StatusIndicator
 

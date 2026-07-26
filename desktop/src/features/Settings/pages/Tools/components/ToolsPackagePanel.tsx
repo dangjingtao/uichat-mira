@@ -21,7 +21,6 @@ type ToolsPackagePanelProps = {
     execute: string;
     config: string;
     packageTitle: string;
-    packageDescription: string;
     terminalApprovalRequired: string;
     terminalTimeout: string;
     terminalReused: string;
@@ -52,7 +51,6 @@ export default function ToolsPackagePanel({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-medium text-text-primary">{labels.packageTitle}</div>
-            <div className="mt-1 text-sm text-text-secondary">{labels.packageDescription}</div>
           </div>
           <Badge variant="muted">{tools.length}</Badge>
         </div>

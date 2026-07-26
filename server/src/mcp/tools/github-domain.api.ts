@@ -259,7 +259,7 @@ export const sanitizeIssueSearchQuery = (value: unknown) => {
   const query = normalizeString(value, "query", { maxLength: 500 });
   if (!query) return undefined;
   const sanitized = query
-    .replace(/[\\\":()]/gu, " ")
+    .replace(/[\\":()]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
   return sanitized ? `${sanitized} in:title,body` : undefined;

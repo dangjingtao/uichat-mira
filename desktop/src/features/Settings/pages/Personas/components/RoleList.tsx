@@ -44,7 +44,7 @@ export default function RoleList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3.5">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {!isLoading && roles.length === 0 ? (
           <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary px-3 py-6 text-center text-sm text-text-secondary">
             {t("list.empty")}

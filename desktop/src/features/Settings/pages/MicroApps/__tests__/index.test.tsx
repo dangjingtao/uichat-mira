@@ -91,7 +91,11 @@ describe("MicroAppsSettings", () => {
     );
     expect(screen.getByTestId("micro-apps-capability-filters")).toBeInTheDocument();
     const resultsScroll = screen.getByTestId("micro-apps-results-scroll");
-    expect(resultsScroll).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
+    expect(resultsScroll).toHaveClass(
+      "min-h-0",
+      "flex-1",
+      "overflow-y-auto",
+    );
     expect(resultsScroll).not.toContainElement(
       screen.getByTestId("micro-apps-capability-filters"),
     );

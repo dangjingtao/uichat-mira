@@ -92,6 +92,7 @@ module.exports = {
         "info-text": "rgb(var(--color-info-text) / <alpha-value>)",
         surface: {
           primary: "rgb(var(--color-surface-primary) / <alpha-value>)",
+          soft: "rgb(var(--color-surface-soft) / <alpha-value>)",
           secondary: "rgb(var(--color-surface-secondary) / <alpha-value>)",
           tertiary: "rgb(var(--color-surface-tertiary) / <alpha-value>)",
           elevated: "rgb(var(--color-surface-elevated) / <alpha-value>)",

@@ -29,7 +29,7 @@ function NavItem({
         focus-visible:ring-offset-surface-primary
         ${
           isActive
-            ? "bg-primary/10 text-text-primary"
+            ? "bg-surface-soft text-text-primary"
             : "text-text-secondary hover:bg-primary/7 hover:text-text-primary"
         }
         `

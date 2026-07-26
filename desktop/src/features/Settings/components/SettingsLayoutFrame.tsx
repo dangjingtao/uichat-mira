@@ -12,6 +12,7 @@ export interface SettingsLayoutFrameProps {
   contentClassName?: string;
   containerClassName?: string;
   scrollBody?: boolean;
+  contentMode?: "fill" | "flow";
 }
 
 export default function SettingsLayoutFrame({
@@ -26,6 +27,7 @@ export default function SettingsLayoutFrame({
   contentClassName = "",
   containerClassName = "",
   scrollBody = true,
+  contentMode = "fill",
 }: SettingsLayoutFrameProps) {
   const containerClasses = ["mx-auto w-full max-w-[1180px]", containerClassName]
     .filter(Boolean)
@@ -53,7 +55,9 @@ export default function SettingsLayoutFrame({
         ].join(" ")}
       >
         <div
-          className={`flex h-full min-h-0 flex-col px-2 pb-6 ${containerClasses} ${contentClassName}`}
+          className={`flex flex-col px-2 pb-6 ${
+            contentMode === "flow" ? "min-h-full" : "h-full min-h-0"
+          } ${containerClasses} ${contentClassName}`}
         >
           {children}
         </div>

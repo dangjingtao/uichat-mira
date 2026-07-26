@@ -168,6 +168,7 @@
 
     --color-surface-primary: 252 251 249;
     --color-surface-auth: 250 249 245;
+    --color-surface-soft: 245 240 232;
     --color-surface-secondary: 248 248 246;
     --color-surface-tertiary: 247 247 245;
     --color-surface-elevated: 253 251 248;
@@ -256,6 +257,7 @@
 
     --color-surface-primary: 24 22 20;
     --color-surface-auth: 32 29 26;
+    --color-surface-soft: 51 48 43;
     --color-surface-secondary: 32 29 26;
     --color-surface-tertiary: 42 39 36;
     --color-surface-elevated: 28 25 23;

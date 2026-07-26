@@ -78,7 +78,6 @@ export default function ToolsSettings() {
               config: t("settings.tools.package.config"),
               execute: t("settings.tools.workbench.execute"),
               packageTitle: t("settings.tools.package.title"),
-              packageDescription: t("settings.tools.package.description"),
               terminalApprovalRequired: t("settings.tools.package.terminalApprovalRequired"),
               terminalTimeout: t("settings.tools.package.terminalTimeout"),
               terminalReused: t("settings.tools.package.terminalReused"),

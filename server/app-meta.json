@@ -38,11 +38,11 @@
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "2998861c13b5db76ef2e877cd9cd05ebf7948149",
-            "shortHash": "2998861",
-            "message": "test: cover SSE route error serialization",
+            "hash": "bef2c7a78330329adee2011a29efabdcef32354c",
+            "shortHash": "bef2c7a",
+            "message": "test: lock Harness to four GitHub domain tools",
             "author": "DangJingtao",
-            "date": "2026-07-26T03:12:41+08:00"
+            "date": "2026-07-26T04:32:46+08:00"
           }
         },
         {

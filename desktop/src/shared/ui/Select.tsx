@@ -204,7 +204,7 @@ export const Select: React.FC<SelectProps> = ({
                   z-[240]
                   max-h-64
                   min-w-[var(--radix-select-trigger-width)]
-                  max-w-[var(--radix-select-trigger-width)]
+                  max-w-[var(--radix-select-content-available-width)]
                   overflow-hidden
                   rounded-ui-surface
                   border
@@ -217,7 +217,7 @@ export const Select: React.FC<SelectProps> = ({
                   data-[side=top]:slide-in-from-bottom-1
                 "
               >
-                <SelectPrimitive.Viewport className="w-[var(--radix-select-trigger-width)] p-1">
+                <SelectPrimitive.Viewport className="min-w-[var(--radix-select-trigger-width)] p-1">
                   {encodedOptions.map((option) => {
                     const isSelected = option.value === value;
 
@@ -250,7 +250,7 @@ export const Select: React.FC<SelectProps> = ({
                         `}
                       >
                         <SelectPrimitive.ItemText>
-                          <span className="block truncate">{option.label}</span>
+                          <span className="block break-words">{option.label}</span>
                         </SelectPrimitive.ItemText>
                         <SelectPrimitive.ItemIndicator className="absolute right-2.5 inline-flex items-center justify-center">
                           <Check

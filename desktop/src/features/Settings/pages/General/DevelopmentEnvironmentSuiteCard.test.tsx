@@ -16,7 +16,7 @@ describe("DevelopmentEnvironmentSuiteCard", () => {
     const { container } = render(<DevelopmentEnvironmentSuiteCard />);
 
     expect(
-      screen.getByText("settings.general.developmentEnvironment.title"),
+      screen.getByText("settings.about.developmentEnvironment.title"),
     ).toBeInTheDocument();
     expect(screen.getByText("Windows x64")).toBeInTheDocument();
     expect(screen.getByText("Node.js")).toBeInTheDocument();
@@ -31,5 +31,7 @@ describe("DevelopmentEnvironmentSuiteCard", () => {
     expect(screen.getByText("v15.2.0")).toBeInTheDocument();
     expect(screen.getAllByRole("listitem")).toHaveLength(5);
     expect(container.querySelectorAll('img[alt=""]')).toHaveLength(4);
+    expect(container.querySelectorAll(".rounded-ui-panel")).toHaveLength(1);
+    expect(container.querySelectorAll("section section")).toHaveLength(0);
   });
 });

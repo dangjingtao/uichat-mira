@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BookOpen } from "lucide-react";
 import Badge from "@/shared/ui/Badge";
+import { Button } from "@/shared/ui/Button";
+import { Modal } from "@/shared/ui/Modal";
 import { getAppMeta, type AppMetaData } from "@/shared/api/system";
 import {
   getDesktopRuntime,
@@ -8,6 +11,8 @@ import {
 } from "@/shared/platform/desktopRuntime";
 import { appPackageMeta } from "@/shared/appMeta";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
+import BaseInformationPanel from "./BaseInformationPanel";
+import DevelopmentEnvironmentSuiteCard from "../General/DevelopmentEnvironmentSuiteCard";
 
 const getFallbackAppMeta = (): AppMetaData => ({
   name: appPackageMeta.name,
@@ -17,7 +22,28 @@ const getFallbackAppMeta = (): AppMetaData => ({
   description: appPackageMeta.description,
   repositoryUrl: appPackageMeta.repositoryUrl,
   homepageUrl: appPackageMeta.homepageUrl,
-  links: [],
+  links: [
+    {
+      label: "作者",
+      value: "Tomz Dang <dangjingtao@gmail.com>",
+      href: "https://github.com/dangjingtao",
+    },
+    {
+      label: "项目仓库",
+      value: appPackageMeta.repositoryUrl,
+      href: appPackageMeta.repositoryUrl,
+    },
+    {
+      label: "官方文档",
+      value: appPackageMeta.homepageUrl,
+      href: appPackageMeta.homepageUrl,
+    },
+    {
+      label: "组件文档",
+      value: "uchat / 内部 UI 组件",
+      href: "./docs/uchat.md",
+    },
+  ],
 });
 
 const platformLabel = (platform: string) => {
@@ -74,6 +100,38 @@ function About() {
       ? hostLabel(runtime.hostKind)
       : `${platformLabel(runtime.platform)} · ${hostLabel(runtime.hostKind)}`;
 
+  const openBrandStory = () => {
+    Modal.show({
+      title: appMeta.displayName,
+      width: 720,
+      maxHeight: 720,
+      footer: null,
+      content: (
+        <article className="space-y-4 text-sm leading-7 text-text-secondary">
+          {brandStoryParagraphs.map((paragraph, index) => {
+            const isFirst = index === 0;
+            const isLast = index === brandStoryParagraphs.length - 1;
+
+            return (
+              <p
+                key={`${index}:${paragraph.slice(0, 12)}`}
+                className={
+                  isLast
+                    ? "pt-2 font-medium text-text-primary"
+                    : isFirst
+                      ? "text-text-primary"
+                      : ""
+                }
+              >
+                {paragraph}
+              </p>
+            );
+          })}
+        </article>
+      ),
+    });
+  };
+
   return (
     <SettingsPageLayout
       miniTitle={t("settings.about.miniTitle")}
@@ -88,33 +146,20 @@ function About() {
           v{appMeta.version} · {runtimeMeta}
         </Badge>
       }
+      slot={
+        <Button variant="ghost" size="sm" onClick={openBrandStory}>
+          <BookOpen className="h-4 w-4" />
+          品牌故事
+        </Button>
+      }
       description={t("settings.about.brand.description")}
       contentClassName="pt-6"
+      contentMode="flow"
     >
-      <article
-        data-testid="about-brand-story"
-        className="max-w-3xl space-y-4 text-sm leading-7 text-text-secondary"
-      >
-        {brandStoryParagraphs.map((paragraph, index) => {
-          const isFirst = index === 0;
-          const isLast = index === brandStoryParagraphs.length - 1;
-
-          return (
-            <p
-              key={`${index}:${paragraph.slice(0, 12)}`}
-              className={
-                isLast
-                  ? "pt-2 font-medium text-text-primary"
-                  : isFirst
-                    ? "text-text-primary"
-                    : ""
-              }
-            >
-              {paragraph}
-            </p>
-          );
-        })}
-      </article>
+      <div className="space-y-4">
+        <BaseInformationPanel appMeta={appMeta} />
+        <DevelopmentEnvironmentSuiteCard />
+      </div>
     </SettingsPageLayout>
   );
 }

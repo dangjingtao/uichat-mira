@@ -70,7 +70,7 @@ const zhCN = {
       evaluationCenter: "知识评测中心",
       development: "开发",
       developmentLogs: "日志",
-      mcp: "MCP",
+      mcp: "MCP 市场",
       tools: "工具",
       about: "关于",
     },
@@ -581,9 +581,6 @@ const zhCN = {
       },
       account: {
         changePassword: "修改密码",
-      },
-      developmentEnvironment: {
-        title: "开发环境套件",
       },
       proxy: {
         title: "SOCKS5 代理",

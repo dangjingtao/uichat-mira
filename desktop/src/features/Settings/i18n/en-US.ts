@@ -7,6 +7,24 @@ const settingsPending = {
       miniTitle: "About",
       gitInfo: "Git Repository Info",
       currentBranch: "Current Branch",
+      projectSupport: "Project & Support",
+      developmentEnvironment: {
+        title: "Development Environment Kit",
+      },
+      updateCheck: {
+        action: "Check for updates",
+        checking: "Checking…",
+        availableTitle: "Update available",
+        currentTitle: "You're up to date",
+        failureTitle: "Update check failed",
+        failureDescription: "GitHub Tags are temporarily unavailable. Try again later.",
+        availableDescription: "A newer version tag is available in the GitHub repository.",
+        currentDescription: "This app matches the latest version tag on GitHub.",
+        currentVersion: "Current version",
+        latestVersion: "Latest version",
+        viewTag: "View GitHub Tag",
+        close: "Later",
+      },
       fallback: {
         links: {
           author: "Author",
@@ -39,7 +57,7 @@ const settingsPending = {
       microApps: "Micro Apps",
       evaluationCenter: "Evaluation Center",
       development: "Development",
-      mcp: "MCP",
+      mcp: "MCP Marketplace",
       enterpriseIntegrations: "Enterprise Integrations",
       integrations: "Integrations",
       wecom: "WeCom",
@@ -1235,8 +1253,6 @@ const settingsPending = {
       },
       package: {
         title: "Tool Package",
-        description:
-          "Tools in the current product capability group are organized as tabs. Switch tabs to run a different tool in the package.",
         empty: "No tools are available in the current product capability group.",
         config: "Args",
         argsModalTitle: "Tool Args",
@@ -1272,8 +1288,8 @@ const settingsPending = {
       },
     },
     mcp: {
-      miniTitle: "MCP",
-      title: "MCP",
+      miniTitle: "MCP Marketplace",
+      title: "MCP Marketplace",
       description:
         "Manage MCP marketplace discovery, third-party MCP servers, and future non-core built-in MCP packages.",
       tabs: {
@@ -2182,7 +2198,6 @@ const settingsPending = {
         serverTests: "Server Tests",
         docs: "Dev Docs",
         apiDocs: "API Docs",
-        baseInformation: "Base Info",
       },
       logs: {
         title: "Runtime Logs",
@@ -2241,10 +2256,6 @@ const settingsPending = {
         title: "API Docs",
         description:
           "Backend OpenAPI documentation for checking contracts and integration.",
-      },
-      baseInformation: {
-        title: "Base Information",
-        description: "App version, author docs, and Git info.",
       },
     },
   },
