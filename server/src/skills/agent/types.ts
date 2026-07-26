@@ -20,7 +20,7 @@ export type SkillAgentExecutionProfile = {
   engine: "pi-agent-core";
   allowedHarnessToolIds: string[];
   runtimeBindings: SkillAgentRuntimeBinding[];
-  workspaceBound: true;
+  workspaceBound: boolean;
 };
 
 export type SkillAgentRequirement = {
@@ -42,10 +42,9 @@ export type SkillAgentPendingInvocation = {
 };
 
 /**
- * Serializable Pi transcript checkpoint captured at a governed approval boundary.
- * Resume replaces the approval placeholder tool result with the exact runtime
- * result, then continues this transcript instead of prompting the original goal
- * again.
+ * Serializable pi-agent-core transcript checkpoint captured at a governed
+ * approval boundary. Product/runtime code refers to the owner as subAgent;
+ * the engine-specific message type remains an implementation detail here.
  */
 export type SkillAgentCheckpoint = {
   version: 1;
@@ -82,7 +81,7 @@ export type SkillAgentApprovedInvocation = {
 export type SkillAgentExecutionInput = {
   goal: string;
   skillContext: SkillContext;
-  workspaceRoot: string;
+  workspaceRoot?: string;
   userId?: number;
   threadId?: string;
   turnId?: string;
@@ -106,3 +105,16 @@ export type SkillAgentToolBinding = {
     requirement?: SkillAgentRequirement;
   }>;
 };
+
+// Public product/architecture aliases. Existing SkillAgent* imports remain
+// temporarily valid so the migration does not turn into a broad rename patch.
+export type SubAgentExecutionStatus = SkillAgentExecutionStatus;
+export type SubAgentRuntimeBinding = SkillAgentRuntimeBinding;
+export type SubAgentExecutionProfile = SkillAgentExecutionProfile;
+export type SubAgentRequirement = SkillAgentRequirement;
+export type SubAgentPendingInvocation = SkillAgentPendingInvocation;
+export type SubAgentCheckpoint = SkillAgentCheckpoint;
+export type SubAgentExecutionResult = SkillAgentExecutionResult;
+export type SubAgentApprovedInvocation = SkillAgentApprovedInvocation;
+export type SubAgentExecutionInput = SkillAgentExecutionInput;
+export type SubAgentToolBinding = SkillAgentToolBinding;
