@@ -159,7 +159,7 @@ function SubAgentWorkingStateView({ state }: { state: SubAgentWorkingState }) {
     <div
       data-testid="subagent-working-state"
       data-subagent-run-id={state.runId}
-      className="mt-2 flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
+      className="flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
     >
       <span
         className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70 ${
@@ -205,6 +205,9 @@ export function UChatExecutionTrace({
   const fallbackInnerStatus = workingState
     ? null
     : getAgentInnerStatus(displaySteps, approvalTraceState);
+  const hasAnswerStarted = displaySteps.some(
+    (step) => step.nodeType === "generate",
+  );
   const latestSubAgentTitle = getLatestSubAgentTraceTitle(displaySteps);
   const summary =
     approvalTraceState === "waiting_approval"
@@ -237,7 +240,7 @@ export function UChatExecutionTrace({
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
               {approvalTraceState === null ? (
-                <span className="hidden text-[11px] text-text-tertiary sm:inline">
+                <span aria-hidden="true" className="hidden">
                   {t("chat.executionTrace.stepCount", {
                     completed: completedCount,
                     total: displaySteps.length,
@@ -263,7 +266,7 @@ export function UChatExecutionTrace({
           >
             <div className="min-h-0">
               <div className="mt-1 border-t border-border/50 pt-1.5">
-                {displaySteps.map((step, index) => {
+                {displaySteps.map((step) => {
                   const display = getDisplayExecutionStep(step);
                   const subAgentTrace = isSubAgentTraceStep(step);
                   const effectivePhase =
@@ -305,7 +308,7 @@ export function UChatExecutionTrace({
                       }`}
                     >
                       <div
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                           effectivePhase === "error"
                             ? "bg-rose-500/10 text-rose-600"
                             : effectivePhase === "start"
@@ -313,11 +316,11 @@ export function UChatExecutionTrace({
                               : "bg-[rgba(var(--color-primary),0.10)] text-primary"
                         }`}
                       >
-                        {effectivePhase === "start" ? (
-                          <LoaderCircle className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <span>{index + 1}</span>
-                        )}
+                        <StatusIcon
+                          className={`h-3 w-3 ${
+                            effectivePhase === "start" ? "animate-spin" : ""
+                          }`}
+                        />
                       </div>
                       <div className="min-w-0 flex flex-1 items-center gap-2 overflow-hidden">
                         <p className="shrink-0 text-[13px] font-medium text-text-primary">
@@ -332,20 +335,9 @@ export function UChatExecutionTrace({
                           </>
                         ) : null}
                       </div>
-                      <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5">
-                        <StatusIcon
-                          className={`h-3.5 w-3.5 ${
-                            effectivePhase === "start"
-                              ? "animate-spin text-text-tertiary"
-                              : effectivePhase === "error"
-                                ? "text-danger-text"
-                                : "text-text-tertiary"
-                          }`}
-                        />
-                        {clickable ? (
-                          <ChevronRight className="h-3.5 w-3.5 text-text-tertiary" />
-                        ) : null}
-                      </div>
+                      {clickable ? (
+                        <ChevronRight className="mt-1 h-3.5 w-3.5 shrink-0 text-text-tertiary" />
+                      ) : null}
                     </button>
                   );
                 })}
@@ -355,18 +347,31 @@ export function UChatExecutionTrace({
         </div>
       ) : null}
 
-      {workingState ? (
-        <SubAgentWorkingStateView state={workingState} />
-      ) : fallbackInnerStatus ? (
+      {workingState || fallbackInnerStatus ? (
         <div
-          data-testid="agent-inner-status"
-          className="mt-2 flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
+          aria-hidden={hasAnswerStarted}
+          className={`grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${
+            hasAnswerStarted
+              ? "mt-0 grid-rows-[0fr] opacity-0"
+              : "mt-2 grid-rows-[1fr] opacity-100"
+          }`}
         >
-          <span
-            className="mt-[7px] h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary/70"
-            aria-hidden="true"
-          />
-          <p className="min-w-0 break-words">{fallbackInnerStatus}</p>
+          <div className="min-h-0 overflow-hidden">
+            {workingState ? (
+              <SubAgentWorkingStateView state={workingState} />
+            ) : fallbackInnerStatus ? (
+              <div
+                data-testid="agent-inner-status"
+                className="flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
+              >
+                <span
+                  className="mt-[7px] h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary/70"
+                  aria-hidden="true"
+                />
+                <p className="min-w-0 break-words">{fallbackInnerStatus}</p>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>
