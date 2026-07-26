@@ -97,6 +97,7 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   ])
   .addConditionalEdges("evidenceStage", routeAfterEvidence, [
     "nextActionPlanner",
+    "approval",
     "generate",
     "error",
   ])
