@@ -13,8 +13,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  check-dev:
+    name: Check dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync package versions
+        run: pnpm version:sync
+
+      - name: Install clipper extension dependencies
+        run: npm ci --prefix mira-clipper-ext --ignore-scripts
+
+      - name: Type check
+        run: pnpm check
+
   build-electron:
     name: Build Electron (${{ matrix.platform }})
+    if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +140,7 @@ jobs:
 
   build-tauri:
     name: Build Tauri (Windows)
+    if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
     runs-on: windows-2022
     steps:
       - name: Checkout
