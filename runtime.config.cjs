@@ -20,11 +20,11 @@ function readPort(name, fallback) {
 module.exports = {
   backend: {
     host: "127.0.0.1",
-    port: readPort("UI_CHAT_BACKEND_PORT", 8788),
+    port: readPort("UI_CHAT_BACKEND_PORT", 8787),
   },
   dev: {
     apiProxyPrefix: "/api",
-    desktopPort: readPort("UI_CHAT_DESKTOP_PORT", 5174),
-    docsSitePort: readPort("UI_CHAT_DOCS_SITE_PORT", 4181),
+    desktopPort: readPort("UI_CHAT_DESKTOP_PORT", 5173),
+    docsSitePort: readPort("UI_CHAT_DOCS_SITE_PORT", 4180),
   },
 };
