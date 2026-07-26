@@ -1,10 +1,20 @@
 export type SkillExecutionContextMode = "inline" | "fork";
+export type SkillPackageOrigin = "built-in" | "user" | "external";
 
+/**
+ * Declarative execution requirements carried by a Skill package.
+ *
+ * This is not a permission grant. `allowedTools` and `runtimeBindings` describe
+ * what the Skill expects; the subAgent runtime still reconciles them against
+ * the currently registered Harness capabilities, runtime availability, Policy,
+ * approval and workspace boundaries.
+ */
 export type SkillExecutionManifest = {
   context: SkillExecutionContextMode;
-  agent?: string;
+  agent?: "subAgent";
   allowedTools: string[];
   runtimeBindings: string[];
+  workspaceBound: boolean;
 };
 
 export type SkillManifest = {
@@ -13,11 +23,12 @@ export type SkillManifest = {
   description: string;
   version: string;
   entry: string;
+  origin: SkillPackageOrigin;
   source?: string;
   category?: string;
   license?: string;
   runtimeRequirements?: string[];
-  execution?: SkillExecutionManifest;
+  execution: SkillExecutionManifest;
 };
 
 export type SkillContent = {
@@ -73,7 +84,8 @@ export type SkillContext = {
     version: string;
     name: string;
     body: string;
-    execution?: SkillExecutionManifest;
+    origin: SkillPackageOrigin;
+    execution: SkillExecutionManifest;
   };
   resources: SkillResource[];
   disclosedResources: Array<{
