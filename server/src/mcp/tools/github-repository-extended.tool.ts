@@ -81,7 +81,9 @@ export const extendedRepositorySchema = {
         mode: { type: "string", enum: ["workflow", "branch"] },
         branch: { type: "string" },
         path: { type: "string", enum: ["/", "/docs"], default: "/" },
-        customDomain: { oneOf: [{ type: "string" }, { type: "null" }] },
+        customDomain: {
+          description: "Custom domain string, or null to remove the current domain.",
+        },
         enforceHttps: { type: "boolean" },
       },
       ["mode"],
