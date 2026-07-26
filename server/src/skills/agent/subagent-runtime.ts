@@ -125,6 +125,7 @@ type PrepareSubAgentInput = {
   goal: string;
   skillContext: SkillContext;
   workspaceRoot?: string;
+  exposedHarnessToolIds?: string[];
   userId?: number;
   threadId?: string;
   turnId?: string;
@@ -139,7 +140,7 @@ const capabilityRequirement = (
 ): SubAgentRequirement => ({
   id: `capability:${skillId}:${capabilityId}`,
   kind: "capability",
-  description: `Skill ${skillId} requires capability ${capabilityId}, but no governed adapter is currently available to this subAgent.`,
+  description: `Skill ${skillId} requires capability ${capabilityId}, but it is not available in the current governed ToolExposure/runtime environment.`,
   requiredFor: capabilityId,
 });
 
@@ -157,7 +158,7 @@ const publishBlockedCapabilityState = async (input: {
     phase: "blocked",
     currentJudgement: "Skill 说明书已读取，但当前环境没有提供它声明的受管能力。",
     currentAction: "等待所需能力可用",
-    nextAction: "启用或授权能力后重新发起任务",
+    nextAction: "启用、授权或让本轮 ToolExposure 选中该能力后重新发起任务",
     blockingReason: reason,
     updatedAt: timestamp,
   };
@@ -213,8 +214,13 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
   let availableCapabilityCount = 0;
   const declaredCapabilityCount =
     profile.allowedHarnessToolIds.length + profile.runtimeBindings.length;
+  const exposedHarnessTools = new Set(input.exposedHarnessToolIds ?? []);
 
   for (const toolId of profile.allowedHarnessToolIds) {
+    if (!exposedHarnessTools.has(toolId)) {
+      missingCapabilities.push(capabilityRequirement(skillId, toolId));
+      continue;
+    }
     try {
       tools.push(createHarnessSkillAgentToolBinding({ toolId, execution }));
       availableCapabilityCount += 1;
