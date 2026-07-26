@@ -1,4 +1,4 @@
-name: Inspect Release Factory Run 30217272044
+name: Lint Release Factory Workflow
 
 on:
   push:
@@ -8,107 +8,46 @@ on:
       - '.github/workflows/diagnose-v0.99.5-job.yml'
 
 permissions:
-  actions: read
-  checks: read
   contents: write
 
 jobs:
-  inspect-run:
+  lint-workflow:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout diagnostic branch
         uses: actions/checkout@v4
 
-      - name: Capture run metadata and checks
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGET_RUN_ID: '30217272044'
+      - name: Checkout release factory branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/release-factory-v2
+          path: release-factory-source
+
+      - name: Install actionlint
         shell: bash
         run: |
           set -euo pipefail
-          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}" > run.json
-          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?per_page=100" > jobs.json
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
 
-          python - <<'PY'
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
+      - name: Lint release workflow
+        shell: bash
+        run: |
+          set +e
+          ./actionlint -no-color release-factory-source/.github/workflows/release-factory-v2.yml > actionlint-output.txt 2>&1
+          exit_code=$?
+          set -e
 
-          run = json.loads(Path('run.json').read_text(encoding='utf-8'))
-          jobs = json.loads(Path('jobs.json').read_text(encoding='utf-8')).get('jobs', [])
-          output = [
-              f"run_id: {run.get('id')}",
-              f"name: {run.get('name')}",
-              f"display_title: {run.get('display_title')}",
-              f"event: {run.get('event')}",
-              f"status: {run.get('status')}",
-              f"conclusion: {run.get('conclusion')}",
-              f"head_branch: {run.get('head_branch')}",
-              f"head_sha: {run.get('head_sha')}",
-              f"path: {run.get('path')}",
-              f"created_at: {run.get('created_at')}",
-              f"run_started_at: {run.get('run_started_at')}",
-              f"updated_at: {run.get('updated_at')}",
-              f"check_suite_id: {run.get('check_suite_id')}",
-              f"jobs_count: {len(jobs)}",
-              '',
-          ]
+          {
+            echo "actionlint_exit_code: ${exit_code}"
+            echo
+            cat actionlint-output.txt
+          } > diagnostics/release-factory-v2-actionlint.txt
 
-          for job in jobs:
-              output.append(
-                  f"job {job.get('id')}: {job.get('name')} | "
-                  f"{job.get('status')} | {job.get('conclusion')}"
-              )
-
-          check_suite_id = run.get('check_suite_id')
-          if check_suite_id:
-              try:
-                  suite_raw = subprocess.check_output([
-                      'gh', 'api',
-                      f'/repos/{os.environ["GITHUB_REPOSITORY"]}/check-suites/{check_suite_id}/check-runs?per_page=100',
-                  ], text=True)
-                  check_runs = json.loads(suite_raw).get('check_runs', [])
-                  output.extend(['', f'check_runs_count: {len(check_runs)}'])
-                  for check in check_runs:
-                      output.extend([
-                          f"check_run {check.get('id')}: {check.get('name')}",
-                          f"  status: {check.get('status')}",
-                          f"  conclusion: {check.get('conclusion')}",
-                          f"  title: {(check.get('output') or {}).get('title')}",
-                          f"  summary: {(check.get('output') or {}).get('summary')}",
-                          f"  text: {(check.get('output') or {}).get('text')}",
-                      ])
-                      annotations_url = check.get('output', {}).get('annotations_url')
-                      if annotations_url:
-                          try:
-                              annotations_raw = subprocess.check_output([
-                                  'gh', 'api', annotations_url,
-                              ], text=True)
-                              annotations = json.loads(annotations_raw)
-                              for annotation in annotations:
-                                  output.extend([
-                                      f"  annotation: {annotation.get('annotation_level')}",
-                                      f"    path: {annotation.get('path')}",
-                                      f"    lines: {annotation.get('start_line')}-{annotation.get('end_line')}",
-                                      f"    title: {annotation.get('title')}",
-                                      f"    message: {annotation.get('message')}",
-                                  ])
-                          except subprocess.CalledProcessError as error:
-                              output.append(f'  annotations_error: {error}')
-              except subprocess.CalledProcessError as error:
-                  output.extend(['', f'check_suite_error: {error}'])
-
-          target = Path('diagnostics/run-30217272044.txt')
-          target.parent.mkdir(parents=True, exist_ok=True)
-          target.write_text('\n'.join(output) + '\n', encoding='utf-8')
-          PY
-
-      - name: Commit run snapshot
+      - name: Commit lint output
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add diagnostics/run-30217272044.txt
-          git commit -m 'chore: inspect release factory run 30217272044 [skip ci]'
+          git add diagnostics/release-factory-v2-actionlint.txt
+          git commit -m 'chore: lint release factory workflow [skip ci]'
           git push
