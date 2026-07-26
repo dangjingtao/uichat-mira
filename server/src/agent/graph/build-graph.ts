@@ -5,6 +5,7 @@ import {
   errorNode,
   evidenceNode,
   generateNode,
+  genericTaskSubAgentNode,
   nextActionPlannerNode,
   policyNode,
   prepareContextNode,
@@ -18,6 +19,7 @@ import {
   routeAfterEvaluate,
   routeAfterEvidence,
   routeAfterGenerate,
+  routeAfterGenericTaskSubAgent,
   routeAfterNextAction,
   routeAfterPolicy,
   routeAfterPrepareContext,
@@ -34,6 +36,10 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   .addNode(
     "nextActionPlanner",
     createAgentNode("nextActionPlanner", nextActionPlannerNode),
+  )
+  .addNode(
+    "genericTaskSubAgent",
+    createAgentNode("genericTaskSubAgent", genericTaskSubAgentNode),
   )
   .addNode(
     "toolCallNormalize",
@@ -56,9 +62,15 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   .addConditionalEdges("nextActionPlanner", routeAfterNextAction, [
     "generate",
     "retrieve",
+    "genericTaskSubAgent",
     "toolCallNormalize",
     "error",
   ])
+  .addConditionalEdges(
+    "genericTaskSubAgent",
+    routeAfterGenericTaskSubAgent,
+    ["evidenceStage", "nextActionPlanner", "approval", "error"],
+  )
   .addConditionalEdges("toolCallNormalize", routeAfterToolCallNormalize, [
     "nextActionPlanner",
     "generate",
