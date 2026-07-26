@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.99.0",
+  "version": "0.99.2",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
@@ -33,16 +33,26 @@
       }
     ],
     "git": {
-      "branch": "codex/feature-20260725",
+      "branch": "dev",
       "versions": [
+        {
+          "version": "0.99.2",
+          "commit": {
+            "hash": "c5c8441e13cbabf653ef765eaa0484d4d3385669",
+            "shortHash": "c5c8441",
+            "message": "ci: avoid full desktop builds on dev pushes",
+            "author": "DangJingtao",
+            "date": "2026-07-26T09:53:47+08:00"
+          }
+        },
         {
           "version": "0.99.0",
           "commit": {
-            "hash": "bef2c7a78330329adee2011a29efabdcef32354c",
-            "shortHash": "bef2c7a",
-            "message": "test: lock Harness to four GitHub domain tools",
+            "hash": "8cca6b3dcd745bbf4872634250dd239931ee6080",
+            "shortHash": "8cca6b3",
+            "message": "merge: feat-20260725 into dev",
             "author": "DangJingtao",
-            "date": "2026-07-26T04:32:46+08:00"
+            "date": "2026-07-26T09:31:06+08:00"
           }
         },
         {
