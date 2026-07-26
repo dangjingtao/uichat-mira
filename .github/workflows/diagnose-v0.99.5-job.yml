@@ -1,4 +1,4 @@
-name: Patch Release Factory Workflow Context
+name: Lint Release Factory Speed Workflow
 
 on:
   push:
@@ -11,57 +11,40 @@ permissions:
   contents: write
 
 jobs:
-  patch-workflow:
+  lint-workflow:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout release factory branch
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Checkout speed branch
         uses: actions/checkout@v4
         with:
-          ref: feature/release-factory-v2
-          fetch-depth: 0
+          ref: wip/release-factory-speed
+          path: speed-source
 
-      - name: Move runner temp resolution into the step
+      - name: Install actionlint
+        shell: bash
+        run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+
+      - name: Lint optimized workflow
         shell: bash
         run: |
-          python - <<'PY'
-          from pathlib import Path
+          set +e
+          ./actionlint -no-color speed-source/.github/workflows/release-factory-v2.yml > actionlint-output.txt 2>&1
+          exit_code=$?
+          set -e
+          {
+            echo "actionlint_exit_code: ${exit_code}"
+            echo
+            cat actionlint-output.txt
+          } > diagnostics/release-factory-speed-actionlint.txt
 
-          path = Path('.github/workflows/release-factory-v2.yml')
-          lines = path.read_text(encoding='utf-8').splitlines()
-          lines = [
-              line for line in lines
-              if not line.strip().startswith('PYTHONPATH:')
-          ]
-          text = '\n'.join(lines) + '\n'
-
-          old = '''      - name: Install validation dependencies
-        shell: pwsh
-        run: |
-          pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
-          python -m pip install `
-            --disable-pip-version-check `
-            --target "$env:PYTHONPATH" `
-'''
-          new = '''      - name: Install validation dependencies
-        shell: pwsh
-        run: |
-          $pythonTarget = Join-Path $env:RUNNER_TEMP 'mira-python-validation'
-          "PYTHONPATH=$pythonTarget" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
-          python -m pip install `
-            --disable-pip-version-check `
-            --target "$pythonTarget" `
-'''
-          if old not in text:
-              raise SystemExit('Expected validation dependency block was not found.')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
-
-      - name: Commit workflow fix
+      - name: Commit lint result
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/release-factory-v2.yml
-          git commit -m 'fix(release): resolve runner temp inside validation step'
-          git push origin HEAD:feature/release-factory-v2
+          git add diagnostics/release-factory-speed-actionlint.txt
+          git commit -m 'chore: lint release speed workflow [skip ci]'
+          git push
