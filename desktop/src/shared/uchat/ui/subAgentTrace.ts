@@ -93,8 +93,7 @@ const isSubAgentDelegationStep = (step: RagNodeLike) => {
 /**
  * The parent delegation row is a hand-off event, not a long-running activity.
  * Treat it as part of the append-only subAgent trace so the UI completes that
- * row as soon as child execution rows begin instead of leaving an earlier
- * spinner above already-completed later steps.
+ * row instead of leaving an earlier spinner above later child steps.
  */
 export const isSubAgentTraceStep = (step: RagNodeLike) =>
   step.details?.subAgentTraceEvent === true || isSubAgentDelegationStep(step);
@@ -158,8 +157,17 @@ export const getLatestSubAgentTraceTitle = (
   return candidates.at(-1)?.label?.trim() || null;
 };
 
+const normalizeDelegationPhase = (step: RagNodeLike): RagNodeLike =>
+  isSubAgentDelegationStep(step) && step.phase === "start"
+    ? { ...step, phase: "done" }
+    : step;
+
 /** State snapshots are persisted execution nodes, but they are not historical
  * Trace rows. Keep them out of the expandable list while retaining all ordinary
- * Agent/RAG events and the append-only subAgent Trace ledger. */
+ * Agent/RAG events and the append-only subAgent Trace ledger. Delegation itself
+ * is normalized to a completed hand-off so status, numbering and step totals
+ * remain one-way and consistent. */
 export const getDisplayExecutionSteps = (steps: RagNodeLike[]) =>
-  steps.filter((step) => !isSubAgentWorkingStateNode(step));
+  steps
+    .filter((step) => !isSubAgentWorkingStateNode(step))
+    .map(normalizeDelegationPhase);
