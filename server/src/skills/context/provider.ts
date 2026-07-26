@@ -7,6 +7,7 @@ import type {
   SkillDisclosurePlan,
   SkillExecutionManifest,
   SkillManifest,
+  SkillMatchResult,
   SkillResource,
 } from "./types.js";
 
