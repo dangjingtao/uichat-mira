@@ -5,6 +5,7 @@ import { extendedRepositorySchema } from "../mcp/tools/github-repository-extende
 import { SkillLoader } from "./context/loader.js";
 import { SkillMatcher } from "./context/matcher.js";
 import { SkillScanner } from "./context/scanner.js";
+import type { SkillManifest } from "./context/types.js";
 
 const skillsRoot = path.dirname(fileURLToPath(import.meta.url));
 
@@ -15,8 +16,22 @@ const loadMiraDocsManifest = async () => {
   return manifest!;
 };
 
-const operationNames = (schema: typeof extendedRepositorySchema) =>
-  schema.oneOf.flatMap((variant) => variant.properties.operation.enum);
+const operationNames = (schema: Record<string, unknown>) =>
+  ((schema.oneOf ?? []) as Array<Record<string, unknown>>).map((variant) => {
+    const properties = variant.properties as Record<string, Record<string, unknown>>;
+    return (properties.operation.enum as string[])[0];
+  });
+
+const loadResourceContent = async (
+  loader: SkillLoader,
+  manifest: SkillManifest,
+  uri: string,
+) => {
+  const resources = await loader.listResources(manifest);
+  const resource = resources.find((candidate) => candidate.uri === uri);
+  expect(resource).toBeDefined();
+  return (await loader.loadResource({ manifest, resource: resource! })).content;
+};
 
 describe("MiraDocs canonical Skill", () => {
   it("discovers one public Skill for site creation, content publishing, and maintenance", async () => {
@@ -57,10 +72,49 @@ describe("MiraDocs canonical Skill", () => {
     ]);
   });
 
+  it("keeps the three disclosed workflows consistent with the primary Skill", async () => {
+    const manifest = await loadMiraDocsManifest();
+    const loader = new SkillLoader();
+    const content = await loader.loadContent(manifest);
+    const createSite = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/references/create-site.md",
+    );
+    const publishContent = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/references/publish-content.md",
+    );
+    const maintainSite = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/references/maintain-site.md",
+    );
+    const conversations = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/examples/conversations.md",
+    );
+
+    expect(content.body).toContain("恢复任务时先回读 checkpoint");
+    expect(createSite).toContain("github_repository.create");
+    expect(createSite).toContain("不得再次调用 `create`");
+    expect(createSite).toContain("Pages 必须保持 `not_run`");
+    expect(publishContent).toContain("不要要求用户填写完整 frontmatter 表单");
+    expect(publishContent).toContain("不覆盖同名内容");
+    expect(maintainSite).toContain("github_repository.get_pages");
+    expect(maintainSite).toContain("github_repository.configure_pages");
+    expect(conversations).toContain("不会重复创建仓库");
+    expect(conversations).toContain("不重新创建仓库、重写内容或新建重复 PR");
+  });
+
   it("binds the GitHub site workflow to the repository capabilities available on dev", async () => {
     const manifest = await loadMiraDocsManifest();
     const content = await new SkillLoader().loadContent(manifest);
-    const operations = operationNames(extendedRepositorySchema);
+    const operations = operationNames(
+      extendedRepositorySchema as unknown as Record<string, unknown>,
+    );
 
     for (const operation of [
       "create",
@@ -128,5 +182,18 @@ describe("MiraDocs canonical Skill", () => {
       source: "semantic",
       score: 0.68,
     });
+  });
+
+  it("does not restore the removed project-management productization intent", async () => {
+    const manifest = await loadMiraDocsManifest();
+    const matcher = new SkillMatcher();
+
+    expect(
+      matcher.match({
+        query: "把项目内容模型、里程碑和决策做成文档站产品",
+        messages: [],
+        manifests: [manifest],
+      }),
+    ).toEqual({ primary: null, secondary: [] });
   });
 });
