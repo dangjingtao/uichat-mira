@@ -21,12 +21,11 @@ const reportDir = path.join(
   "reports",
   scope,
 );
+const coverageDir = path.join(workspaceDir, "coverage");
 const rawResultsPath = path.join(reportDir, "raw-results.json");
-const includeCoverage = ["1", "true"].includes(
-  process.env.MIRA_RELEASE_COVERAGE?.trim().toLowerCase() ?? "",
-);
 
 fs.rmSync(reportDir, { recursive: true, force: true });
+fs.rmSync(coverageDir, { recursive: true, force: true });
 fs.mkdirSync(reportDir, { recursive: true });
 
 const pnpmExecutable = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -34,23 +33,27 @@ const args = [
   "exec",
   "vitest",
   "run",
+  "--coverage",
   "--reporter=default",
   "--reporter=json",
   `--outputFile=${rawResultsPath}`,
 ];
-if (includeCoverage) {
-  args.push("--coverage");
-}
 
-console.log(
-  `Running ${scope} release tests${includeCoverage ? " with coverage" : " without coverage"}...`,
-);
+console.log(`Running ${scope} release tests with fresh coverage...`);
 const run = spawnSync(pnpmExecutable, args, {
   cwd: workspaceDir,
   stdio: "inherit",
   env: process.env,
   windowsHide: true,
 });
+
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function normalizePath(filePath) {
+  return path.relative(workspaceDir, filePath).replaceAll("\\", "/");
+}
 
 function normalizeAssertion(assertion) {
   return {
@@ -70,10 +73,7 @@ function normalizeAssertion(assertion) {
 
 function normalizeSuite(suite) {
   return {
-    name:
-      typeof suite.name === "string"
-        ? path.relative(workspaceDir, suite.name).replaceAll("\\", "/")
-        : "",
+    name: typeof suite.name === "string" ? normalizePath(suite.name) : "",
     absoluteName: suite.name ?? "",
     status: suite.status ?? "unknown",
     startTime: typeof suite.startTime === "number" ? suite.startTime : null,
@@ -87,7 +87,7 @@ function normalizeSuite(suite) {
 
 let raw;
 if (fs.existsSync(rawResultsPath)) {
-  raw = JSON.parse(fs.readFileSync(rawResultsPath, "utf8"));
+  raw = readJson(rawResultsPath);
 } else {
   raw = {
     success: false,
@@ -157,17 +157,84 @@ fs.writeFileSync(
   `${JSON.stringify(testReport, null, 2)}\n`,
 );
 
-const coverageReport = {
-  schemaVersion: 1,
-  generatedAt: new Date().toISOString(),
-  scope,
-  summary: {},
-  files: [],
-  available: false,
-  missingReason: includeCoverage
-    ? "Coverage normalization is not part of the fast release path."
-    : "Release validation skips coverage to minimize wall-clock time.",
-};
+function toCountMap(coverageObject = {}) {
+  return Object.entries(coverageObject).reduce((result, [key, value]) => {
+    result[String(key)] = Number(value ?? 0);
+    return result;
+  }, {});
+}
+
+function toBranchMap(branchMap = {}, branchCounts = {}) {
+  return Object.entries(branchMap).map(([key, branch]) => ({
+    id: String(key),
+    line: branch?.line ?? null,
+    type: branch?.type ?? "branch",
+    locations: Array.isArray(branch?.locations)
+      ? branch.locations.map((location, index) => ({
+          index,
+          start: location?.start ?? null,
+          end: location?.end ?? null,
+          count: Number(branchCounts?.[key]?.[index] ?? 0),
+        }))
+      : [],
+  }));
+}
+
+const coverageSummaryPath = path.join(coverageDir, "coverage-summary.json");
+const coverageFinalPath = path.join(coverageDir, "coverage-final.json");
+let coverageReport;
+
+if (fs.existsSync(coverageSummaryPath) && fs.existsSync(coverageFinalPath)) {
+  const summary = readJson(coverageSummaryPath);
+  const full = readJson(coverageFinalPath);
+  const totalSummary = summary.total;
+
+  coverageReport = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    scope,
+    summary,
+    files: Object.values(full).map((entry) => {
+      const normalizedPath = normalizePath(entry.path);
+      const fileSummary =
+        summary[entry.path] ??
+        summary[normalizedPath] ??
+        summary[normalizedPath.split("/").join(path.sep)] ??
+        totalSummary;
+
+      return {
+        path: normalizedPath,
+        absolutePath: entry.path,
+        summary: fileSummary,
+        lines: {
+          map: entry.lineMap ?? {},
+          hits: toCountMap(entry.l),
+        },
+        statements: {
+          map: entry.statementMap ?? {},
+          hits: toCountMap(entry.s),
+        },
+        functions: {
+          map: entry.fnMap ?? {},
+          hits: toCountMap(entry.f),
+        },
+        branches: toBranchMap(entry.branchMap, entry.b),
+      };
+    }),
+    available: true,
+  };
+} else {
+  coverageReport = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    scope,
+    summary: {},
+    files: [],
+    available: false,
+    missingReason: "Vitest did not emit fresh coverage artifacts for this release run.",
+  };
+}
+
 fs.writeFileSync(
   path.join(reportDir, "coverage-report.json"),
   `${JSON.stringify(coverageReport, null, 2)}\n`,
@@ -175,9 +242,9 @@ fs.writeFileSync(
 fs.rmSync(rawResultsPath, { force: true });
 
 console.log(
-  `${scope} tests: ${testReport.summary.failedTests}/${testReport.summary.totalTests} failed in ${testReport.summary.durationMs}ms.`,
+  `${scope} tests: ${testReport.summary.failedTests}/${testReport.summary.totalTests} failed in ${testReport.summary.durationMs}ms; coverage=${coverageReport.available}.`,
 );
 
-if (!testReport.summary.success) {
+if (!testReport.summary.success || !coverageReport.available) {
   process.exitCode = run.status || 1;
 }
