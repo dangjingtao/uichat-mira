@@ -130,12 +130,12 @@ export const getLatestSubAgentTraceTitle = (
   runId?: string,
 ) => {
   const ordered = getSubAgentTraceSteps(steps);
-  const activeRunId = runId ?? getSubAgentRunId(ordered.at(-1) ?? ({} as RagNodeLike));
+  const latest = ordered.at(-1);
+  const activeRunId = runId ?? (latest ? getSubAgentRunId(latest) : null);
   const candidates = ordered.filter(
     (step) => !activeRunId || getSubAgentRunId(step) === activeRunId,
   );
-  const latest = candidates.at(-1);
-  return latest?.label?.trim() || null;
+  return candidates.at(-1)?.label?.trim() || null;
 };
 
 /** State snapshots are persisted execution nodes, but they are not historical
