@@ -81,6 +81,8 @@ const DEFAULT_EXECUTION: SkillExecutionManifest = {
 type PrimarySkill = NonNullable<SkillContext["primary"]>;
 type ProfileSource = string | Pick<PrimarySkill, "id" | "execution">;
 
+const unique = (values: string[]) => [...new Set(values)];
+
 const toRuntimeBinding = (runtimeId: string): SkillAgentRuntimeBinding => {
   const known = KNOWN_PRIVATE_RUNTIME_BINDINGS[runtimeId];
   if (known) return { ...known };
@@ -101,6 +103,37 @@ const cloneExecution = (execution: SkillExecutionManifest): SkillExecutionManife
   runtimeBindings: [...execution.runtimeBindings],
 });
 
+const resolveExecution = (input: {
+  skillId: string;
+  declared?: SkillExecutionManifest;
+}) => {
+  const compatibility = LEGACY_OFFICE_EXECUTION[input.skillId];
+  if (!input.declared) {
+    return cloneExecution(compatibility ?? DEFAULT_EXECUTION);
+  }
+  if (!compatibility) {
+    return cloneExecution(input.declared);
+  }
+
+  // Office package discovery can derive the private runtime from the built-in
+  // Registry, while the historic read-only Harness surface is intentionally not
+  // duplicated there. Merge the minimum compatibility requirements so moving
+  // from a hard-coded profile to a discovered manifest cannot reduce capability.
+  return cloneExecution({
+    ...input.declared,
+    allowedTools: unique([
+      ...compatibility.allowedTools,
+      ...input.declared.allowedTools,
+    ]),
+    runtimeBindings: unique([
+      ...compatibility.runtimeBindings,
+      ...input.declared.runtimeBindings,
+    ]),
+    workspaceBound:
+      compatibility.workspaceBound || input.declared.workspaceBound,
+  });
+};
+
 /**
  * Resolve the single logical subAgent profile for any discovered Skill.
  *
@@ -113,9 +146,7 @@ export const resolveSubAgentExecutionProfile = (
 ): SubAgentExecutionProfile => {
   const skillId = typeof source === "string" ? source : source.id;
   const declared = typeof source === "string" ? undefined : source.execution;
-  const execution = cloneExecution(
-    declared ?? LEGACY_OFFICE_EXECUTION[skillId] ?? DEFAULT_EXECUTION,
-  );
+  const execution = resolveExecution({ skillId, declared });
 
   return {
     skillId,
