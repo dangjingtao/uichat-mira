@@ -63,6 +63,40 @@ Content quality, facts, outline and citations must be prepared before calling th
 
 For long reports, build the outline first, then write the full document against that outline. If a target length/page count is explicit, validate the finished artifact instead of guessing from source text length.
 
+# TOC layout contract
+
+When a report needs a table of contents, use the runtime-native `spec.toc` generated from `heading1` / `heading2` / `heading3` blocks.
+
+Canonical input:
+
+```json
+{
+  "toc": {
+    "title": "报告目录"
+  }
+}
+```
+
+The TOC is a document-navigation structure, not a normal content table.
+
+Hard layout rules:
+
+1. Never synthesize a TOC with a `table` block.
+2. Never build a four-column or two-column TOC such as `标题 | 点线页码 | 标题 | 点线页码`.
+3. Never insert manual dot leaders or guessed page numbers into paragraph/table text.
+4. Use a single-column TOC: title on the left, runtime-generated leader/page number on the right.
+5. Chinese section titles must remain horizontal. They may wrap naturally to a second line, but must never collapse to one character per line.
+6. If a heading is too long for two readable lines, shorten the heading text; keep the full wording in the section body.
+7. A long TOC may continue onto another page. Do not compress it into multiple columns merely to keep it on one page.
+8. Do not put line breaks inside heading text to force a visual layout. Heading text is also used for PDF bookmarks and TOC entries.
+9. Rendered TOC quality must be inspected before completion. Any character-by-character vertical wrapping, overlapping leader/page number, clipped title, or unreadable indentation is a generation failure.
+
+For exact failure examples and acceptance checks, read:
+
+```text
+skill://pdf/references/toc-layout.md
+```
+
 ## Route B — Convert Markdown
 Use `operation=md2pdf` when the real source is an existing Markdown artifact and conversion is desired.
 
@@ -105,6 +139,7 @@ Split/image extraction use an `outputDir` and may produce multiple artifacts.
 - Tables should remain readable rather than cramming excessive columns into one page.
 - References/citations must be real and verifiable when the task requires sourced factual content.
 - For image blocks, source assets must remain inside the active workspace.
+- A generated TOC must remain single-column, horizontally readable, correctly indented and page-number aligned.
 
 # Hard rules
 
@@ -116,6 +151,7 @@ Split/image extraction use an `outputDir` and may produce multiple artifacts.
 6. Match the user's requested language, outline and document structure.
 7. Do not silently use lossy conversion when a native PDF operation exists.
 8. Do not use `terminal_session` to invoke any PDF Python script.
+9. Never use a content `table` to imitate a table of contents; use `spec.toc`.
 
 # Completion
 
@@ -123,6 +159,7 @@ A PDF task is complete only when all applicable conditions hold:
 - requested extraction/inspection result exists in Evidence;
 - generated or modified artifact exists and is readable;
 - requested headings/tables/charts/equations/references or other document structure exist in generated reports;
+- any requested TOC is single-column, horizontally readable, aligned and generated from actual headings;
 - requested page/form/metadata operation is reflected in the result;
 - multi-output operations report their output directory/file count;
 - source files remain preserved unless the user explicitly requested otherwise.
