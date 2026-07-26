@@ -446,6 +446,23 @@ async function mergeShards() {
     );
   }
 
+  const blobFiles = fs
+  .readdirSync(mergeDir)
+  .filter((filename) => filename.endsWith(".blob.json"))
+  .map((filename) => path.join(mergeDir, filename));
+if (expectedShards > 0 && blobFiles.length !== expectedShards) {
+  throw new Error(
+    `Expected ${expectedShards} ${scope} Vitest blobs, received ${blobFiles.length}.`,
+  );
+}
+
+const vitestMergeDir = path.join(validationRoot, "merge-input", scope);
+fs.rmSync(vitestMergeDir, { recursive: true, force: true });
+fs.mkdirSync(vitestMergeDir, { recursive: true });
+for (const blobFile of blobFiles) {
+  fs.copyFileSync(blobFile, path.join(vitestMergeDir, path.basename(blobFile)));
+}
+
   fs.rmSync(reportDir, { recursive: true, force: true });
   fs.rmSync(coverageDir, { recursive: true, force: true });
   fs.mkdirSync(reportDir, { recursive: true });
@@ -456,7 +473,7 @@ async function mergeShards() {
     [
       "exec",
       "vitest",
-      `--merge-reports=${mergeDir}`,
+      `--merge-reports=${vitestMergeDir}`,
       "--reporter=default",
       "--reporter=json",
       `--outputFile=${rawResultsPath}`,
