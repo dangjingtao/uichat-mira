@@ -5,6 +5,7 @@ import {
   GENERIC_TASK_DELEGATE_TOOL_ID,
   GENERIC_TASK_SUBAGENT_SKILL_ID,
 } from "../delegation/contract.js";
+import { routeAfterEvidence } from "../graph/routes.js";
 import type { AgentToolCallRequest } from "../types.js";
 
 const createGenericPendingToolCall = () =>
@@ -84,4 +85,19 @@ test("non-generic approvals cannot restore generic task tools", () => {
   });
 
   assert.deepEqual(resumed.exposedTools, []);
+});
+
+test("delegated approval goes from Evidence directly to Approval", () => {
+  const route = routeAfterEvidence({
+    pendingApproval: {
+      id: "approval-generic-task",
+      runId: "run-generic-task",
+      stepId: `subagent:${GENERIC_TASK_SUBAGENT_SKILL_ID}`,
+      toolId: "terminal_session",
+      reason: "Command execution requires approval.",
+      createdAt: "2026-07-27T00:00:00.000Z",
+    },
+  } as never);
+
+  assert.equal(route, "approval");
 });
