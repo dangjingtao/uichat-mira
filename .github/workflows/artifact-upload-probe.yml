@@ -50,7 +50,9 @@ jobs:
         run: node scripts/release/run-test-scope.mjs --scope=client --shard=1/2 --timeout-seconds=480
 
       - name: Inspect and package real shard
+        id: package
         if: always()
+        continue-on-error: true
         shell: pwsh
         run: |
           $source = '.artifacts\release-validation\windows-x64\shards\client\1-of-2'
@@ -74,12 +76,13 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path 'artifact-probe' | Out-Null
           $diagnostic | ConvertTo-Json -Depth 5 | Out-File -LiteralPath 'artifact-probe\diagnostic.json' -Encoding utf8
-          Compress-Archive -LiteralPath "$source\*" -DestinationPath 'artifact-probe\client-shard.zip' -CompressionLevel Fastest -Force
+          Compress-Archive -Path "$source\*" -DestinationPath 'artifact-probe\client-shard.zip' -CompressionLevel Fastest -Force
           Copy-Item -LiteralPath $source -Destination 'artifact-probe\raw-shard' -Recurse -Force
           Get-Content -LiteralPath 'artifact-probe\diagnostic.json'
 
       - name: Upload diagnostic only
         id: diagnostic-upload
+        if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -91,6 +94,7 @@ jobs:
 
       - name: Upload zipped shard
         id: zip-upload
+        if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -102,6 +106,7 @@ jobs:
 
       - name: Upload raw shard
         id: raw-upload
+        if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -115,13 +120,14 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
+          PACKAGE_OUTCOME: ${{ steps.package.outcome }}
           DIAGNOSTIC_UPLOAD: ${{ steps.diagnostic-upload.outcome }}
           ZIP_UPLOAD: ${{ steps.zip-upload.outcome }}
           RAW_UPLOAD: ${{ steps.raw-upload.outcome }}
           SHARD_OUTCOME: ${{ steps.shard.outcome }}
         with:
           script: |
-            const summary = `shard=${process.env.SHARD_OUTCOME}, diagnostic=${process.env.DIAGNOSTIC_UPLOAD}, zip=${process.env.ZIP_UPLOAD}, raw=${process.env.RAW_UPLOAD}`;
+            const summary = `shard=${process.env.SHARD_OUTCOME}, package=${process.env.PACKAGE_OUTCOME}, diagnostic=${process.env.DIAGNOSTIC_UPLOAD}, zip=${process.env.ZIP_UPLOAD}, raw=${process.env.RAW_UPLOAD}`;
             const transportPassed = process.env.DIAGNOSTIC_UPLOAD === 'success' && process.env.ZIP_UPLOAD === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
