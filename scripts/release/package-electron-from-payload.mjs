@@ -18,8 +18,15 @@ if (process.platform !== "win32") {
   );
 }
 
+const allowFailedTests = ["1", "true"].includes(
+  process.env.MIRA_RELEASE_ALLOW_FAILED_TESTS?.trim().toLowerCase() ?? "",
+);
+
 runPnpm(["version:sync"], { cwd: projectRoot });
-const manifest = verifyPayload();
+const manifest = verifyPayload({
+  allowFailedTests,
+  requireReleaseEligible: !allowFailedTests,
+});
 
 const electronRoot = path.join(
   artifactsRoot,
@@ -108,10 +115,11 @@ if (setupExecutables.length === 0) {
 }
 
 const packageSummary = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   consumer: "electron",
   payloadVersion: manifest.version,
   payloadCommit: manifest.gitCommit,
+  releaseEligible: manifest.releaseEligible,
   outputs: outputs.map((file) => ({
     path: file.relativePath,
     bytes: fs.statSync(file.fullPath).size,
@@ -123,5 +131,5 @@ fs.writeFileSync(
 );
 
 console.log(
-  `Electron package ready from frozen payload: ${setupExecutables.length} setup executable(s).`,
+  `Electron package ready from frozen payload: ${setupExecutables.length} setup executable(s), releaseEligible=${manifest.releaseEligible}.`,
 );
