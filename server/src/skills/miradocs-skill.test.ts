@@ -96,6 +96,11 @@ describe("MiraDocs canonical Skill", () => {
       manifest,
       "skill://miradocs/examples/conversations.md",
     );
+    const deliveryTemplate = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/templates/site-draft.md",
+    );
 
     expect(content.body).toContain("恢复任务时先回读 checkpoint");
     expect(createSite).toContain("github_repository.create");
@@ -107,6 +112,11 @@ describe("MiraDocs canonical Skill", () => {
     expect(maintainSite).toContain("github_repository.configure_pages");
     expect(conversations).toContain("不会重复创建仓库");
     expect(conversations).toContain("不重新创建仓库、重写内容或新建重复 PR");
+    expect(deliveryTemplate).toContain("completed");
+    expect(deliveryTemplate).toContain("blocked");
+    expect(deliveryTemplate).toContain("failed");
+    expect(deliveryTemplate).toContain("not_run");
+    expect(deliveryTemplate).toContain("恢复入口必须指向第一个未完成步骤");
   });
 
   it("binds the GitHub site workflow to the repository capabilities available on dev", async () => {
