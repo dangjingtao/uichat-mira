@@ -1,0 +1,279 @@
+Source job: 89769278798
+Total lines: 708
+
+=== Error-like lines ===
+616: 2026-07-26T07:33:48.1038974Z collect2.exe: error: ld returned 1 exit status
+621: 2026-07-26T07:33:48.1213340Z Error: Command failed: gcc -O2 -s -static -mconsole -o D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\dist\native\.MiraWebBridgeHost.3028.tmp.exe D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\native-host\launcher.c
+622: 2026-07-26T07:33:48.1214458Z     at genericNodeError (node:internal/errors:984:15)
+624: 2026-07-26T07:33:48.1215460Z     at checkExecSyncError (node:child_process:891:11)
+643: 2026-07-26T07:33:48.1427822Z Error: Command failed: npm run native:build
+644: 2026-07-26T07:33:48.1428365Z     at genericNodeError (node:internal/errors:984:15)
+646: 2026-07-26T07:33:48.1429360Z     at checkExecSyncError (node:child_process:891:11)
+661: 2026-07-26T07:33:48.1504660Z  ELIFECYCLE  Command failed with exit code 1.
+666: 2026-07-26T07:33:48.4761188Z Error: Command failed: C:\hostedtoolcache\windows\node\20.20.2\x64\node.exe C:\Users\runneradmin\setup-pnpm\node_modules\.pnpm\pnpm@9.12.0\node_modules\pnpm\bin\pnpm.cjs internal:prepare:desktop-artifacts
+667: 2026-07-26T07:33:48.4762734Z     at genericNodeError (node:internal/errors:984:15)
+669: 2026-07-26T07:33:48.4764005Z     at checkExecSyncError (node:child_process:891:11)
+686: 2026-07-26T07:33:48.4842547Z  ELIFECYCLE  Command failed with exit code 1.
+687: 2026-07-26T07:33:48.6757712Z ##[error]Process completed with exit code 1.
+
+=== Final 260 lines ===
+2026-07-26T07:32:34.8532826Z .../node_modules/better-sqlite3 install:   sqlite3.vcxproj -> D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\\sqlite3.lib
+2026-07-26T07:32:34.9770331Z .../node_modules/better-sqlite3 install: cl : command line  warning D9025: overriding '/std:c++17' with '/std:c++20' [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:34.9771687Z .../node_modules/better-sqlite3 install:   better_sqlite3.cpp
+2026-07-26T07:32:37.7468691Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u6784' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7526067Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u5EFA' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7533661Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u9A8C' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7541276Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u8BC1' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7547962Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u542B' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7554569Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u7A7A' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7561195Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u683C' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7567786Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u7B26' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.7574686Z .../node_modules/better-sqlite3 install: D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\src\better_sqlite3.cpp(48,1): warning C4566: character represented by universal-character-name '\u53F7' cannot be represented in the current code page (1252) [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.8129958Z .../node_modules/better-sqlite3 install: cl : command line  warning D9025: overriding '/std:c++17' with '/std:c++20' [D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\better_sqlite3.vcxproj]
+2026-07-26T07:32:37.8157281Z .../node_modules/better-sqlite3 install:   win_delay_load_hook.cc
+2026-07-26T07:32:40.3002144Z .../node_modules/better-sqlite3 install:      Creating library D:\Mira ????\? ?? & ??\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\better_sqlite3.lib and object D:\Mira ????\? ?? & ??\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\better_sqlite3.exp
+2026-07-26T07:32:40.3113432Z .../node_modules/better-sqlite3 install:   Generating code
+2026-07-26T07:32:40.3919278Z .../node_modules/better-sqlite3 install:   Previous IPDB not found, fall back to full compilation.
+2026-07-26T07:32:56.7176642Z .../node_modules/better-sqlite3 install:   All 4910 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+2026-07-26T07:32:56.7531165Z .../node_modules/better-sqlite3 install:   Finished generating code
+2026-07-26T07:32:57.6343112Z .../node_modules/better-sqlite3 install:   better_sqlite3.vcxproj -> D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\\better_sqlite3.node
+2026-07-26T07:32:57.7354811Z .../node_modules/better-sqlite3 install:   test_extension.c
+2026-07-26T07:32:57.8352732Z .../node_modules/better-sqlite3 install:   win_delay_load_hook.cc
+2026-07-26T07:32:58.1361719Z .../node_modules/better-sqlite3 install:      Creating library D:\Mira ????\? ?? & ??\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\test_extension.lib and object D:\Mira ????\? ?? & ??\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\test_extension.exp
+2026-07-26T07:32:58.1404280Z .../node_modules/better-sqlite3 install:   Generating code
+2026-07-26T07:32:58.1417322Z .../node_modules/better-sqlite3 install:   Previous IPDB not found, fall back to full compilation.
+2026-07-26T07:32:58.1495303Z .../node_modules/better-sqlite3 install:   All 3 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+2026-07-26T07:32:58.1497057Z .../node_modules/better-sqlite3 install:   Finished generating code
+2026-07-26T07:32:58.2871674Z .../node_modules/better-sqlite3 install:   test_extension.vcxproj -> D:\Mira 构建验证\含 空格 & 符号\workspace\node_modules\.pnpm\better-sqlite3@12.10.0\node_modules\better-sqlite3\build\Release\\test_extension.node
+2026-07-26T07:32:58.3904543Z .../node_modules/better-sqlite3 install: gyp info ok 
+2026-07-26T07:32:58.3994959Z .../node_modules/better-sqlite3 install: Done
+2026-07-26T07:32:58.5858803Z .../node_modules/@google/genai preinstall$ echo 'preinstall: no-op'
+2026-07-26T07:32:58.5953804Z .../node_modules/@google/genai preinstall: 'preinstall: no-op'
+2026-07-26T07:32:58.5963360Z .../node_modules/@google/genai preinstall: Done
+2026-07-26T07:32:58.9854030Z 
+2026-07-26T07:32:58.9854667Z devDependencies:
+2026-07-26T07:32:58.9855382Z + @huggingface/tokenizers 0.1.3
+2026-07-26T07:32:58.9856419Z + @tauri-apps/cli 2.11.2
+2026-07-26T07:32:58.9856967Z + concurrently 9.2.1
+2026-07-26T07:32:58.9857843Z + cross-env 7.0.3
+2026-07-26T07:32:58.9859447Z + electron 31.7.7
+2026-07-26T07:32:58.9860416Z + electron-builder 24.13.3
+2026-07-26T07:32:58.9861005Z + jimp 1.6.1
+2026-07-26T07:32:58.9861751Z + onnxruntime-web 1.27.0
+2026-07-26T07:32:58.9862541Z + png2icons 2.0.1
+2026-07-26T07:32:58.9863064Z + typescript 5.9.3
+2026-07-26T07:32:58.9863342Z 
+2026-07-26T07:32:59.1067179Z Done in 1m 44.1s
+2026-07-26T07:33:01.9294759Z 
+2026-07-26T07:33:01.9295728Z added 57 packages, and audited 58 packages in 3s
+2026-07-26T07:33:01.9296376Z 
+2026-07-26T07:33:01.9296846Z 11 packages are looking for funding
+2026-07-26T07:33:01.9297794Z   run `npm fund` for details
+2026-07-26T07:33:01.9307822Z 
+2026-07-26T07:33:01.9308160Z found 0 vulnerabilities
+2026-07-26T07:33:02.0416685Z ##[group]Run $keyRoot = Join-Path $env:MIRA_VALIDATION_ROOT 'mira-clipper-ext\.keys'
+2026-07-26T07:33:02.0417536Z [36;1m$keyRoot = Join-Path $env:MIRA_VALIDATION_ROOT 'mira-clipper-ext\.keys'[0m
+2026-07-26T07:33:02.0418211Z [36;1mNew-Item -ItemType Directory -Force -Path $keyRoot | Out-Null[0m
+2026-07-26T07:33:02.0418732Z [36;1m[System.IO.File]::WriteAllText([0m
+2026-07-26T07:33:02.0419183Z [36;1m  (Join-Path $keyRoot 'mira-clipper-prod.pem'),[0m
+2026-07-26T07:33:02.0419654Z [36;1m  $env:MIRA_CLIPPER_CRX_PROD_PEM,[0m
+2026-07-26T07:33:02.0420084Z [36;1m  [System.Text.UTF8Encoding]::new($false)[0m
+2026-07-26T07:33:02.0420488Z [36;1m)[0m
+2026-07-26T07:33:02.0453522Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-07-26T07:33:02.0454008Z env:
+2026-07-26T07:33:02.0454363Z   MIRA_VALIDATION_ROOT: D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:02.0454879Z   LOCAL_MODEL_RAW_ROOT: D:\Mira 构建验证\binary-cache\local-models
+2026-07-26T07:33:02.0455382Z   LOCAL_MODEL_ALLOW_NETWORK: 1
+2026-07-26T07:33:02.0455712Z   CI: true
+2026-07-26T07:33:02.0456076Z   PNPM_HOME: C:\Users\runneradmin\setup-pnpm\node_modules\.bin
+2026-07-26T07:33:02.0470691Z   MIRA_CLIPPER_CRX_PROD_PEM: ***
+2026-07-26T07:33:02.0471071Z ##[endgroup]
+2026-07-26T07:33:02.4130404Z ##[group]Run pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win
+2026-07-26T07:33:02.4131140Z [36;1mpnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win[0m
+2026-07-26T07:33:02.4164396Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-07-26T07:33:02.4164883Z env:
+2026-07-26T07:33:02.4165247Z   MIRA_VALIDATION_ROOT: D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:02.4165770Z   LOCAL_MODEL_RAW_ROOT: D:\Mira 构建验证\binary-cache\local-models
+2026-07-26T07:33:02.4166236Z   LOCAL_MODEL_ALLOW_NETWORK: 1
+2026-07-26T07:33:02.4166567Z   CI: true
+2026-07-26T07:33:02.4166946Z   PNPM_HOME: C:\Users\runneradmin\setup-pnpm\node_modules\.bin
+2026-07-26T07:33:02.4167410Z   HF_TOKEN: 
+2026-07-26T07:33:02.4167718Z ##[endgroup]
+2026-07-26T07:33:03.1931187Z 
+2026-07-26T07:33:03.1932644Z > ui-chat-mira@0.99.5 release:payload:win D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:03.1933828Z > node scripts/release/build-payload.mjs
+2026-07-26T07:33:03.1934382Z 
+2026-07-26T07:33:03.2585314Z === Release Factory: build shared Windows payload ===
+2026-07-26T07:33:03.2590660Z Project root: D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:03.2591753Z Payload root: D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-payload\windows-x64
+2026-07-26T07:33:03.2592376Z Skip tests: false
+2026-07-26T07:33:03.2597576Z > executable: C:\hostedtoolcache\windows\node\20.20.2\x64\node.exe
+2026-07-26T07:33:03.2598818Z > args: ["C:\\Users\\runneradmin\\setup-pnpm\\node_modules\\.pnpm\\pnpm@9.12.0\\node_modules\\pnpm\\bin\\pnpm.cjs","version:sync"]
+2026-07-26T07:33:03.2599759Z > cwd: D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:03.7894383Z 
+2026-07-26T07:33:03.7895748Z > ui-chat-mira@0.99.5 version:sync D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:03.7896484Z > node scripts/sync-version.js
+2026-07-26T07:33:03.7897585Z 
+2026-07-26T07:33:03.8481523Z Syncing workspace package versions to 0.99.5...
+2026-07-26T07:33:03.8492502Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\electron\package.json
+2026-07-26T07:33:03.8496821Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\desktop\package.json
+2026-07-26T07:33:03.8501419Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\server\package.json
+2026-07-26T07:33:03.8505042Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\packages\core\package.json
+2026-07-26T07:33:03.8508929Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\package.json
+2026-07-26T07:33:03.8512883Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\tauri\tauri.conf.json
+2026-07-26T07:33:03.8519341Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\tauri\Cargo.toml
+2026-07-26T07:33:03.8524154Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\extension\manifest.json
+2026-07-26T07:33:03.8529373Z Updated D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\manifest.json
+2026-07-26T07:33:03.8530081Z Version sync complete.
+2026-07-26T07:33:03.8716735Z > executable: C:\hostedtoolcache\windows\node\20.20.2\x64\node.exe
+2026-07-26T07:33:03.8717993Z > args: ["C:\\Users\\runneradmin\\setup-pnpm\\node_modules\\.pnpm\\pnpm@9.12.0\\node_modules\\pnpm\\bin\\pnpm.cjs","check"]
+2026-07-26T07:33:03.8719047Z > cwd: D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:04.4037693Z 
+2026-07-26T07:33:04.4038957Z > ui-chat-mira@0.99.5 check D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:04.4039779Z > pnpm -r --workspace-concurrency=1 typecheck
+2026-07-26T07:33:04.4040162Z 
+2026-07-26T07:33:05.0047339Z Scope: 6 of 7 workspace projects
+2026-07-26T07:33:05.0098187Z ##[group]@ui-chat-mira/desktop@0.99.5 : typecheck desktop
+2026-07-26T07:33:05.0128449Z 
+2026-07-26T07:33:05.0129693Z > @ui-chat-mira/desktop@0.99.5 typecheck D:\Mira 构建验证\含 空格 & 符号\workspace\desktop
+2026-07-26T07:33:05.0130452Z > tsc --noEmit
+2026-07-26T07:33:05.0130682Z 
+2026-07-26T07:33:20.5326066Z ##[endgroup]
+2026-07-26T07:33:20.5331877Z ##[group]@ui-chat-mira/core@0.99.5 : typecheck packages\core
+2026-07-26T07:33:20.5347353Z 
+2026-07-26T07:33:20.5351436Z > @ui-chat-mira/core@0.99.5 typecheck D:\Mira 构建验证\含 空格 & 符号\workspace\packages\core
+2026-07-26T07:33:20.5352608Z > tsc --noEmit -p tsconfig.json
+2026-07-26T07:33:20.5353004Z 
+2026-07-26T07:33:21.6049292Z ##[endgroup]
+2026-07-26T07:33:21.6055233Z ##[group]@ui-chat-mira/deepagents-spike@0.0.0 : typecheck packages\deepagents-spike
+2026-07-26T07:33:21.6072168Z 
+2026-07-26T07:33:21.6073648Z > @ui-chat-mira/deepagents-spike@0.0.0 typecheck D:\Mira 构建验证\含 空格 & 符号\workspace\packages\deepagents-spike
+2026-07-26T07:33:21.6074899Z > tsc --noEmit -p tsconfig.json
+2026-07-26T07:33:21.6075281Z 
+2026-07-26T07:33:25.1733696Z ##[endgroup]
+2026-07-26T07:33:25.1740878Z ##[group]@ui-chat-mira/docs-site@0.7.1 : typecheck packages\docs-site
+2026-07-26T07:33:25.1756051Z 
+2026-07-26T07:33:25.1757017Z > @ui-chat-mira/docs-site@0.7.1 typecheck D:\Mira 构建验证\含 空格 & 符号\workspace\packages\docs-site
+2026-07-26T07:33:25.1757838Z > tsc --noEmit -p tsconfig.json
+2026-07-26T07:33:25.1758478Z 
+2026-07-26T07:33:27.5529563Z ##[endgroup]
+2026-07-26T07:33:27.5534082Z ##[group]@ui-chat-mira/server@0.99.5 : typecheck server
+2026-07-26T07:33:27.5549793Z 
+2026-07-26T07:33:27.5550743Z > @ui-chat-mira/server@0.99.5 typecheck D:\Mira 构建验证\含 空格 & 符号\workspace\server
+2026-07-26T07:33:27.5551720Z > node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
+2026-07-26T07:33:27.5552195Z 
+2026-07-26T07:33:42.1477759Z ##[endgroup]
+2026-07-26T07:33:42.1726998Z > executable: C:\hostedtoolcache\windows\node\20.20.2\x64\node.exe
+2026-07-26T07:33:42.1728669Z > args: ["C:\\Users\\runneradmin\\setup-pnpm\\node_modules\\.pnpm\\pnpm@9.12.0\\node_modules\\pnpm\\bin\\pnpm.cjs","internal:prepare:desktop-artifacts"]
+2026-07-26T07:33:42.1730129Z > cwd: D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:42.7100542Z 
+2026-07-26T07:33:42.7101899Z > ui-chat-mira@0.99.5 internal:prepare:desktop-artifacts D:\Mira 构建验证\含 空格 & 符号\workspace
+2026-07-26T07:33:42.7103304Z > node scripts/prepare-desktop-artifacts.js && pnpm prepare:vivliostyle-runtime && node scripts/stage-vivliostyle-runtime.mjs
+2026-07-26T07:33:42.7104095Z 
+2026-07-26T07:33:42.7795621Z Preparing shared desktop artifacts...
+2026-07-26T07:33:43.0954259Z 
+2026-07-26T07:33:43.0954896Z > mira-clipper-ext@0.99.5 prod
+2026-07-26T07:33:43.0955639Z > node scripts/package-extension.mjs --mode prod
+2026-07-26T07:33:43.0956068Z 
+2026-07-26T07:33:43.2719717Z Packaged 触界 (prod)
+2026-07-26T07:33:43.2720947Z CRX: D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\dist\prod\Chujie.crx
+2026-07-26T07:33:43.2722334Z ZIP: D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\dist\prod\Chujie.zip
+2026-07-26T07:33:43.2723856Z Signing key: D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\.keys\mira-clipper-prod.pem
+2026-07-26T07:33:43.6034777Z 
+2026-07-26T07:33:43.6035488Z > mira-clipper-ext@0.99.5 native:build
+2026-07-26T07:33:43.6036369Z > node scripts/build-native-host.mjs
+2026-07-26T07:33:43.6036778Z 
+2026-07-26T07:33:48.0918837Z C:/mingw64/bin/../lib/gcc/x86_64-w64-mingw32/14.2.0/../../../../x86_64-w64-mingw32/bin/ld.exe: cannot open output file D:\Mira ????\? ?? & ??\workspace\mira-clipper-ext\dist\native\.MiraWebBridgeHost.3028.tmp.exe: Invalid argument
+2026-07-26T07:33:48.1038974Z collect2.exe: error: ld returned 1 exit status
+2026-07-26T07:33:48.1208729Z node:internal/errors:984
+2026-07-26T07:33:48.1209931Z   const err = new Error(message);
+2026-07-26T07:33:48.1211611Z               ^
+2026-07-26T07:33:48.1211949Z 
+2026-07-26T07:33:48.1213340Z Error: Command failed: gcc -O2 -s -static -mconsole -o D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\dist\native\.MiraWebBridgeHost.3028.tmp.exe D:\Mira 构建验证\含 空格 & 符号\workspace\mira-clipper-ext\native-host\launcher.c
+2026-07-26T07:33:48.1214458Z     at genericNodeError (node:internal/errors:984:15)
+2026-07-26T07:33:48.1214966Z     at wrappedFn (node:internal/errors:538:14)
+2026-07-26T07:33:48.1215460Z     at checkExecSyncError (node:child_process:891:11)
+2026-07-26T07:33:48.1215987Z     at execFileSync (node:child_process:927:15)
+2026-07-26T07:33:48.1217794Z     at file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/mira-clipper-ext/scripts/build-native-host.mjs:18:3
+2026-07-26T07:33:48.1218735Z     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+2026-07-26T07:33:48.1219535Z     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+2026-07-26T07:33:48.1220773Z     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+2026-07-26T07:33:48.1221695Z   status: 1,
+2026-07-26T07:33:48.1222174Z   signal: null,
+2026-07-26T07:33:48.1222715Z   output: [ null, null, null ],
+2026-07-26T07:33:48.1223475Z   pid: 3236,
+2026-07-26T07:33:48.1223963Z   stdout: null,
+2026-07-26T07:33:48.1224467Z   stderr: null
+2026-07-26T07:33:48.1224940Z }
+2026-07-26T07:33:48.1225201Z 
+2026-07-26T07:33:48.1225457Z Node.js v20.20.2
+2026-07-26T07:33:48.1424325Z node:internal/errors:984
+2026-07-26T07:33:48.1425524Z   const err = new Error(message);
+2026-07-26T07:33:48.1427231Z               ^
+2026-07-26T07:33:48.1427556Z 
+2026-07-26T07:33:48.1427822Z Error: Command failed: npm run native:build
+2026-07-26T07:33:48.1428365Z     at genericNodeError (node:internal/errors:984:15)
+2026-07-26T07:33:48.1428870Z     at wrappedFn (node:internal/errors:538:14)
+2026-07-26T07:33:48.1429360Z     at checkExecSyncError (node:child_process:891:11)
+2026-07-26T07:33:48.1429852Z     at execSync (node:child_process:963:15)
+2026-07-26T07:33:48.1430699Z     at file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/scripts/prepare-desktop-artifacts.js:120:1
+2026-07-26T07:33:48.1431595Z     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+2026-07-26T07:33:48.1432253Z     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+2026-07-26T07:33:48.1432983Z     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+2026-07-26T07:33:48.1433561Z   status: 1,
+2026-07-26T07:33:48.1433891Z   signal: null,
+2026-07-26T07:33:48.1434259Z   output: [ null, null, null ],
+2026-07-26T07:33:48.1434618Z   pid: 1432,
+2026-07-26T07:33:48.1434983Z   stdout: null,
+2026-07-26T07:33:48.1435302Z   stderr: null
+2026-07-26T07:33:48.1435609Z }
+2026-07-26T07:33:48.1435776Z 
+2026-07-26T07:33:48.1435916Z Node.js v20.20.2
+2026-07-26T07:33:48.1504660Z  ELIFECYCLE  Command failed with exit code 1.
+2026-07-26T07:33:48.4755821Z node:internal/errors:984
+2026-07-26T07:33:48.4757019Z   const err = new Error(message);
+2026-07-26T07:33:48.4759252Z               ^
+2026-07-26T07:33:48.4759630Z 
+2026-07-26T07:33:48.4761188Z Error: Command failed: C:\hostedtoolcache\windows\node\20.20.2\x64\node.exe C:\Users\runneradmin\setup-pnpm\node_modules\.pnpm\pnpm@9.12.0\node_modules\pnpm\bin\pnpm.cjs internal:prepare:desktop-artifacts
+2026-07-26T07:33:48.4762734Z     at genericNodeError (node:internal/errors:984:15)
+2026-07-26T07:33:48.4763377Z     at wrappedFn (node:internal/errors:538:14)
+2026-07-26T07:33:48.4764005Z     at checkExecSyncError (node:child_process:891:11)
+2026-07-26T07:33:48.4764604Z     at execFileSync (node:child_process:927:15)
+2026-07-26T07:33:48.4765695Z     at runExecutable (file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/scripts/release/process-utils.mjs:19:10)
+2026-07-26T07:33:48.4767124Z     at runPnpm (file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/scripts/release/process-utils.mjs:42:12)
+2026-07-26T07:33:48.4768270Z     at file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/scripts/release/build-payload.mjs:84:1
+2026-07-26T07:33:48.4770165Z     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+2026-07-26T07:33:48.4771218Z     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+2026-07-26T07:33:48.4772762Z     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+2026-07-26T07:33:48.4773690Z   status: 1,
+2026-07-26T07:33:48.4774194Z   signal: null,
+2026-07-26T07:33:48.4774734Z   output: [ null, null, null ],
+2026-07-26T07:33:48.4775352Z   pid: 1700,
+2026-07-26T07:33:48.4775839Z   stdout: null,
+2026-07-26T07:33:48.4776303Z   stderr: null
+2026-07-26T07:33:48.4776755Z }
+2026-07-26T07:33:48.4777013Z 
+2026-07-26T07:33:48.4777243Z Node.js v20.20.2
+2026-07-26T07:33:48.4842547Z  ELIFECYCLE  Command failed with exit code 1.
+2026-07-26T07:33:48.6757712Z ##[error]Process completed with exit code 1.
+2026-07-26T07:33:48.6983507Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-26T07:33:48.6985215Z Post job cleanup.
+2026-07-26T07:33:48.8160580Z Pruning is unnecessary.
+2026-07-26T07:33:48.8429256Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-07-26T07:33:48.8431049Z Post job cleanup.
+2026-07-26T07:33:49.0539951Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-07-26T07:33:49.0770329Z git version 2.55.0.windows.3
+2026-07-26T07:33:49.0829397Z Temporarily overriding HOME='D:\a\_temp\0b23b88c-d393-4a1d-984e-19e31b3f826f' before making global git config changes
+2026-07-26T07:33:49.0830482Z Adding repository directory to the temporary git global config as a safe directory
+2026-07-26T07:33:49.0841201Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\uichat-mira\uichat-mira
+2026-07-26T07:33:49.1094735Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-07-26T07:33:49.1349796Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-07-26T07:33:49.6357736Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-07-26T07:33:49.6567262Z http.https://github.com/.extraheader
+2026-07-26T07:33:49.6603137Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-07-26T07:33:49.6845725Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-07-26T07:33:50.1751139Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-07-26T07:33:50.1985789Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-07-26T07:33:50.6594478Z Cleaning up orphan processes
+2026-07-26T07:33:50.7066335Z Terminate orphan process: pid (1204) (vctip)
+2026-07-26T07:33:50.7283546Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4, actions/setup-node@v4, pnpm/action-setup@v3. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
