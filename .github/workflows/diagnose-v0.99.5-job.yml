@@ -1,4 +1,4 @@
-name: Inspect Release Factory Branch Run
+name: Inspect Release Factory Run 30217272044
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 
 permissions:
   actions: read
+  checks: read
   contents: write
 
 jobs:
@@ -18,57 +19,96 @@ jobs:
       - name: Checkout diagnostic branch
         uses: actions/checkout@v4
 
-      - name: Capture target run and jobs
+      - name: Capture run metadata and checks
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: '1fe3610646018666b3a6f2aa2af70962bcef7a49'
+          TARGET_RUN_ID: '30217272044'
         shell: bash
         run: |
           set -euo pipefail
-          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_SHA}&per_page=20" > runs.json
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}" > run.json
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${TARGET_RUN_ID}/jobs?per_page=100" > jobs.json
+
           python - <<'PY'
           import json
           import os
           import subprocess
           from pathlib import Path
 
-          target_sha = os.environ['TARGET_SHA']
-          payload = json.loads(Path('runs.json').read_text(encoding='utf-8'))
-          runs = payload.get('workflow_runs', [])
-          output = [f'Target SHA: {target_sha}', f'Run count: {len(runs)}', '']
+          run = json.loads(Path('run.json').read_text(encoding='utf-8'))
+          jobs = json.loads(Path('jobs.json').read_text(encoding='utf-8')).get('jobs', [])
+          output = [
+              f"run_id: {run.get('id')}",
+              f"name: {run.get('name')}",
+              f"display_title: {run.get('display_title')}",
+              f"event: {run.get('event')}",
+              f"status: {run.get('status')}",
+              f"conclusion: {run.get('conclusion')}",
+              f"head_branch: {run.get('head_branch')}",
+              f"head_sha: {run.get('head_sha')}",
+              f"path: {run.get('path')}",
+              f"created_at: {run.get('created_at')}",
+              f"run_started_at: {run.get('run_started_at')}",
+              f"updated_at: {run.get('updated_at')}",
+              f"check_suite_id: {run.get('check_suite_id')}",
+              f"jobs_count: {len(jobs)}",
+              '',
+          ]
 
-          for run in runs:
-              run_id = run.get('id')
-              output.extend([
-                  f'run_id: {run_id}',
-                  f'name: {run.get("name")}',
-                  f'event: {run.get("event")}',
-                  f'status: {run.get("status")}',
-                  f'conclusion: {run.get("conclusion")}',
-                  f'url: {run.get("html_url")}',
-              ])
-              jobs_raw = subprocess.check_output([
-                  'gh', 'api',
-                  f'/repos/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run_id}/jobs?per_page=100',
-              ], text=True)
-              jobs = json.loads(jobs_raw).get('jobs', [])
-              for job in jobs:
-                  output.append(
-                      f'  job {job.get("id")}: {job.get("name")} | '
-                      f'{job.get("status")} | {job.get("conclusion")}'
-                  )
-              output.append('')
+          for job in jobs:
+              output.append(
+                  f"job {job.get('id')}: {job.get('name')} | "
+                  f"{job.get('status')} | {job.get('conclusion')}"
+              )
 
-          target = Path('diagnostics/latest-release-factory-status.txt')
+          check_suite_id = run.get('check_suite_id')
+          if check_suite_id:
+              try:
+                  suite_raw = subprocess.check_output([
+                      'gh', 'api',
+                      f'/repos/{os.environ["GITHUB_REPOSITORY"]}/check-suites/{check_suite_id}/check-runs?per_page=100',
+                  ], text=True)
+                  check_runs = json.loads(suite_raw).get('check_runs', [])
+                  output.extend(['', f'check_runs_count: {len(check_runs)}'])
+                  for check in check_runs:
+                      output.extend([
+                          f"check_run {check.get('id')}: {check.get('name')}",
+                          f"  status: {check.get('status')}",
+                          f"  conclusion: {check.get('conclusion')}",
+                          f"  title: {(check.get('output') or {}).get('title')}",
+                          f"  summary: {(check.get('output') or {}).get('summary')}",
+                          f"  text: {(check.get('output') or {}).get('text')}",
+                      ])
+                      annotations_url = check.get('output', {}).get('annotations_url')
+                      if annotations_url:
+                          try:
+                              annotations_raw = subprocess.check_output([
+                                  'gh', 'api', annotations_url,
+                              ], text=True)
+                              annotations = json.loads(annotations_raw)
+                              for annotation in annotations:
+                                  output.extend([
+                                      f"  annotation: {annotation.get('annotation_level')}",
+                                      f"    path: {annotation.get('path')}",
+                                      f"    lines: {annotation.get('start_line')}-{annotation.get('end_line')}",
+                                      f"    title: {annotation.get('title')}",
+                                      f"    message: {annotation.get('message')}",
+                                  ])
+                          except subprocess.CalledProcessError as error:
+                              output.append(f'  annotations_error: {error}')
+              except subprocess.CalledProcessError as error:
+                  output.extend(['', f'check_suite_error: {error}'])
+
+          target = Path('diagnostics/run-30217272044.txt')
           target.parent.mkdir(parents=True, exist_ok=True)
           target.write_text('\n'.join(output) + '\n', encoding='utf-8')
           PY
 
-      - name: Commit status snapshot
+      - name: Commit run snapshot
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add diagnostics/latest-release-factory-status.txt
-          git commit -m 'chore: inspect split release factory run [skip ci]'
+          git add diagnostics/run-30217272044.txt
+          git commit -m 'chore: inspect release factory run 30217272044 [skip ci]'
           git push
