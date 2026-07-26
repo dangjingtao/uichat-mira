@@ -1,2 +1,3 @@
 temporary artifact trigger for local Node/Vitest execution
 retry: include dependency dist files
+retry: use zstd bundle
