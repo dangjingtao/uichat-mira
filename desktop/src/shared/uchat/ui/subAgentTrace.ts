@@ -76,8 +76,28 @@ const parseWorkingState = (value: unknown): SubAgentWorkingState | null => {
 export const isSubAgentWorkingStateNode = (step: RagNodeLike) =>
   step.details?.subAgentWorkingState === true;
 
+const isSubAgentDelegationStep = (step: RagNodeLike) => {
+  if (step.details?.subAgentDelegation === true) return true;
+
+  const text = `${step.nodeId} ${step.label} ${step.summary ?? ""}`.toLowerCase();
+  const namesSubAgent = text.includes("subagent") || text.includes("子代理");
+  const namesDelegation =
+    text.includes("dispatch") ||
+    text.includes("delegate") ||
+    text.includes("delegation") ||
+    text.includes("委派");
+
+  return namesSubAgent && namesDelegation;
+};
+
+/**
+ * The parent delegation row is a hand-off event, not a long-running activity.
+ * Treat it as part of the append-only subAgent trace so the UI completes that
+ * row as soon as child execution rows begin instead of leaving an earlier
+ * spinner above already-completed later steps.
+ */
 export const isSubAgentTraceStep = (step: RagNodeLike) =>
-  step.details?.subAgentTraceEvent === true;
+  step.details?.subAgentTraceEvent === true || isSubAgentDelegationStep(step);
 
 const getSubAgentSeq = (step: RagNodeLike) => {
   const value = step.details?.subAgentSeq;
