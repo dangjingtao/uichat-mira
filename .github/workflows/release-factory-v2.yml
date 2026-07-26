@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 50
     env:
       MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
+      PYTHONPATH: '${{ runner.temp }}\mira-python-validation'
       CI: 'true'
     steps:
       - name: Checkout source snapshot
@@ -38,6 +39,11 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Stage repository into hostile Windows path
         shell: pwsh
@@ -59,7 +65,14 @@ jobs:
 
       - name: Install validation dependencies
         shell: pwsh
-        run: pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
+        run: |
+          pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile
+          python -m pip install `
+            --disable-pip-version-check `
+            --target "$env:PYTHONPATH" `
+            python-docx==1.2.0 `
+            python-pptx==1.0.2 `
+            openpyxl==3.1.5
 
       - name: Run strict shared release validation
         shell: pwsh
