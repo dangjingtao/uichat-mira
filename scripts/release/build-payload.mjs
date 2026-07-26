@@ -11,6 +11,10 @@ import {
   writePayloadManifest,
 } from "./payload-utils.mjs";
 import { runPnpm } from "./process-utils.mjs";
+import {
+  readAndVerifyValidationManifest,
+  summarizeTestReport,
+} from "./validation-utils.mjs";
 
 if (process.platform !== "win32") {
   throw new Error(
@@ -18,13 +22,27 @@ if (process.platform !== "win32") {
   );
 }
 
-const skipTests = process.argv.includes("--notest");
-const childEnv = skipTests
+const validationArgument = process.argv.find((argument) =>
+  argument.startsWith("--validation-manifest="),
+);
+const configuredValidationPath =
+  process.env.MIRA_RELEASE_VALIDATION_MANIFEST?.trim() ||
+  validationArgument?.slice("--validation-manifest=".length).trim() ||
+  "";
+const externalValidationPath = configuredValidationPath
+  ? path.isAbsolute(configuredValidationPath)
+    ? configuredValidationPath
+    : path.resolve(projectRoot, configuredValidationPath)
+  : null;
+
+const explicitlySkipTests = process.argv.includes("--notest");
+const prepareWithoutTests = explicitlySkipTests || Boolean(externalValidationPath);
+const childEnv = prepareWithoutTests
   ? { ...process.env, UICHAT_MIRA_SKIP_TESTS: "1" }
   : process.env;
 
-function readTestValidation(scope) {
-  if (skipTests) {
+function readLocalTestValidation(scope) {
+  if (explicitlySkipTests) {
     return {
       status: "skipped",
       totalTests: 0,
@@ -40,61 +58,71 @@ function readTestValidation(scope) {
     `${scope}-coverage`,
     "test-report.json",
   );
-  if (!fs.existsSync(reportPath)) {
-    throw new Error(`Missing ${scope} release test report: ${reportPath}`);
-  }
-
-  const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-  const summary = report.summary ?? {};
-  const validation = {
-    status:
-      summary.success === true &&
-      Number(summary.failedTests ?? 0) === 0 &&
-      Number(summary.failedSuites ?? 0) === 0
-        ? "passed"
-        : "failed",
-    totalTests: Number(summary.totalTests ?? 0),
-    failedTests: Number(summary.failedTests ?? 0),
-    totalSuites: Number(summary.totalSuites ?? 0),
-    failedSuites: Number(summary.failedSuites ?? 0),
-  };
-
+  const validation = summarizeTestReport(reportPath);
   if (validation.status !== "passed") {
     throw new Error(
       `${scope} release tests failed: ${validation.failedTests} failed tests across ${validation.failedSuites} failed suites.`,
     );
   }
-
   return validation;
+}
+
+function stageExternalValidationReports(manifestPath) {
+  const validationDirectory = path.dirname(manifestPath);
+  for (const scope of ["client", "server"]) {
+    copyRequired(
+      path.join(validationDirectory, "reports", scope),
+      path.join(artifactsRoot, "server-bundle", `${scope}-coverage`),
+      `${scope} release validation reports`,
+    );
+  }
 }
 
 console.log("=== Release Factory: build shared Windows payload ===");
 console.log(`Project root: ${projectRoot}`);
 console.log(`Payload root: ${payloadRoot}`);
-console.log(`Skip tests: ${skipTests}`);
+console.log(`External validation: ${externalValidationPath ?? "none"}`);
+console.log(`Explicitly skip tests: ${explicitlySkipTests}`);
 
 runPnpm(["version:sync"], {
   cwd: projectRoot,
   env: childEnv,
 });
-runPnpm(["check"], {
-  cwd: projectRoot,
-  env: childEnv,
-});
+
+let validation;
+if (externalValidationPath) {
+  const validationManifest = readAndVerifyValidationManifest(
+    externalValidationPath,
+  );
+  validation = validationManifest.validation;
+  console.log(
+    `Accepted release validation for ${validationManifest.version} at ${validationManifest.gitCommit}.`,
+  );
+} else {
+  runPnpm(["check"], {
+    cwd: projectRoot,
+    env: childEnv,
+  });
+}
+
 runPnpm(["internal:prepare:desktop-artifacts"], {
   cwd: projectRoot,
   env: childEnv,
 });
 
-const validation = {
-  typecheck: {
-    status: "passed",
-  },
-  tests: {
-    client: readTestValidation("client"),
-    server: readTestValidation("server"),
-  },
-};
+if (externalValidationPath) {
+  stageExternalValidationReports(externalValidationPath);
+} else {
+  validation = {
+    typecheck: {
+      status: "passed",
+    },
+    tests: {
+      client: readLocalTestValidation("client"),
+      server: readLocalTestValidation("server"),
+    },
+  };
+}
 
 removePath(payloadRoot);
 fs.mkdirSync(payloadRoot, { recursive: true });
@@ -154,7 +182,9 @@ if (copiedModels) {
 }
 
 const manifest = writePayloadManifest(validation);
-verifyPayload({ allowSkippedTests: skipTests });
+verifyPayload({
+  allowSkippedTests: explicitlySkipTests && !externalValidationPath,
+});
 
 console.log(
   `Shared Windows payload ready: ${manifest.totalFiles} files, ${manifest.totalBytes} bytes.`,
