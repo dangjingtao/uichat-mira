@@ -129,8 +129,10 @@ export const getLatestSubAgentTraceTitle = (
   steps: RagNodeLike[],
   runId?: string,
 ) => {
-  const candidates = getSubAgentTraceSteps(steps).filter(
-    (step) => !runId || getSubAgentRunId(step) === runId,
+  const ordered = getSubAgentTraceSteps(steps);
+  const activeRunId = runId ?? getSubAgentRunId(ordered.at(-1) ?? ({} as RagNodeLike));
+  const candidates = ordered.filter(
+    (step) => !activeRunId || getSubAgentRunId(step) === activeRunId,
   );
   const latest = candidates.at(-1);
   return latest?.label?.trim() || null;
