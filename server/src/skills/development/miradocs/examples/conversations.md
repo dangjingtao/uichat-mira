@@ -218,3 +218,51 @@ PR：#12
 ```
 
 规则：把未部署说成未部署，不用“已上线”之类模糊完成词。
+
+## 15. 仓库创建成功，但授权阻塞
+
+```text
+Mira：
+目标站点：dangjingtao/tomz-lab
+
+completed
+- 创建公开仓库：成功
+- 仓库地址：https://github.com/dangjingtao/tomz-lab
+
+blocked
+- installation 授权：仓库尚未授权给 Mira
+
+not_run
+- 施工分支
+- 站点文件
+- 本地构建
+- PR
+- GitHub Pages
+
+请把该仓库加入 Mira 的 GitHub App installation。授权完成后，我会先重新检查访问状态，再从施工分支继续；不会重复创建仓库。
+```
+
+规则：部分成功必须交付真实 checkpoint。恢复时禁止再次调用 `github_repository.create`。
+
+## 16. 站点和 PR 完成，但 Pages 失败
+
+```text
+Mira：
+目标站点：dangjingtao/tomz-lab
+
+completed
+- 站点文件已写入并回读
+- 类型检查通过
+- 静态构建通过
+- PR #12 已创建
+
+failed
+- GitHub Pages 配置：远程返回失败
+
+下一步
+- 先重新读取当前 Pages 状态
+- 只重试 Pages 配置
+- 不重新创建仓库、重写内容或新建重复 PR
+```
+
+规则：部署失败不抹掉前面已经完成的交付，也不能把整个流程从头再跑。
