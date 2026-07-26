@@ -18,7 +18,7 @@ jobs:
       - name: Checkout diagnostic branch
         uses: actions/checkout@v4
 
-      - name: Download latest failed job log
+      - name: Download and normalize failed test log
         env:
           GH_TOKEN: ${{ github.token }}
           FAILED_JOB_ID: '89773190647'
@@ -27,44 +27,60 @@ jobs:
           set -euo pipefail
           gh api "/repos/${GITHUB_REPOSITORY}/actions/jobs/${FAILED_JOB_ID}/logs" > failed-job.log
           python - <<'PY'
+          import re
           from pathlib import Path
 
           job_id = '89773190647'
           text = Path('failed-job.log').read_text(
               encoding='utf-8-sig', errors='replace'
           )
-          lines = text.splitlines()
-          keywords = (
-              '##[error]', 'error:', 'error ', 'failed', 'ERR_PNPM',
-              'ELIFECYCLE', 'Command failed', 'throw new Error',
-          )
-          matches = []
-          for index, line in enumerate(lines, start=1):
-              lowered = line.lower()
-              if any(keyword.lower() in lowered for keyword in keywords):
-                  matches.append(f'{index}: {line}')
+          ansi = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
+          lines = [ansi.sub('', line) for line in text.splitlines()]
 
-          output = [
+          numbered = [f'{index:04d}: {line}' for index, line in enumerate(lines, start=1)]
+          target = Path(f'diagnostics/v0.99.5-job-{job_id}-clean.txt')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          target.write_text('\n'.join(numbered) + '\n', encoding='utf-8')
+
+          patterns = (
+              ' FAIL ', '×', 'AssertionError', 'Test Files', 'Tests  ',
+              'expected', 'received', 'failed tests', 'failed suites',
+              'Unhandled', 'TypeError:', 'ReferenceError:', 'Error:',
+          )
+          match_indexes = []
+          for index, line in enumerate(lines):
+              lowered = line.lower()
+              if any(pattern.lower() in lowered for pattern in patterns):
+                  match_indexes.append(index)
+
+          selected = set()
+          for index in match_indexes:
+              selected.update(range(max(0, index - 3), min(len(lines), index + 8)))
+
+          excerpt = [
               f'Source job: {job_id}',
               f'Total lines: {len(lines)}',
-              '',
-              '=== Error-like lines ===',
-              *(matches[-160:] or ['No error-like lines matched.']),
-              '',
-              '=== Final 300 lines ===',
-              *lines[-300:],
+              f'Matched lines: {len(match_indexes)}',
               '',
           ]
-          target = Path(f'diagnostics/v0.99.5-job-{job_id}.txt')
-          target.parent.mkdir(parents=True, exist_ok=True)
-          target.write_text('\n'.join(output), encoding='utf-8')
+          last = None
+          for index in sorted(selected):
+              if last is not None and index > last + 1:
+                  excerpt.append('...')
+              excerpt.append(f'{index + 1:04d}: {lines[index]}')
+              last = index
+
+          Path(f'diagnostics/v0.99.5-job-{job_id}-test-excerpts.txt').write_text(
+              '\n'.join(excerpt) + '\n',
+              encoding='utf-8',
+          )
           PY
 
-      - name: Commit diagnostic excerpt
+      - name: Commit normalized diagnostics
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add diagnostics/v0.99.5-job-89773190647.txt
-          git commit -m 'chore: capture second v0.99.5 failure [skip ci]'
+          git add diagnostics/v0.99.5-job-89773190647-clean.txt diagnostics/v0.99.5-job-89773190647-test-excerpts.txt
+          git commit -m 'chore: normalize v0.99.5 test failure log [skip ci]'
           git push
