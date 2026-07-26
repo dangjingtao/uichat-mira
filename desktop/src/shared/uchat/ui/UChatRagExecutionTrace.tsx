@@ -168,9 +168,7 @@ function SubAgentWorkingStateView({ state }: { state: SubAgentWorkingState }) {
         aria-hidden="true"
       />
       <div className="min-w-0 space-y-1 break-words">
-        {state.currentJudgement ? (
-          <p>{state.currentJudgement}</p>
-        ) : null}
+        {state.currentJudgement ? <p>{state.currentJudgement}</p> : null}
         <p className="text-text-primary/90">{state.currentAction}</p>
         {state.nextAction ? (
           <p className="text-text-tertiary">接下来：{state.nextAction}</p>
@@ -215,10 +213,15 @@ export function UChatExecutionTrace({
         (approvalTraceState === "running"
           ? t("chat.thread.agent.running")
           : summarizeRagProgress(displaySteps));
-  const runningCount = displaySteps.filter((step) => step.phase === "start").length;
+  const runningCount = displaySteps.filter(
+    (step) => step.phase === "start" && !isSubAgentTraceStep(step),
+  ).length;
   const completedCount = displaySteps.filter((step) => step.phase === "done").length;
+  const workingStateRunning = Boolean(
+    workingState && !isTerminalWorkingState(workingState),
+  );
   const showActiveSpinner =
-    approvalTraceState === "running" || runningCount > 0;
+    approvalTraceState === "running" || runningCount > 0 || workingStateRunning;
 
   return (
     <div data-uchat-execution-trace="true" className="mt-chat-trace-top">
@@ -263,15 +266,17 @@ export function UChatExecutionTrace({
                 {displaySteps.map((step, index) => {
                   const display = getDisplayExecutionStep(step);
                   const subAgentTrace = isSubAgentTraceStep(step);
+                  const effectivePhase =
+                    subAgentTrace && step.phase !== "error" ? "done" : step.phase;
                   const clickable =
-                    step.phase !== "start" &&
+                    effectivePhase !== "start" &&
                     ((!!step.details && Object.keys(step.details).length > 0) ||
                       (!!step.environment &&
                         Object.keys(step.environment).length > 0));
                   const StatusIcon =
-                    step.phase === "error"
+                    effectivePhase === "error"
                       ? AlertCircle
-                      : step.phase === "start"
+                      : effectivePhase === "start"
                         ? LoaderCircle
                         : CheckCircle2;
 
@@ -287,7 +292,7 @@ export function UChatExecutionTrace({
                           nodeId: step.nodeId,
                           nodeType: step.nodeType,
                           label: display.label,
-                          status: step.phase,
+                          status: effectivePhase,
                           summary: display.summary,
                           details: step.details,
                           environment: step.environment,
@@ -301,14 +306,14 @@ export function UChatExecutionTrace({
                     >
                       <div
                         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium ${
-                          step.phase === "error"
+                          effectivePhase === "error"
                             ? "bg-rose-500/10 text-rose-600"
-                            : step.phase === "start"
+                            : effectivePhase === "start"
                               ? "bg-amber-500/10 text-amber-600"
                               : "bg-[rgba(var(--color-primary),0.10)] text-primary"
                         }`}
                       >
-                        {step.phase === "start" ? (
+                        {effectivePhase === "start" ? (
                           <LoaderCircle className="h-3 w-3 animate-spin" />
                         ) : (
                           <span>{index + 1}</span>
@@ -330,9 +335,9 @@ export function UChatExecutionTrace({
                       <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5">
                         <StatusIcon
                           className={`h-3.5 w-3.5 ${
-                            step.phase === "start"
+                            effectivePhase === "start"
                               ? "animate-spin text-text-tertiary"
-                              : step.phase === "error"
+                              : effectivePhase === "error"
                                 ? "text-danger-text"
                                 : "text-text-tertiary"
                           }`}
