@@ -1,0 +1,6 @@
+actionlint_exit_code: 1
+
+release-factory-source/.github/workflows/release-factory-v2.yml:25:24: context "runner" is not allowed here. available contexts are "github", "inputs", "matrix", "needs", "secrets", "strategy", "vars". see https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability for more details [expression]
+   |
+25 |       PYTHONPATH: '${{ runner.temp }}\mira-python-validation'
+   |                        ^~~~~~~~~~~
