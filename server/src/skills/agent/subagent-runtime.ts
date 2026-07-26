@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import { getWorkspaceSelection } from "@/mcp/workspace.js";
 import { loadSkillResource } from "@/skills/context/provider.js";
-import type { SkillContext } from "@/skills/context/types.js";
+import type {
+  SkillContext,
+  SkillPackageOrigin,
+} from "@/skills/context/types.js";
 import { runPiSkillAgent } from "./pi-core.js";
 import { resolveSubAgentExecutionProfile } from "./profiles.js";
 import {
@@ -134,6 +137,25 @@ type PrepareSubAgentInput = {
   onRuntimeEvent?: (event: SubAgentRuntimeEvent) => Promise<void> | void;
 };
 
+export const resolveSubAgentHarnessToolIds = (input: {
+  origin?: SkillPackageOrigin;
+  declaredToolIds: string[];
+  canonicalToolIds?: string[];
+}) => {
+  const resolved = new Set(input.canonicalToolIds ?? []);
+
+  // Built-in Skill packages are trusted execution manifests, but still not
+  // permission grants. They may select their declared subAgent-local tools;
+  // the adapter must still find a registered Harness implementation, and every
+  // invocation still crosses Harness Policy, approval and provider authorization.
+  // User and external Skills remain limited to the canonical ToolExposure.
+  if (input.origin === "built-in") {
+    for (const toolId of input.declaredToolIds) resolved.add(toolId);
+  }
+
+  return [...resolved];
+};
+
 const capabilityRequirement = (
   skillId: string,
   capabilityId: string,
@@ -214,7 +236,13 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
   let availableCapabilityCount = 0;
   const declaredCapabilityCount =
     profile.allowedHarnessToolIds.length + profile.runtimeBindings.length;
-  const exposedHarnessTools = new Set(input.exposedHarnessToolIds ?? []);
+  const exposedHarnessTools = new Set(
+    resolveSubAgentHarnessToolIds({
+      origin: primary.origin,
+      declaredToolIds: profile.allowedHarnessToolIds,
+      canonicalToolIds: input.exposedHarnessToolIds,
+    }),
+  );
 
   for (const toolId of profile.allowedHarnessToolIds) {
     if (!exposedHarnessTools.has(toolId)) {
@@ -253,6 +281,95 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
     missingCapabilities,
     availableCapabilityCount,
     declaredCapabilityCount,
+  };
+};
+
+const normalizeMalformedCompletion = async (input: {
+  result: SubAgentExecutionResult;
+  skillId: string;
+  onRuntimeEvent?: PrepareSubAgentInput["onRuntimeEvent"];
+}): Promise<SubAgentExecutionResult | null> => {
+  if (
+    input.result.status !== "failed" ||
+    !input.result.error?.includes("invalid completion envelope")
+  ) {
+    return null;
+  }
+
+  const hasAuthoritativeOutput =
+    input.result.evidence.length > 0 || input.result.artifacts.length > 0;
+  const runId = input.result.trace?.runId ?? crypto.randomUUID();
+  const seq = input.result.trace?.nextSeq ?? 1;
+  const timestamp = Date.now();
+  const state: SubAgentWorkingState = {
+    runId,
+    skillId: input.skillId,
+    phase: hasAuthoritativeOutput ? "completed" : "blocked",
+    currentJudgement: hasAuthoritativeOutput
+      ? "受管工具已经产出 Evidence 或 Artifact，最终格式错误不应抹掉真实执行结果。"
+      : "subAgent 未返回有效完成状态，也没有产出可验证的执行结果。",
+    currentAction: hasAuthoritativeOutput
+      ? "根据权威执行结果恢复交付"
+      : "保留证据缺口，拒绝宣称完成",
+    nextAction: hasAuthoritativeOutput
+      ? "把 Evidence 与 Artifact 交还给 Main Agent"
+      : "重新执行并取得至少一项受管工具结果",
+    ...(!hasAuthoritativeOutput
+      ? { blockingReason: "Invalid completion envelope without Evidence or Artifact" }
+      : {}),
+    updatedAt: timestamp,
+  };
+  const event: SubAgentTraceEvent = {
+    runId,
+    seq,
+    eventId: crypto.randomUUID(),
+    skillId: input.skillId,
+    type: hasAuthoritativeOutput ? "subagent.completed" : "input.required",
+    title: hasAuthoritativeOutput
+      ? "subAgent 交付格式已从权威结果恢复"
+      : "subAgent 缺少可验证交付",
+    timestamp,
+    details: {
+      normalizedInvalidCompletionEnvelope: true,
+      evidenceCount: input.result.evidence.length,
+      artifactCount: input.result.artifacts.length,
+    },
+  };
+  await input.onRuntimeEvent?.({ kind: "trace", event });
+  await input.onRuntimeEvent?.({ kind: "working_state", state });
+
+  const trace = {
+    engine: "pi-agent-core" as const,
+    skillId: input.skillId,
+    toolCalls: input.result.trace?.toolCalls ?? [],
+    ...(input.result.trace ?? {}),
+    runId,
+    nextSeq: seq + 1,
+    workingState: state,
+    events: [...(input.result.trace?.events ?? []), event],
+  };
+
+  if (hasAuthoritativeOutput) {
+    return {
+      status: "completed",
+      summary:
+        "The subAgent completed governed tool execution; its malformed final envelope was normalized from authoritative Evidence or Artifact output.",
+      evidence: input.result.evidence,
+      artifacts: input.result.artifacts,
+      trace,
+    };
+  }
+
+  return {
+    status: "insufficient_evidence",
+    summary:
+      "The subAgent returned an invalid completion envelope and produced no authoritative Evidence or Artifact.",
+    missingEvidence: [
+      "At least one governed tool result or a valid terminal completion envelope is required.",
+    ],
+    evidence: input.result.evidence,
+    artifacts: input.result.artifacts,
+    trace,
   };
 };
 
@@ -296,6 +413,12 @@ export const runSubAgent = async (
     execution: prepared.execution,
     tools: prepared.tools,
   });
+  const normalizedCompletion = await normalizeMalformedCompletion({
+    result,
+    skillId: prepared.profile.skillId,
+    onRuntimeEvent: input.onRuntimeEvent,
+  });
+  if (normalizedCompletion) return normalizedCompletion;
 
   const requiresAuthoritativeRuntimeEvidence =
     prepared.profile.runtimeBindings.some((binding) => binding.status === "ready");
