@@ -47,5 +47,5 @@ jobs:
       - name: Typecheck server
         run: pnpm --filter @ui-chat-mira/server typecheck
 
-      - name: Run generic subAgent focused tests
-        run: pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/generic-task-subagent.test.ts
+      - name: Run full Agent regression suite
+        run: pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__
