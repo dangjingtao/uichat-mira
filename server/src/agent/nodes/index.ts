@@ -37,6 +37,10 @@ export {
 } from "./evaluate";
 
 export { nextActionPlannerNode } from "./next-action-planner";
+export {
+  genericTaskSubAgentNode,
+  createGenericTaskSubAgentNode,
+} from "./generic-task-subagent";
 export { policyNode } from "./policy-node";
 export {
   toolCallNormalizeNode,
