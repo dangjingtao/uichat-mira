@@ -127,6 +127,11 @@ if (externalValidationPath) {
   stageExternalValidationReports(externalValidationPath);
 } else {
   validation = {
+    environment: {
+      status: "passed",
+      detail:
+        "Combined payload build completed its required runtime and test preparation.",
+    },
     typecheck: {
       status: "passed",
     },
