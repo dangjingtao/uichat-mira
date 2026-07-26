@@ -1,6 +1,6 @@
 # A19_T002 — subAgent 常驻工作状态与 UChat Trace
 
-- 状态：READY
+- 状态：IMPLEMENTED — VERIFICATION PENDING
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 施工分支：`feature/subagent-skill-runtime-v1`
@@ -48,175 +48,194 @@ subAgent Runtime
 - Working State 由 subAgent Runtime 主动发布。
 - Working State 至少包含：当前判断、正在处理、下一步、阻塞原因（可选）。
 - 同一 run 的 Trace 使用稳定 `runId` 和单调递增 `seq`。
-- Trace 只追加，不修改或重排已经发布的历史。
-- 审批 checkpoint 保存并恢复 `runId`、下一序号和最后 Working State。
-- 页面刷新、断线重连和历史消息加载后可恢复最后状态。
-- 顶部 Trace 默认只显示当前阶段标题、状态和进度；普通事件不展示冗长摘要。
-- 正文上方 Working State 常驻，不随普通 Trace 更新消失。
-- 完成后保留最后一份可读状态快照；失败、阻塞和审批等待有明确状态。
-- 旧消息没有新字段时继续使用兼容降级展示。
+- Trace 只追加，不修改或删除旧事件。
+- 审批 checkpoint 保存 `runId`、`nextSeq`、最后 Working State 和 Trace 历史。
+- 精确审批恢复后沿用同一 run，不重新从第一步开始。
+- 顶部普通 Trace 默认只显示标题，不展开 summary 噪声。
+- 正文上方 Working State 在 running、waiting、completed、failed、blocked 状态都可恢复和展示。
+- 历史消息从持久化 data part 重建，而不是依赖瞬时组件 state。
+- Trace 发布失败不能成为 subAgent 的第二控制平面。
 
 ### 非目标
 
-- 不展示或持久化模型原始隐藏推理文本。
-- 不让前端控制 subAgent 下一步。
-- 不实现完整项目管理式甘特图或可编辑 Plan。
-- 不重做 UChat 消息系统、主题系统或全部 Trace UI。
+- 不展示原始 chain-of-thought、隐藏推理、私有 scratchpad 或秘密。
+- 不把 Working State 伪装成逐 token 内心独白。
+- 不重写 UChat 消息协议或另建旁路 WebSocket。
+- 不把所有内部日志都常驻在消息正文。
 - 不修改 Main Agent C contract。
-- 不把每个 token、日志行或底层 HTTP 事件都塞进 Trace。
+- 不让 Trace 事件反向控制 subAgent。
 
-## 建议协议
-
-具体字段名可按现有消息协议调整，但语义必须稳定：
+## Working State 合同
 
 ```ts
 type SubAgentWorkingState = {
   runId: string
   skillId: string
-  phase: string
+  phase:
+    | "planning"
+    | "working"
+    | "waiting_approval"
+    | "waiting_input"
+    | "blocked"
+    | "completed"
+    | "failed"
   currentJudgement?: string
   currentAction: string
   nextAction?: string
   blockingReason?: string
   updatedAt: number
 }
+```
 
+这是面向用户的安全工作摘要，不是模型原始隐藏思维。
+
+## Trace Event 合同
+
+```ts
 type SubAgentTraceEvent = {
   runId: string
   seq: number
   eventId: string
   skillId: string
-  type: string
+  type: SubAgentTraceEventType
   title: string
   timestamp: number
   details?: Record<string, unknown>
 }
 ```
 
-约束：
+关键规则：
 
-1. `seq` 由 Runtime 生成，模型不得指定。
-2. Working State 是最新快照，可覆盖更新；Trace Event 是历史，只追加。
-3. 返工必须发布显式 `revisit` / `plan.revised` 事件，不得复用旧步骤序号伪装倒退。
-4. 普通 Trace 的用户可见主信息是 `title`；详情默认折叠。
-5. 审批、失败、Evidence 缺口和返工可以突出显示详情。
-6. Working State 是经过整理的工作摘要，不是原始 chain-of-thought。
+- `seq` 由 Runtime 生成，不由模型生成；
+- 同一 `runId` 内单调递增；
+- 多个 run 保持消息中的追加顺序，不把不同 run 的相同 seq 混排；
+- 返工应发布显式事件，不能重写旧步骤编号；
+- 普通 Trace 行只展示 `title`，详情默认折叠。
 
 ## UChat 展示合同
 
 ### 顶部 Trace Bar
 
-默认显示：
+显示：
 
-- 当前阶段标题；
-- running / waiting / completed / failed 状态；
-- 已完成 / 总步骤（仅在可信时显示）；
-- 展开入口。
+- 最新 Trace 标题；
+- 状态图标；
+- 现有步骤计数；
+- running 时 spinner。
 
-普通 Trace 事件只展示标题，不在顶部堆叠长摘要。
+普通 subAgent Trace 不在折叠列表中重复展示 summary。
 
 ### 正文上方常驻区
 
-固定显示 subAgent 当前：
+显示：
 
 - 当前判断；
 - 正在处理；
 - 下一步；
-- 等待审批、等待用户输入或阻塞原因。
+- 阻塞原因。
 
-新 Working State 到达时更新当前卡片，但不得因为随后到达普通 Trace、tool result 或 answer token 而消失。
+新状态覆盖旧快照的展示，但旧快照和 Trace 仍保存在消息 data parts 中。任务结束后保留最终状态，不自动消失。
 
-### 详细 Trace
+## 简单 Smoke
 
-- 默认折叠；
-- 按 `seq` 排序；
-- 普通事件只显示标题；
-- 审批、失败、返工和 Evidence 缺口允许展开详情；
-- 旧消息无 `runId/seq` 时使用原顺序兼容展示。
+### Smoke A：运行中
 
-## 施工范围
+启动一个 PDF 或 GitHub Skill。
 
-动手前必须读通并记录现有链路：
+检查：
 
-- subAgent runner 与 checkpoint
-- Agent / node execution event
-- SSE / stream payload
-- message persistence / reload
-- execution parser 与类型
-- UChat message rendering / slots / lifecycle
-- approval pause / resume
-- 现有 Trace、RAG Trace、Agent status 测试
+- 顶部标题随事件推进；
+- 正文上方状态持续存在；
+- 工具调用期间不会闪退；
+- 普通 Trace 展开后只显示标题。
 
-可能修改：
+### Smoke B：审批暂停与恢复
 
-- subAgent event emitter
-- checkpoint 类型与恢复
-- 服务端流式协议与持久化字段
-- desktop parser / state reducer
-- UChat Trace 和 Working State 展示
-- 服务端与桌面端测试
+触发需要审批的写操作。
 
-不得只修改 `UChatExecutionTrace.tsx` 后宣称完成。
+检查：
 
-## 简单烟测用例
+- Working State 切换到 `waiting_approval`；
+- 刷新页面后状态仍在；
+- 审批通过后同一个 `runId` 恢复；
+- `seq` 延续递增；
+- 旧副作用不重复执行。
 
-### Smoke 1：常驻状态不闪退
+### Smoke C：完成后刷新
 
-1. 触发一个至少包含 3 个工具步骤的 Skill 任务。
-2. subAgent 发布 Working State A。
-3. 连续发布多个普通 Trace 和 tool result。
-4. 断言正文上方仍显示 A，直到 Working State B 到达才更新。
-5. 断言顶部只快速显示当前 Trace 标题和状态。
+完成一个 Skill 任务并刷新会话。
 
-### Smoke 2：审批暂停与恢复
+检查：
 
-1. 触发一个需要审批的 Skill 写操作。
-2. 记录暂停前 `runId`、最后 `seq` 和 Working State。
-3. 批准后恢复。
-4. 断言使用同一 `runId`，新事件 `seq` 大于暂停前序号。
-5. 断言 Working State 从“等待审批”更新为“继续执行”，不从头重演。
+- 最终 Working State 仍显示；
+- spinner 消失；
+- 顶部显示最后 Trace 标题；
+- Trace 历史顺序不变。
 
-### Smoke 3：刷新恢复
+### Smoke D：Stateful Flow
 
-1. 在 subAgent 运行中或等待审批时刷新页面 / 重载会话。
-2. 从持久化消息恢复。
-3. 断言顶部 Trace、最后 Working State 和审批状态一致。
-4. 断言没有重复事件、序号倒退或常驻区消失。
+进行一轮备孕评估。
 
-### Smoke 4：显式返工
+检查：
 
-1. 让验证步骤发现结果缺口并返回前序工作修复。
-2. 断言 Trace 新增 `revisit` / `plan.revised` 标题。
-3. 断言 `seq` 继续增长，不显示为“第 5 步退回第 3 步”。
+- Flow 作为单 subAgent 控制器发布 `waiting_input`；
+- 常驻区显示当前缺口和下一步；
+- 下一轮继续使用稳定 Flow session run id；
+- 完成后显示 `completed` 并进入冻结交付。
+
+## 必须覆盖的测试
+
+- Working State parser 选择最新状态。
+- state snapshots 不混入历史 Trace 行。
+- 同一 run 按 seq 排序，不同 run 不混排。
+- 普通 subAgent Trace 行标题可见、summary 不显示。
+- completed Working State 仍常驻。
+- append-only start 事件不会留下永久 spinner。
+- checkpoint 恢复 runId / nextSeq / Working State。
+- Trace emit 失败不改变执行结果。
+- UChat 旧消息兼容：没有 subAgent state 时继续使用旧 inner status fallback。
 
 ## 验收标准
 
-- subAgent 能实时发布自己的 Working State 和 Trace。
-- Working State 在 UChat 正文上方常驻并可恢复。
-- 顶部 Trace 以标题、状态、进度为主，普通信息不喧宾夺主。
-- 同一 run 的事件严格 append-only，`seq` 单调递增。
-- 审批恢复延续同一 run，不重复执行已批准前的副作用。
-- 页面刷新、历史加载和旧消息兼容通过。
-- 不依赖从 Main Planner thought 推测 subAgent 状态。
-- server、desktop 单测、集成测试、smoke、typecheck 通过。
+- subAgent 自己发布可读工作状态。
+- 顶部 Trace 与常驻 Working State 职责分离。
+- SSE、持久化、刷新、审批恢复完整贯通。
+- 不暴露隐藏 chain-of-thought。
+- 不引入第二控制平面。
+- 单测、typecheck 与人工 UChat smoke 实际通过后才可把本卡改为 DONE。
 
 ## 施工红线
 
-1. 不把 UChat 当简单 React 组件直接改。
-2. 不在前端用文本匹配、时间猜测或数组下标伪造 run/step 身份。
-3. 不把原始隐藏推理当产品协议。
-4. 不允许 Trace 事件覆盖、删除或重排历史。
-5. 不让 Trace 回调影响 subAgent 控制流。
-6. 不破坏 RAG、普通 Agent、审批和旧消息展示。
-7. 不重开 Main Agent、Planner、Agent Graph 或 C contract。
+1. 不只改 `UChatExecutionTrace.tsx` 就宣称完成。
+2. 不从 Main Planner thought 推导 subAgent 状态。
+3. 不把模型生成的步骤编号当事件顺序。
+4. 不让 Trace 发布失败中断业务执行。
+5. 不破坏旧 RAG / Main Agent Trace 展示。
+6. 不泄露 prompt、token、凭据、原始隐藏推理或未脱敏参数。
 
-## 交付要求
+## 实现记录
 
-完成后提供：
+已落地：
 
-- 端到端数据链图或说明；
-- 新事件与持久化字段清单；
-- UChat 展示变化说明；
-- 审批恢复与刷新恢复测试结果；
-- 兼容策略和已知限制；
-- 一个聚焦提交，不夹带 UChat 无关重构。
+- Runtime-owned append-only ledger：`runId + seq + events + Working State`。
+- `subagent_report_state` 安全状态发布工具。
+- 工具开始/完成/失败、审批、恢复、输入缺口和终态事件。
+- checkpoint 保存并恢复 ledger 与 Skill 版本绑定。
+- 事件复用现有 execution-node → SSE → message data part → persistence 链路。
+- UChat parser 将 state snapshot 与历史 Trace 分离。
+- 顶部优先显示最新 subAgent Trace 标题。
+- 正文上方常驻显示判断、动作、下一步和阻塞。
+- completed / failed / blocked 状态不再自动消失。
+- Planner-derived inner status 仅作为旧消息 fallback。
+- Stateful Flow 发布同一套 Working State / Trace 语义。
+- 增加 UChat parser/展示回归测试。
+
+尚未在当前执行环境运行：
+
+- desktop Vitest
+- server checkpoint / approval 回归测试
+- desktop / server typecheck
+- `pnpm check`
+- 真实 UChat 刷新、断线和审批恢复 smoke
+
+在上述验证完成前，本卡保持 `IMPLEMENTED — VERIFICATION PENDING`。
