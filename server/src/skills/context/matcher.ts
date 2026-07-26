@@ -44,6 +44,36 @@ const SEMANTIC_HINTS: Record<string, Array<{ pattern: RegExp; weight: number; la
     { pattern: /\bpptx?\b|powerpoint/i, weight: 0.92, label: "PowerPoint/PPTX" },
     { pattern: /幻灯片|演示文稿|路演.*(?:ppt|演示)|deck\b/i, weight: 0.82, label: "presentation" },
   ],
+  miradocs: [
+    {
+      pattern: /\bmiradocs\b|mira\s*docs|@uichat-mira\/docs/i,
+      weight: 0.97,
+      label: "MiraDocs product",
+    },
+    {
+      pattern:
+        /(?:建|创建|初始化|搭建).{0,12}(?:文档站|博客站|个人博客)|(?:文档站|博客站).{0,8}(?:建|创建|初始化|搭建)/i,
+      weight: 0.9,
+      label: "MiraDocs site creation",
+    },
+    {
+      pattern:
+        /(?:把|将).{0,18}(?:文章|博客|markdown|文档).{0,12}(?:发|发布|上线|放到|放进)|(?:发|发布|上线).{0,12}(?:博客|文档)/i,
+      weight: 0.88,
+      label: "MiraDocs content publishing",
+    },
+    {
+      pattern:
+        /(?:文档站|博客站|miradocs).{0,16}(?:修改|改|维护|升级|迁移|构建|部署|修复|诊断)|(?:修复|诊断|升级|迁移).{0,12}(?:文档站|博客站|miradocs)/i,
+      weight: 0.84,
+      label: "MiraDocs site maintenance",
+    },
+    {
+      pattern: /(?:帮我|给我|想|要).{0,8}(?:建|做|搭).{0,6}(?:网站|站点|博客)/i,
+      weight: 0.68,
+      label: "site creation",
+    },
+  ],
   "fertility-assessment": [
     {
       pattern: /备孕.*(?:评估|分析|报告)|生育力.*(?:评估|分析|报告)|夫妻.*备孕|试管.*(?:复盘|评估|报告)/i,
