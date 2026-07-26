@@ -41,19 +41,46 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'release-merge-probe',
-              description: 'Testing status-file separation for Vitest merge',
+              description: 'Testing blob-only Vitest merge input',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
 
-      - name: Patch status extension in workspace
+      - name: Patch blob-only merge directory in workspace
         shell: pwsh
         run: |
-          $path = 'scripts\release\run-test-scope.mjs'
-          $text = Get-Content -LiteralPath $path -Raw
-          $text = $text.Replace('`${scope}-${safeShard}.status.json`', '`${scope}-${safeShard}.status`')
-          $text = $text.Replace('.endsWith(".status.json")', '.endsWith(".status")')
-          [System.IO.File]::WriteAllText((Resolve-Path $path), $text, [System.Text.UTF8Encoding]::new($false))
-          node --check $path
+          @'
+          from pathlib import Path
+
+          path = Path('scripts/release/run-test-scope.mjs')
+          text = path.read_text(encoding='utf-8')
+          merge_start = text.index('async function mergeShards()')
+          insert_at = text.index('  fs.rmSync(reportDir, { recursive: true, force: true });', merge_start)
+          block = '''  const blobFiles = fs
+            .readdirSync(mergeDir)
+            .filter((filename) => filename.endsWith(".blob.json"))
+            .map((filename) => path.join(mergeDir, filename));
+          if (expectedShards > 0 && blobFiles.length !== expectedShards) {
+            throw new Error(
+              `Expected ${expectedShards} ${scope} Vitest blobs, received ${blobFiles.length}.`,
+            );
+          }
+
+          const vitestMergeDir = path.join(validationRoot, "merge-input", scope);
+          fs.rmSync(vitestMergeDir, { recursive: true, force: true });
+          fs.mkdirSync(vitestMergeDir, { recursive: true });
+          for (const blobFile of blobFiles) {
+            fs.copyFileSync(blobFile, path.join(vitestMergeDir, path.basename(blobFile)));
+          }
+
+          '''
+          text = text[:insert_at] + block + text[insert_at:]
+          old = '`--merge-reports=${mergeDir}`'
+          if old not in text[merge_start:]:
+              raise SystemExit('Expected merge-reports argument was not found')
+          text = text[:merge_start] + text[merge_start:].replace(old, '`--merge-reports=${vitestMergeDir}`', 1)
+          path.write_text(text, encoding='utf-8')
+          '@ | python -
+          node --check scripts/release/run-test-scope.mjs
 
       - run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/desktop...
 
@@ -65,13 +92,6 @@ jobs:
           merge-multiple: true
           github-token: ${{ github.token }}
           run-id: 30222148715
-
-      - name: Rename prior status files outside Vitest JSON set
-        shell: pwsh
-        run: |
-          Get-ChildItem -LiteralPath '.artifacts\release-validation\windows-x64\shards\client' -Filter '*.status.json' | ForEach-Object {
-            Rename-Item -LiteralPath $_.FullName -NewName ($_.Name -replace '\.status\.json$', '.status')
-          }
 
       - name: Merge existing client shards
         id: merge
@@ -99,7 +119,7 @@ jobs:
           Get-Content -LiteralPath 'merge-probe\merge-output.txt' -Tail 80
           if (-not $reportReady) { exit 1 }
 
-      - name: Commit tested status extension fix
+      - name: Commit tested blob-only merge fix
         if: steps.merge.outcome == 'success'
         shell: pwsh
         run: |
@@ -107,7 +127,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add scripts/release/run-test-scope.mjs
           if (-not (git diff --cached --quiet)) {
-            git commit -m 'fix(release): keep shard status outside Vitest blob JSON set'
+            git commit -m 'fix(release): isolate Vitest blob inputs during merge'
             git push origin HEAD:wip/release-factory-speed
           }
 
