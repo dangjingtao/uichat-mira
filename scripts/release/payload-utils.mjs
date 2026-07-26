@@ -97,6 +97,7 @@ function readRootPackage() {
 
 function isReleaseEligibleValidation(validation) {
   return (
+    validation?.environment?.status === "passed" &&
     validation?.typecheck?.status === "passed" &&
     validation?.tests?.client?.status === "passed" &&
     validation?.tests?.server?.status === "passed"
@@ -107,6 +108,12 @@ function assertValidationContract(
   validation,
   { allowSkippedTests, allowFailedTests },
 ) {
+  if (validation?.environment?.status !== "passed") {
+    throw new Error(
+      `Payload validation environment did not pass: ${validation?.environment?.detail ?? "unknown environment failure"}.`,
+    );
+  }
+
   if (validation?.typecheck?.status !== "passed") {
     throw new Error("Payload validation is missing a passed typecheck result.");
   }
