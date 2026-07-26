@@ -64,7 +64,9 @@ const parseWorkingState = (value: unknown): SubAgentWorkingState | null => {
     ...(asString(value.currentJudgement)
       ? { currentJudgement: asString(value.currentJudgement) }
       : {}),
-    ...(asString(value.nextAction) ? { nextAction: asString(value.nextAction) } : {}),
+    ...(asString(value.nextAction)
+      ? { nextAction: asString(value.nextAction) }
+      : {}),
     ...(asString(value.blockingReason)
       ? { blockingReason: asString(value.blockingReason) }
       : {}),
@@ -82,6 +84,9 @@ const getSubAgentSeq = (step: RagNodeLike) => {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 };
 
+const getSubAgentRunId = (step: RagNodeLike) =>
+  asString(step.details?.subAgentRunId) ?? null;
+
 export const getLatestSubAgentWorkingState = (
   steps: RagNodeLike[],
 ): SubAgentWorkingState | null => {
@@ -98,19 +103,36 @@ export const getLatestSubAgentWorkingState = (
 export const getSubAgentTraceSteps = (steps: RagNodeLike[]) =>
   steps
     .filter(isSubAgentTraceStep)
-    .map((step, index) => ({ step, index, seq: getSubAgentSeq(step) }))
+    .map((step, index) => ({
+      step,
+      index,
+      runId: getSubAgentRunId(step),
+      seq: getSubAgentSeq(step),
+    }))
     .sort((left, right) => {
-      if (left.seq !== null && right.seq !== null) {
+      // SSE/message data parts already preserve append order across runs. Only
+      // repair ordering within the same run, where seq is authoritative.
+      if (
+        left.runId &&
+        right.runId &&
+        left.runId === right.runId &&
+        left.seq !== null &&
+        right.seq !== null
+      ) {
         return left.seq - right.seq || left.index - right.index;
       }
-      if (left.seq !== null) return -1;
-      if (right.seq !== null) return 1;
       return left.index - right.index;
     })
     .map((entry) => entry.step);
 
-export const getLatestSubAgentTraceTitle = (steps: RagNodeLike[]) => {
-  const latest = getSubAgentTraceSteps(steps).at(-1);
+export const getLatestSubAgentTraceTitle = (
+  steps: RagNodeLike[],
+  runId?: string,
+) => {
+  const candidates = getSubAgentTraceSteps(steps).filter(
+    (step) => !runId || getSubAgentRunId(step) === runId,
+  );
+  const latest = candidates.at(-1);
   return latest?.label?.trim() || null;
 };
 
