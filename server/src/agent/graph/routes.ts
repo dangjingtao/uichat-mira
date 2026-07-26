@@ -52,6 +52,9 @@ export const routeAfterNextAction = (state: AgentGraphStateType) => {
 };
 
 export const routeAfterGenericTaskSubAgent = (state: AgentGraphStateType) => {
+  // Commit the subAgent observation before pausing so the approval screen and
+  // resumed run both retain the task-local trace. routeAfterEvidence then goes
+  // straight to Approval without invoking Main Planner again.
   if (state.pendingEvidenceObservation) {
     return "evidenceStage";
   }
@@ -136,6 +139,10 @@ export const routeAfterRetrieve = (state: AgentGraphStateType) => {
 export const routeAfterEvidence = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
+  }
+
+  if (state.pendingApproval) {
+    return "approval";
   }
 
   return "nextActionPlanner";
