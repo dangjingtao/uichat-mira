@@ -7,6 +7,9 @@ category: development
 visibility: public
 source: Mira
 status: review
+execution.context: fork
+execution.agent: miradocs
+execution.allowedTools: read_discover, read_open, edit_file, terminal_session, web_search, github_repository, github_pull_request, github_actions
 ---
 
 # MiraDocs Skill V1
@@ -218,6 +221,8 @@ MiraDocs Skill 负责：
 | 读取 Pages 状态 | `github_repository.get_pages` |
 | 启用或修改 Pages | `github_repository.configure_pages` |
 
+`execution.allowedTools` 是 MiraDocs fork 执行的受控工具集合。它描述允许并需要校验的工具边界，不注册工具、不扩大 ToolExposure，也不绕过 Policy 或审批。委派执行只能从这个集合与当前真实可用能力的交集中选择；缺失关键能力时必须阻塞并明确返回缺口，不能拿半套工具悄悄开工。
+
 Skill 命中不代表工具已经进入本轮 ToolExposure。Planner 只能使用当前真实暴露并通过 Policy 的能力；但已经真实暴露的能力，不应被 Skill 人为回避。
 
 # 交付格式
@@ -284,6 +289,7 @@ PR 已创建，但 Actions 失败
 13. 当前环境已暴露且用户目标需要的 GitHub 能力应实际调用，不得用“V1 暂不做”替代能力执行。
 14. 新仓库创建后必须检查 installation 授权；Pages 配置后必须回读最终状态和 URL。
 15. 恢复任务时先回读 checkpoint，禁止重复创建仓库、重复发布同一内容或重复执行已完成的远程写入。
+16. fork 执行不得调用 `execution.allowedTools` 之外的工具；关键工具缺失时必须先报告 capability 缺口。
 
 # Completion Criteria
 
