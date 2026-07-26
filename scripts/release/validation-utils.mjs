@@ -32,6 +32,14 @@ function resolveGitCommit() {
   }
 }
 
+export function isValidationReleaseEligible(validation) {
+  return (
+    validation?.typecheck?.status === "passed" &&
+    validation?.tests?.client?.status === "passed" &&
+    validation?.tests?.server?.status === "passed"
+  );
+}
+
 export function resetValidationRoot() {
   removePath(validationRoot);
   fs.mkdirSync(validationRoot, { recursive: true });
@@ -83,13 +91,14 @@ export function copyOfficialReports(scope, sourceDir) {
 export function writeValidationManifest(validation) {
   const packageJson = readRootPackage();
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     product: packageJson.name,
     version: packageJson.version,
     platform: "windows",
     architecture: "x64",
     gitCommit: resolveGitCommit(),
     generatedAt: new Date().toISOString(),
+    releaseEligible: isValidationReleaseEligible(validation),
     validation,
   };
 
@@ -104,14 +113,14 @@ export function writeValidationManifest(validation) {
 
 export function readAndVerifyValidationManifest(
   manifestPath = validationManifestPath,
-  { allowSkippedTests = false } = {},
+  { allowSkippedTests = false, allowFailedTests = false } = {},
 ) {
   if (!fs.existsSync(manifestPath)) {
     throw new Error(`Missing release validation manifest: ${manifestPath}`);
   }
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  if (manifest.schemaVersion !== 1) {
+  if (manifest.schemaVersion !== 2) {
     throw new Error(
       `Unsupported release validation schema: ${manifest.schemaVersion ?? "missing"}`,
     );
@@ -145,20 +154,31 @@ export function readAndVerifyValidationManifest(
     );
   }
 
+  const expectedEligibility = isValidationReleaseEligible(manifest.validation);
+  if (manifest.releaseEligible !== expectedEligibility) {
+    throw new Error(
+      `Validation eligibility mismatch: expected ${expectedEligibility}, got ${manifest.releaseEligible}.`,
+    );
+  }
+
   if (manifest.validation?.typecheck?.status !== "passed") {
     throw new Error("Release validation does not contain a passed typecheck.");
   }
 
   for (const scope of ["client", "server"]) {
     const status = manifest.validation?.tests?.[scope]?.status;
+    if (status === "passed") {
+      continue;
+    }
     if (status === "skipped" && allowSkippedTests) {
       continue;
     }
-    if (status !== "passed") {
-      throw new Error(
-        `Release validation requires passed ${scope} tests; received ${status ?? "missing"}.`,
-      );
+    if (status === "failed" && allowFailedTests) {
+      continue;
     }
+    throw new Error(
+      `Release validation requires passed ${scope} tests; received ${status ?? "missing"}.`,
+    );
   }
 
   return manifest;
@@ -182,7 +202,9 @@ export function printFailedTestDetails(scope, reportPath, limit = 120) {
       continue;
     }
 
-    console.error(`FAIL ${scope}: ${suite.name || suite.absoluteName || "unknown suite"}`);
+    console.error(
+      `FAIL ${scope}: ${suite.name || suite.absoluteName || "unknown suite"}`,
+    );
     if (suite.message?.trim()) {
       console.error(suite.message.trim());
     }
@@ -194,7 +216,9 @@ export function printFailedTestDetails(scope, reportPath, limit = 120) {
         );
         return;
       }
-      console.error(`  × ${assertion.fullName || assertion.title || "unnamed test"}`);
+      console.error(
+        `  × ${assertion.fullName || assertion.title || "unnamed test"}`,
+      );
       for (const message of assertion.failureMessages ?? []) {
         console.error(
           String(message)
