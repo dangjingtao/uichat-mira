@@ -5,6 +5,7 @@ import { getDefaultSkillRegistry, type SkillRegistry } from "./scanner.js";
 import type {
   SkillContext,
   SkillDisclosurePlan,
+  SkillExecutionManifest,
   SkillManifest,
   SkillMatchResult,
   SkillResource,
@@ -24,6 +25,14 @@ const NEW_QUESTION_PATTERN = /(?:[?？]\s*$|为什么|为何|怎么(?:办|样|�
 const ASSISTANT_CLARIFICATION_PATTERN =
   /(?:请(?:提供|告诉|补充|确认|选择)|需要(?:你|您).*?(?:提供|确认|选择|补充)|为了.*?(?:请|需要)|以下(?:信息|参数)|[?？])/i;
 const MAX_CONTINUITY_USER_TURNS = 4;
+
+const DEFAULT_SUBAGENT_EXECUTION: SkillExecutionManifest = {
+  context: "fork",
+  agent: "subAgent",
+  allowedTools: [],
+  runtimeBindings: [],
+  workspaceBound: false,
+};
 
 const trimToBudget = (value: string, limit: number) =>
   value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
@@ -229,6 +238,7 @@ export class SkillContextProvider {
       disclosedResources.push({ uri, content: contentWithinBudget });
     }
 
+    const execution = manifest.execution ?? DEFAULT_SUBAGENT_EXECUTION;
     return {
       instruction: SKILL_CONTEXT_INSTRUCTION,
       primary: {
@@ -236,15 +246,12 @@ export class SkillContextProvider {
         version: manifest.version,
         name: manifest.name,
         body: trimToBudget(content.body, MAX_SKILL_BODY_CHARS),
-        ...(manifest.execution
-          ? {
-              execution: {
-                ...manifest.execution,
-                allowedTools: [...manifest.execution.allowedTools],
-                runtimeBindings: [...manifest.execution.runtimeBindings],
-              },
-            }
-          : {}),
+        origin: manifest.origin ?? "external",
+        execution: {
+          ...execution,
+          allowedTools: [...execution.allowedTools],
+          runtimeBindings: [...execution.runtimeBindings],
+        },
       },
       resources: plan.availableResources,
       disclosedResources,

@@ -16,6 +16,7 @@ import { migrateLegacyUserSkillPackages } from "@/skills/user-skill-migration.js
 import {
   deleteUserSkill,
   importMarkdownSkill,
+  setUserSkillEnabled,
   updateUserSkill,
   type UpdateUserSkillInput,
 } from "@/skills/user-skills.js";
@@ -36,6 +37,10 @@ type RuntimeSnapshot = {
   status: Exclude<SkillRuntimeDisplayStatus, "not-required" | "unknown">;
   missing: string[];
   error?: string;
+};
+
+type SetSkillEnabledBody = {
+  enabled: boolean;
 };
 
 const loadWenshuRuntimeSnapshot = async (): Promise<RuntimeSnapshot> => {
@@ -109,6 +114,13 @@ const resolveRuntimeSnapshot = async (skills: SkillCatalogSummary[]) =>
     ? await loadWenshuRuntimeSnapshot()
     : undefined;
 
+const getProtectedSkillIds = async () =>
+  new Set(
+    (await listSkillCatalogSummaries())
+      .filter((skill) => skill.origin !== "user")
+      .map((skill) => skill.id),
+  );
+
 const invalidateSkillDiscovery = () => {
   getDefaultSkillRegistry().invalidate();
   getDefaultSkillContextProvider().invalidate();
@@ -145,11 +157,18 @@ const skillsRoutes: FastifyPluginAsync = async (app) => {
       }
       const buffer = await upload.toBuffer();
       if (buffer.byteLength === 0) throw badRequest("Markdown 文件内容为空");
+      const protectedSkillIds = await getProtectedSkillIds();
       try {
         const imported = await importMarkdownSkill({
           fileName: upload.filename,
           content: buffer.toString("utf8"),
         });
+        if (protectedSkillIds.has(imported.id)) {
+          await deleteUserSkill(imported.entry);
+          throw new Error(
+            `Skill id ${imported.id} is reserved by a system-installed Skill`,
+          );
+        }
         invalidateSkillDiscovery();
         const detail = await getSkillCatalogDetail(imported.id);
         if (!detail) throw new Error("Imported Skill could not be rediscovered");
@@ -204,6 +223,48 @@ const skillsRoutes: FastifyPluginAsync = async (app) => {
         if (!detail) throw new Error("Updated Skill could not be rediscovered");
         const runtimeSnapshot = await resolveRuntimeSnapshot([detail]);
         return success(withRuntimeStatus(detail, runtimeSnapshot), "Skill updated");
+      },
+    ),
+  );
+
+  app.put<{ Params: { id: string }; Body: SetSkillEnabledBody }>(
+    "/skills/:id/enabled",
+    routeHandler<{ Params: { id: string }; Body: SetSkillEnabledBody }>(
+      "Failed to change Skill enabled state",
+      async (request) => {
+        if (typeof request.body?.enabled !== "boolean") {
+          throw badRequest("enabled must be a boolean");
+        }
+
+        // A disabled package is intentionally absent from the Registry, so
+        // enabling must resolve it from the governed user-Skill directory.
+        if (!request.body.enabled) {
+          const detail = await getSkillCatalogDetail(request.params.id);
+          if (!detail) throw notFound(`Skill not found: ${request.params.id}`);
+          if (detail.origin !== "user") {
+            throw badRequest("Only user-imported Skills can be disabled");
+          }
+        } else if ((await getProtectedSkillIds()).has(request.params.id)) {
+          throw badRequest(
+            `Skill id ${request.params.id} is now reserved by a system-installed Skill`,
+          );
+        }
+
+        try {
+          const changed = await setUserSkillEnabled(
+            request.params.id,
+            request.body.enabled,
+          );
+          invalidateSkillDiscovery();
+          return success(
+            changed,
+            request.body.enabled ? "Skill enabled" : "Skill disabled",
+          );
+        } catch (error) {
+          throw badRequest(
+            error instanceof Error ? error.message : "Skill 状态更新失败",
+          );
+        }
       },
     ),
   );

@@ -6,7 +6,11 @@ import {
   getBuiltInSkillPackage,
   MIRA_LAB_SKILL_SOURCE,
 } from "../registry.js";
-import type { SkillExecutionManifest, SkillManifest } from "./types.js";
+import type {
+  SkillExecutionManifest,
+  SkillManifest,
+  SkillPackageOrigin,
+} from "./types.js";
 
 const FRONTMATTER_BOUNDARY = "---";
 const MAX_MANIFEST_BYTES = 16 * 1024;
@@ -37,38 +41,6 @@ const stripQuotes = (value: string) => {
     return trimmed.slice(1, -1);
   }
   return trimmed;
-};
-
-const parseStringList = (value: string | undefined) => {
-  if (!value?.trim()) return [];
-  const normalized = value.trim();
-  const body =
-    normalized.startsWith("[") && normalized.endsWith("]")
-      ? normalized.slice(1, -1)
-      : normalized;
-  return [
-    ...new Set(
-      body
-        .split(",")
-        .map((item) => stripQuotes(item).trim())
-        .filter(Boolean),
-    ),
-  ];
-};
-
-const parseExecutionManifest = (
-  frontmatter: Record<string, string>,
-): SkillExecutionManifest | undefined => {
-  const rawContext = frontmatter["execution.context"]?.trim().toLowerCase();
-  if (rawContext !== "inline" && rawContext !== "fork") return undefined;
-
-  const agent = frontmatter["execution.agent"]?.trim();
-  return {
-    context: rawContext,
-    ...(agent ? { agent } : {}),
-    allowedTools: parseStringList(frontmatter["execution.allowedTools"]),
-    runtimeBindings: parseStringList(frontmatter["execution.runtimeBindings"]),
-  };
 };
 
 const parseFrontmatter = (raw: string) => {
@@ -108,6 +80,29 @@ const unique = (values: Array<string | null | undefined>): string[] => [
   ...new Set(values.filter((value): value is string => Boolean(value))),
 ];
 
+const parseList = (value: string | undefined) => {
+  if (!value?.trim()) return [];
+  const normalized = value.trim();
+  const body =
+    normalized.startsWith("[") && normalized.endsWith("]")
+      ? normalized.slice(1, -1)
+      : normalized;
+  return unique(
+    body
+      .split(",")
+      .map((item) => stripQuotes(item).trim())
+      .filter(Boolean),
+  );
+};
+
+const parseBoolean = (value: string | undefined, fallback: boolean) => {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  return fallback;
+};
+
 export const resolveUserSkillsRoot = () => {
   const configured = process.env.MIRA_USER_SKILLS_ROOT?.trim();
   if (configured) return path.resolve(configured);
@@ -124,12 +119,15 @@ export const resolveSkillRootCandidates = () => {
   const configured = process.env.MIRA_SKILLS_ROOT?.trim();
   const entryDir = process.argv[1] ? path.dirname(path.resolve(process.argv[1])) : null;
 
+  // System/package roots are scanned before the user root so an installed user
+  // package cannot shadow an official/external Skill identity merely by reusing
+  // its id. User packages remain fully discoverable when their id is unique.
   return unique([
     configured ? path.resolve(configured) : null,
-    resolveUserSkillsRoot(),
     entryDir ? path.join(entryDir, "skills") : null,
     path.join(process.cwd(), "src", "skills"),
     path.join(process.cwd(), "server", "src", "skills"),
+    resolveUserSkillsRoot(),
   ]);
 };
 
@@ -165,6 +163,70 @@ type SkillCandidate = {
   legacyFlat: boolean;
 };
 
+const resolveOrigin = (input: {
+  userInstalled: boolean;
+  builtIn: boolean;
+}): SkillPackageOrigin => {
+  // Files under the user root are always user content, even when they reuse a
+  // built-in id. Built-in fallback metadata must never grant a user package a
+  // private Runtime or system provenance.
+  if (input.userInstalled) return "user";
+  return input.builtIn ? "built-in" : "external";
+};
+
+const resolveExecution = (input: {
+  frontmatter: Record<string, string>;
+  fallbackRuntimeCapabilities: string[];
+  origin: SkillPackageOrigin;
+}): SkillExecutionManifest => {
+  const declaredTools = parseList(
+    input.frontmatter["execution.allowedTools"] ||
+      input.frontmatter.allowedTools ||
+      input.frontmatter.allowedToolIds ||
+      input.frontmatter.tools,
+  );
+  const declaredRuntimes = parseList(
+    input.frontmatter["execution.runtimeBindings"] ||
+      input.frontmatter.runtimeBindings ||
+      input.frontmatter.runtimeCapabilities ||
+      input.frontmatter.privateRuntimes,
+  );
+  const declaredAgent = String(
+    input.frontmatter["execution.agent"] || input.frontmatter.agent || "",
+  ).trim();
+  const declaredWorkspaceBound =
+    input.frontmatter["execution.workspaceBound"] || input.frontmatter.workspaceBound;
+
+  // Imported user Skills are instructions, not capability grants. They always
+  // receive a subAgent, but no Tool/Runtime is made visible merely because the
+  // Markdown asked for it. A later governed binding flow may satisfy those
+  // requirements explicitly.
+  const allowedTools = input.origin === "user" ? [] : declaredTools;
+  const runtimeBindings =
+    input.origin === "user"
+      ? []
+      : unique([
+          ...declaredRuntimes,
+          ...(declaredRuntimes.length === 0 ? input.fallbackRuntimeCapabilities : []),
+        ]);
+  const workspaceBound =
+    input.origin === "user"
+      ? false
+      : declaredWorkspaceBound
+        ? parseBoolean(declaredWorkspaceBound, runtimeBindings.length > 0)
+        : runtimeBindings.length > 0
+          ? true
+          : undefined;
+
+  return {
+    context: "fork",
+    agent: input.origin === "user" ? "subAgent" : declaredAgent || "subAgent",
+    allowedTools,
+    runtimeBindings,
+    ...(workspaceBound !== undefined ? { workspaceBound } : {}),
+  };
+};
+
 const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillManifest | null> => {
   let manifestWindow: string;
   try {
@@ -174,7 +236,9 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
   }
 
   const frontmatter = parseFrontmatter(manifestWindow);
-  const fallback = getBuiltInSkillPackage(candidate.directoryId);
+  const fallback = candidate.userInstalled
+    ? undefined
+    : getBuiltInSkillPackage(candidate.directoryId);
   const visibility = String(frontmatter.visibility || "").trim().toLowerCase();
 
   if (BLOCKED_VISIBILITIES.has(visibility)) return null;
@@ -196,7 +260,10 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
   const rawCategory = String(
     candidate.categoryFromDirectory || frontmatter.category || fallback?.category || "",
   ).trim();
-  const execution = parseExecutionManifest(frontmatter);
+  const origin = resolveOrigin({
+    userInstalled: candidate.userInstalled,
+    builtIn: Boolean(fallback),
+  });
 
   return {
     id,
@@ -211,13 +278,18 @@ const readCandidateManifest = async (candidate: SkillCandidate): Promise<SkillMa
       String(frontmatter.description || fallback?.description || "").trim() || id,
     version: String(frontmatter.version || fallback?.version || "1.0.0"),
     entry: candidate.skillFile,
+    origin,
     ...(rawSource ? { source: normalizeSkillSource(rawSource) } : {}),
     ...(rawCategory ? { category: normalizeCategoryLabel(rawCategory) } : {}),
     ...(frontmatter.license ? { license: String(frontmatter.license).trim() } : {}),
     ...(fallback?.runtimePack
       ? { runtimeRequirements: [`${fallback.runtimePack.id}@${fallback.runtimePack.version}`] }
       : {}),
-    ...(execution ? { execution } : {}),
+    execution: resolveExecution({
+      frontmatter,
+      fallbackRuntimeCapabilities: fallback?.runtimeCapabilities ?? [],
+      origin,
+    }),
   };
 };
 
@@ -311,7 +383,16 @@ export class SkillRegistry {
   }
 
   register(manifest: SkillManifest) {
-    this.manifests.set(manifest.id, { ...manifest });
+    this.manifests.set(manifest.id, {
+      ...manifest,
+      execution: manifest.execution
+        ? {
+            ...manifest.execution,
+            allowedTools: [...manifest.execution.allowedTools],
+            runtimeBindings: [...manifest.execution.runtimeBindings],
+          }
+        : undefined,
+    });
   }
 
   get(id: string, version?: string) {

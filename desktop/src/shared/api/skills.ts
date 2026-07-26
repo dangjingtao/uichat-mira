@@ -74,7 +74,14 @@ export type UpdateSkillInput = {
   featured?: boolean;
 };
 
-export const getSkillCatalog = () => get<{ skills: SkillCatalogItem[] }>(`${SKILLS_ROUTE}/catalog`);
+export type SetSkillEnabledResult = {
+  id: string;
+  enabled: boolean;
+  entry: string;
+};
+
+export const getSkillCatalog = () =>
+  get<{ skills: SkillCatalogItem[] }>(`${SKILLS_ROUTE}/catalog`);
 
 export const getSkillDetail = (id: string) =>
   get<SkillDetail>(`${SKILLS_ROUTE}/${encodeURIComponent(id)}`);
@@ -84,7 +91,9 @@ export const getSkillFileContent = (id: string, filePath: string) => {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  return get<SkillFileContent>(`${SKILLS_ROUTE}/${encodeURIComponent(id)}/files/${encodedPath}`);
+  return get<SkillFileContent>(
+    `${SKILLS_ROUTE}/${encodeURIComponent(id)}/files/${encodedPath}`,
+  );
 };
 
 export const importSkillMarkdown = (file: File) => {
@@ -95,6 +104,12 @@ export const importSkillMarkdown = (file: File) => {
 
 export const updateSkill = (id: string, input: UpdateSkillInput) =>
   put<SkillDetail>(`${SKILLS_ROUTE}/${encodeURIComponent(id)}`, input);
+
+export const setSkillEnabled = (id: string, enabled: boolean) =>
+  put<SetSkillEnabledResult>(
+    `${SKILLS_ROUTE}/${encodeURIComponent(id)}/enabled`,
+    { enabled },
+  );
 
 export const deleteSkill = (id: string) =>
   del<{ id: string }>(`${SKILLS_ROUTE}/${encodeURIComponent(id)}`);
