@@ -1,0 +1,51 @@
+name: Agent Runtime CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - "server/src/agent/**"
+      - "server/src/skills/agent/**"
+      - "server/package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/agent-runtime-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-agent:
+    name: Server Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install server workspace dependencies
+        run: pnpm install --frozen-lockfile --filter @ui-chat-mira/server...
+
+      - name: Typecheck server
+        run: pnpm --filter @ui-chat-mira/server typecheck
+
+      - name: Run generic subAgent focused tests
+        run: pnpm --filter @ui-chat-mira/server test -- src/agent/__tests__/generic-task-subagent.test.ts
