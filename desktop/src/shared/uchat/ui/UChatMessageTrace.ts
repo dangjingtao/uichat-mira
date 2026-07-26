@@ -7,23 +7,18 @@ import {
   getExecutionProgressFromRenderableParts,
   toUChatRenderableParts,
 } from "./executionParsers";
-import {
-  getDisplayExecutionSteps,
-  getLatestSubAgentWorkingState,
-} from "./subAgentTrace";
+import { getLatestSubAgentWorkingState } from "./subAgentTrace";
 
 export const getUChatMessageTraceState = (message: ChatMessage) => {
-  const allSteps = getExecutionProgressFromRenderableParts(
+  const steps = getExecutionProgressFromRenderableParts(
     toUChatRenderableParts(message),
   );
-  const steps = getDisplayExecutionSteps(allSteps);
-  const subAgentWorkingState = getLatestSubAgentWorkingState(allSteps);
+  const subAgentWorkingState = getLatestSubAgentWorkingState(steps);
 
   return {
     steps,
-    allSteps,
     subAgentWorkingState,
-    hasTrace: steps.length > 0 || subAgentWorkingState !== null,
+    hasTrace: steps.length > 0,
     failurePresentation:
       message.status === "error"
         ? getExecutionFailurePresentation(steps, message.errorMessage)
