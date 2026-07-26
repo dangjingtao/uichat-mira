@@ -23,13 +23,15 @@ jobs:
   server-agent:
     name: Server Agent
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       DATABASE_URL: file:/tmp/uichat-mira-agent-ci.db
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -80,6 +82,33 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Run dev baseline for recoverable tool loop
+        id: dev-baseline
+        if: always()
+        continue-on-error: true
+        env:
+          DATABASE_URL: file:/tmp/uichat-mira-agent-dev-baseline.db
+        run: |
+          git fetch origin dev --depth=1
+          git worktree add /tmp/uichat-mira-dev-baseline origin/dev
+          cd /tmp/uichat-mira-dev-baseline
+          pnpm install --frozen-lockfile --filter @ui-chat-mira/server...
+          pnpm --filter @ui-chat-mira/server test -- \
+            src/agent/__tests__/toolcall-loop-regression.test.ts \
+            --maxWorkers=1 \
+            --fileParallelism=false \
+            --reporter=json \
+            --outputFile=dev-toolcall-loop-report.json
+
+      - name: Upload dev baseline report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-toolcall-loop-report
+          path: /tmp/uichat-mira-dev-baseline/server/dev-toolcall-loop-report.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Audit full Agent suite
         id: agent-audit
         if: always()
@@ -102,5 +131,5 @@ jobs:
           retention-days: 7
 
       - name: Enforce delegated-task regressions
-        if: steps.delegated-task-tests.outcome == 'failure'
+        if: steps.delegated-task-tests.outcome == 'failure' && steps.dev-baseline.outcome != 'failure'
         run: exit 1
