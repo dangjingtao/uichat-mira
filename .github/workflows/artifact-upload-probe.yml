@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   probe:
-    runs-on: ubuntu-latest
+    runs-on: windows-2022
     timeout-minutes: 5
     steps:
       - name: Publish probe status
@@ -26,18 +26,23 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'artifact-upload-probe',
-              description: 'Artifact upload probe is running',
+              description: 'Windows artifact upload probe is running',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
 
-      - name: Create tiny probe
-        run: printf 'mira-artifact-probe\n' > probe.txt
+      - name: Create tiny probe directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'release-validation-shards\client\1-of-2' | Out-Null
+          'mira-artifact-probe' | Out-File -LiteralPath 'release-validation-shards\client\1-of-2\status.json' -Encoding utf8
+          'blob-probe' | Out-File -LiteralPath 'release-validation-shards\client\1-of-2\vitest-client-1-of-2.blob.json' -Encoding utf8
+          Get-ChildItem -LiteralPath 'release-validation-shards' -Recurse | Format-Table FullName, Length
 
-      - name: Upload tiny probe
+      - name: Upload tiny Windows probe
         uses: actions/upload-artifact@v4
         with:
-          name: mira-artifact-probe-${{ github.sha }}
-          path: probe.txt
+          name: mira-windows-artifact-probe-${{ github.sha }}
+          path: release-validation-shards/client/1-of-2
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -53,6 +58,6 @@ jobs:
               sha: context.sha,
               state: 'success',
               context: 'artifact-upload-probe',
-              description: 'Artifact upload probe passed',
+              description: 'Windows artifact upload probe passed',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
