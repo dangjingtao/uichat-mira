@@ -1,4 +1,4 @@
-name: Export Release Factory Workflow
+name: Restore Release R2 Contract
 
 on:
   push:
@@ -8,18 +8,23 @@ on:
       - '.github/workflows/restore-release-r2.yml'
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 jobs:
-  export:
+  patch:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout patch branch
+        uses: actions/checkout@v4
+
+      - name: Checkout Release Factory branch
+        uses: actions/checkout@v4
         with:
           ref: feature/release-factory-v2
-          fetch-depth: 1
+          path: target
+          fetch-depth: 0
 
       - name: Publish running status
         uses: actions/github-script@v7
@@ -30,23 +35,33 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: 'pending',
-              context: 'release-r2-export',
-              description: 'Exporting current Release Factory workflow',
+              context: 'release-r2-restore',
+              description: 'Restoring GitHub Release and R2 publishing',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
 
-      - name: Stage workflow file
-        run: |
-          mkdir -p export
-          cp .github/workflows/release-factory-v2.yml export/release-factory-v2.yml
+      - name: Patch Release Factory workflow
+        run: python scripts/diagnostics/patch-release-r2-workflow.py target/.github/workflows/release-factory-v2.yml
 
-      - name: Upload workflow source
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-factory-source-${{ github.sha }}
-          path: export/release-factory-v2.yml
-          if-no-files-found: error
-          retention-days: 1
+      - name: Validate workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -no-color target/.github/workflows/release-factory-v2.yml
+          grep -q 'Upload release assets to Cloudflare R2' target/.github/workflows/release-factory-v2.yml
+          grep -q 'publish-release-assets' target/.github/workflows/release-factory-v2.yml
+
+      - name: Commit R2 publishing contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/release-factory-v2.yml
+          git commit -m 'fix(release): restore GitHub and R2 publishing contract'
+          git push origin HEAD:feature/release-factory-v2
 
       - name: Publish success status
         uses: actions/github-script@v7
@@ -57,7 +72,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: 'success',
-              context: 'release-r2-export',
-              description: 'Release Factory workflow exported',
+              context: 'release-r2-restore',
+              description: 'GitHub Release and R2 publishing restored',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
