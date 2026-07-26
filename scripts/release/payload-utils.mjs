@@ -48,7 +48,11 @@ export function copyOptional(sourcePath, destinationPath, label) {
   return true;
 }
 
-function listFilesRecursive(rootPath, currentPath = rootPath) {
+export function listFilesRecursive(rootPath, currentPath = rootPath) {
+  if (!fs.existsSync(currentPath)) {
+    return [];
+  }
+
   return fs
     .readdirSync(currentPath, { withFileTypes: true })
     .flatMap((entry) => {
@@ -85,10 +89,35 @@ function resolveGitCommit() {
   }
 }
 
-export function writePayloadManifest() {
-  const packageJson = JSON.parse(
+function readRootPackage() {
+  return JSON.parse(
     fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"),
   );
+}
+
+function assertValidationContract(validation, { allowSkippedTests }) {
+  if (validation?.typecheck?.status !== "passed") {
+    throw new Error("Payload validation is missing a passed typecheck result.");
+  }
+
+  for (const scope of ["client", "server"]) {
+    const result = validation?.tests?.[scope];
+    if (!result) {
+      throw new Error(`Payload validation is missing ${scope} test results.`);
+    }
+    if (result.status === "skipped" && allowSkippedTests) {
+      continue;
+    }
+    if (result.status !== "passed") {
+      throw new Error(
+        `Payload validation requires passed ${scope} tests; received ${result.status ?? "missing"}.`,
+      );
+    }
+  }
+}
+
+export function writePayloadManifest(validation) {
+  const packageJson = readRootPackage();
   const files = listFilesRecursive(payloadRoot)
     .filter((file) => file.relativePath !== "manifest.json")
     .map((file) => {
@@ -101,13 +130,14 @@ export function writePayloadManifest() {
     });
 
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     product: packageJson.name,
     version: packageJson.version,
     platform: "windows",
     architecture: "x64",
     gitCommit: resolveGitCommit(),
     generatedAt: new Date().toISOString(),
+    validation,
     totalFiles: files.length,
     totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
     files,
@@ -118,12 +148,48 @@ export function writePayloadManifest() {
   return manifest;
 }
 
-export function verifyPayload() {
+export function verifyPayload({ allowSkippedTests = false } = {}) {
   if (!fs.existsSync(payloadManifestPath)) {
     throw new Error(`Missing release payload manifest: ${payloadManifestPath}`);
   }
 
   const manifest = JSON.parse(fs.readFileSync(payloadManifestPath, "utf8"));
+  if (manifest.schemaVersion !== 2) {
+    throw new Error(
+      `Unsupported payload manifest schema: ${manifest.schemaVersion ?? "missing"}`,
+    );
+  }
+  if (manifest.platform !== "windows" || manifest.architecture !== "x64") {
+    throw new Error(
+      `Unexpected payload target: ${manifest.platform}/${manifest.architecture}`,
+    );
+  }
+
+  const packageJson = readRootPackage();
+  if (manifest.product !== packageJson.name) {
+    throw new Error(
+      `Payload product mismatch: expected ${packageJson.name}, got ${manifest.product}`,
+    );
+  }
+  if (manifest.version !== packageJson.version) {
+    throw new Error(
+      `Payload version mismatch: expected ${packageJson.version}, got ${manifest.version}`,
+    );
+  }
+
+  const expectedCommit = process.env.GITHUB_SHA?.trim();
+  if (
+    expectedCommit &&
+    manifest.gitCommit !== "unknown" &&
+    manifest.gitCommit !== expectedCommit
+  ) {
+    throw new Error(
+      `Payload commit mismatch: expected ${expectedCommit}, got ${manifest.gitCommit}`,
+    );
+  }
+
+  assertValidationContract(manifest.validation, { allowSkippedTests });
+
   const actualFiles = listFilesRecursive(payloadRoot).filter(
     (file) => file.relativePath !== "manifest.json",
   );
@@ -158,6 +224,19 @@ export function verifyPayload() {
   if (actualPaths.size !== expectedPaths.size) {
     throw new Error(
       `Payload file count mismatch: expected ${expectedPaths.size}, got ${actualPaths.size}`,
+    );
+  }
+
+  const actualTotalBytes = actualFiles.reduce(
+    (sum, file) => sum + fs.statSync(file.fullPath).size,
+    0,
+  );
+  if (
+    manifest.totalFiles !== actualFiles.length ||
+    manifest.totalBytes !== actualTotalBytes
+  ) {
+    throw new Error(
+      `Payload totals mismatch: expected ${manifest.totalFiles} files/${manifest.totalBytes} bytes, got ${actualFiles.length} files/${actualTotalBytes} bytes.`,
     );
   }
 
