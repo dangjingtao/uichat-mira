@@ -1,6 +1,6 @@
 # A19_T001 — 所有现有 Skill 统一接入 subAgent Runtime
 
-- 状态：READY
+- 状态：IMPLEMENTED — VERIFICATION PENDING
 - 仓库：`dangjingtao/uichat-mira`
 - 基线分支：`dev`
 - 施工分支：`feature/subagent-skill-runtime-v1`
@@ -33,117 +33,151 @@
 - Harness、Policy、审批、Evidence 和 workspace 边界保持有效。
 - GitHub Skill 已有专业内容允许复用；只做统一 Runtime 接线和必要规范补齐。
 - 文枢现有能力不得回退。
+- Stateful Skill 的 Flow/Reducer 作为该 Skill 唯一 subAgent 的确定性控制器，不得再叠一层自由 Planner。
 
 ### 非目标
 
 - 不新增 Agent Graph 拓扑。
 - 不重开 Planner、Normalize、Policy、ToolNode、Evidence、Generate 或 C contract。
-- 不引入多 subAgent 编排、swarm、manager/worker 或嵌套 Agent。
-- 不为每个 Skill 手工复制一套 runner。
-- 不因接入 subAgent 自动扩大 ToolExposure。
-- 不顺手重做 Skill 商店、安装 UI 或 UChat 展示。
+- 不允许 subAgent 创建子 Agent。
+- 不把 Office Runtime 重新暴露成全局 Harness 工具。
+- 不取消现有精确审批、checkpoint 或 Evidence 约束。
+- 不在本卡实现 Skill 市场、在线安装或多 Skill 编排。
+- 不因统一接入而重写各 Skill 的专业正文。
 
-## 通用执行合同
-
-建议收口为通用类型，具体命名可按现有代码风格调整：
+## 统一执行合同
 
 ```ts
 type SubAgentExecutionProfile = {
   skillId: string
+  mode: "forked-agent"
   engine: "pi-agent-core"
   allowedHarnessToolIds: string[]
-  runtimeBindings: SubAgentRuntimeBinding[]
+  runtimeBindings: RuntimeBinding[]
   workspaceBound: boolean
 }
 ```
 
-约束：
+Profile 是需求声明，不是权限授予：
 
-1. profile 来源必须是通用 Registry / Resolver，不再以 `WENSHU_*` 专用映射作为唯一入口。
-2. 同一轮只选择一个 primary Skill，并启动其唯一 subAgent。
-3. Skill 私有 Runtime 只对对应 subAgent 可见。
-4. Harness 工具仍以真实注册、授权和 Policy 结果为准。
-5. 缺少能力时返回标准 requirement，不伪造成功。
-6. `pi-agent-core` 不出现在用户可见文案中。
+```text
+实际可用 Harness 工具
+= Skill 声明
+∩ 当前 canonical ToolExposure
+∩ Harness 已注册和健康能力
+∩ Policy / approval
+```
 
-## Skill 包最低质量基线
+私有 Runtime 继续通过受管 adapter 绑定，不进入全局 ToolExposure。
 
-现有 Skill 可以修订，但只补齐执行所必需的规范，不进行无关重写。每个 Skill 至少应具备：
+## Stateful Skill 兼容合同
 
-- 稳定 `id`、`version`、名称、描述与适用范围；
-- 清楚的使用时机与不适用范围；
-- 可执行的工作方法 / 计划，而不是泛泛角色提示；
-- 工具、Runtime、权限和审批边界；
-- Evidence、Artifact 与 Completion Criteria；
-- 缺资料、缺能力、失败和恢复规则；
-- 渐进式资源披露，避免一次注入全部参考资料；
-- Skill 与 Tool 分离，不通过说明书暗中注册能力。
+若 Skill 已注册确定性的 `SkillConversationFlowRuntime`：
 
-如某个 Skill 已满足要求，不得为了统一文风而改写其专业内容。
+- Flow / Reducer 持有状态、阶段、下一问和完成条件；
+- 它就是该 Skill 唯一 subAgent 的执行控制器；
+- 统一 subAgent 层只发布 Working State、Trace、Requirement、Evidence 与交付；
+- 不额外启动第二个自由规划模型；
+- Main Planner 不得覆盖 Flow 产生的 `ask_user` 或完成交付。
 
-## 施工范围
+## 完成语义
 
-优先检查或修改：
+subAgent 只允许返回：
 
-- Skill Scanner / Loader / Registry
-- SkillContext 与 primary Skill 选择
-- subAgent profile resolver
-- 当前 forked Skill agent runner 的通用命名与入口
-- 文枢专用 profile 的迁移兼容
-- GitHub、MiraDocs、备孕及其他现有 Skill 的接线
-- 服务端单测、集成测试和最小 smoke
+- `completed`
+- `insufficient_evidence`
+- `needs_input`
+- `failed`
 
-## 简单烟测用例
+带受管私有 Runtime 的 Skill 不能在没有 Runtime Evidence 或 Artifact 时宣称完成。纯说明书 Skill 可基于其说明书给出分析结论，但必须如实标明依据和缺口。
 
-### Smoke 1：当前 Skill 全量解析
+## 简单 Smoke
 
-1. 启动服务端并扫描当前 Skill 包。
-2. 读取实际发现的 Skill 列表。
-3. 对每个 Skill 调用通用 profile resolver。
-4. 断言每个 Skill 恰好得到一个 profile，`engine=pi-agent-core`。
-5. 断言不存在同一 Skill 多 profile 或无 profile。
+### Smoke A：已有 Office Skill
 
-### Smoke 2：文枢能力不回退
+输入一个 DOCX / PDF / PPTX / XLSX 任务。
 
-1. 分别触发 DOCX、PDF、XLSX、PPTX 的最小只读或安全诊断任务。
-2. 断言每次只创建一个 subAgent run。
-3. 断言只暴露对应 Skill 的 Runtime 与允许的 Harness 工具。
-4. 断言返回 Evidence；可生成 Artifact 的任务同时返回 Artifact。
+检查：
 
-### Smoke 3：GitHub Skill 统一接线
+- 只启动一个 subAgent；
+- 使用正确私有 Runtime；
+- 写操作经过精确审批；
+- 完成后 Main Planner 不重新施工；
+- 现有文枢 smoke 不回退。
 
-1. 使用已授权仓库发起只读项目概览任务。
-2. 断言命中 `github-collaboration` 后创建一个 subAgent。
-3. 断言仍只使用现有四个 GitHub 领域工具。
-4. 断言不扩大 ToolExposure，不产生远程写入。
+### Smoke B：GitHub Skill
+
+输入：读取已授权仓库近期 PR 并给出风险。
+
+检查：
+
+- 命中 `github-collaboration`；
+- 只启动一个 subAgent；
+- GitHub 工具来自当前 ToolExposure，不由 SKILL.md 自行授予；
+- 只读任务不触发写审批；
+- 结论包含当前远程事实和缺口。
+
+### Smoke C：Stateful Skill
+
+进入备孕评估，回答一轮信息后继续。
+
+检查：
+
+- 只有一个 Skill 执行所有者；
+- Flow/Reducer 决定下一问；
+- 不再启动第二层自由 Planner；
+- `ask_user` 在 prepareContext 后直接交付，不被 Main Planner 改写；
+- 完成后按冻结交付合同直接 Generate。
+
+## 必须覆盖的测试
+
+- 任意 Scanner Skill 都能解析出唯一 profile。
+- 用户或外部 Skill 不因重用 built-in id 获得私有 Runtime。
+- Office Scanner manifest 仍保留 `read_open` / `read_extract` 和既有 Runtime。
+- Skill 声明工具但当前 ToolExposure 未选择时，subAgent 返回 capability Requirement。
+- 部分能力可用时允许继续可完成路径，例如 XLSX inspect / verify。
+- Stateful Flow 的 interrupted/completed 映射到同一 subAgent 的 needs_input/completed。
+- prepared `ask_user` 在 Pi loop 中直接 Generate，不进入 Main Planner。
+- terminal / recoverable C contract 不变。
 
 ## 验收标准
 
-- 当前可发现的全部 Skill 均进入同一 subAgent Runtime。
-- 一个 Skill 恰好对应一个 subAgent profile；一次任务只实例化一个 subAgent。
-- 不存在 subAgent 套娃或按 Skill 随意配置数量。
-- 文枢、GitHub 等现有能力与审批边界不回退。
-- Skill 包必要修订符合最低质量基线，且无无关内容重写。
-- Main Agent C contract 与主循环职责保持不变。
-- 单测、集成测试、smoke、server typecheck 通过。
+- 当前所有可发现 Skill 均走统一 subAgent 委派合同。
+- 一 Skill 一 subAgent，不套娃。
+- 工具权限没有因 Skill 声明而扩大。
+- Office、GitHub 与 Stateful Flow 的既有专业边界不回退。
+- Main Agent C contract 保持不变。
+- 单测、typecheck 与 smoke 实际通过后才可把本卡改为 DONE。
 
 ## 施工红线
 
-1. 不把 Tool 当 Skill，也不把 Skill 当 ToolExposure 开关。
-2. 不为某个具体 Skill 在 Main Agent / Graph 中增加特判。
-3. 不允许 subAgent 创建下一级 Agent。
-4. 不绕过 Harness、Policy、审批、Evidence 或 workspace 边界。
-5. 不修改 GitHub Skill 的远程写入前读、审批后写、执行后回读合同。
-6. 不以“统一”为理由重写已经合格的 Skill 专业内容。
-7. 如通用合同不足，先提交合同缺口，不私自扩张架构。
+1. 不新增 Main Agent Graph 节点或 Planner action 类型。
+2. 不绕过 Harness、Policy、审批或 Evidence。
+3. 不让 SKILL.md 成为权限来源。
+4. 不把 Runtime Binding 当成多个 subAgent。
+5. 不把 Stateful Flow 再包一层自由 Agent Loop。
+6. 不为通过单个测试硬编码用户任务或返回值。
+7. 不顺手重构无关模块、升级依赖或全仓格式化。
 
-## 交付要求
+## 实现记录
 
-完成后提供：
+已落地：
 
-- 实际接入的 Skill 清单；
-- 旧专用入口与新通用入口的迁移说明；
-- 修改过的 Skill 包及修改原因；
-- 测试命令与结果；
-- 已知限制；
-- 一个聚焦提交，不夹带无关重构或依赖升级。
+- Scanner / Registry 输出通用 `origin + execution` 声明。
+- 通用 `resolveSubAgentExecutionProfile()` 覆盖所有 Skill。
+- `runSubAgent()` 替代文枢专用 runner，旧入口只保留兼容导出。
+- Harness 工具采用 Skill 声明与 canonical ToolExposure 的交集。
+- Office 既有只读面、私有 Runtime、审批和 Evidence 合同被保留。
+- GitHub Skill 只补执行元数据，专业正文未重写。
+- Stateful Flow 接入为单 subAgent 的确定性控制器。
+- Pi loop 在 prepareContext 后直接处理 subAgent `ask_user` / completed handoff。
+- 增加通用 profile 与用户 Skill 权限隔离回归测试。
+
+尚未在当前执行环境运行：
+
+- Vitest
+- server / desktop typecheck
+- `pnpm check`
+- 真实模型与私有 Runtime smoke
+
+在上述验证完成前，本卡保持 `IMPLEMENTED — VERIFICATION PENDING`。
