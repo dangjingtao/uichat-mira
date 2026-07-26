@@ -50,6 +50,8 @@ jobs:
         run: pnpm --filter @ui-chat-mira/server typecheck
 
       - name: Run delegated-task contract regressions
+        id: delegated-task-tests
+        continue-on-error: true
         run: >-
           pnpm --filter @ui-chat-mira/server test --
           src/agent/__tests__/generic-task-subagent.test.ts
@@ -66,9 +68,21 @@ jobs:
           src/agent/__tests__/toolcall-loop-regression.test.ts
           --maxWorkers=1
           --fileParallelism=false
+          --reporter=json
+          --outputFile=delegated-task-test-report.json
+
+      - name: Upload delegated-task regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delegated-task-test-report
+          path: server/delegated-task-test-report.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Audit full Agent suite
         id: agent-audit
+        if: always()
         continue-on-error: true
         run: >-
           pnpm --filter @ui-chat-mira/server test --
@@ -86,3 +100,7 @@ jobs:
           path: server/agent-test-report.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Enforce delegated-task regressions
+        if: steps.delegated-task-tests.outcome == 'failure'
+        run: exit 1
