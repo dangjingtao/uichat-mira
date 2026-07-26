@@ -108,8 +108,12 @@ describe("MiraDocs canonical Skill", () => {
     expect(createSite).toContain("Pages 必须保持 `not_run`");
     expect(publishContent).toContain("不要要求用户填写完整 frontmatter 表单");
     expect(publishContent).toContain("同名文件、标题或路由冲突时先说明冲突，不直接覆盖");
+    expect(publishContent).toContain("不新建重复 PR");
+    expect(publishContent).toContain("不能再次创建同名文件");
     expect(maintainSite).toContain("github_repository.get_pages");
     expect(maintainSite).toContain("github_repository.configure_pages");
+    expect(maintainSite).toContain("不创建重复施工分支或重复 PR");
+    expect(maintainSite).toContain("只重试未完成的 `configure_pages`");
     expect(conversations).toContain("不会重复创建仓库");
     expect(conversations).toContain("不重新创建仓库、重写内容或新建重复 PR");
     expect(deliveryTemplate).toContain("completed");
