@@ -6,7 +6,7 @@ version: 0.1.0
 category: development
 visibility: public
 source: Mira
-status: draft
+status: review
 ---
 
 # MiraDocs Skill V1
