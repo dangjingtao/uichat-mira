@@ -236,7 +236,33 @@ github_repository.configure_pages
 - 工作流模式不传 branch/path；分支模式必须明确 branch；
 - 没有 Actions 和 Pages 回读证据时，只能说“部署配置已写入”，不能说“网站已上线”。
 
-## 8. 完成标准
+## 8. 失败与恢复
+
+每一步完成后记录可回读事实，不使用只存在于对话里的“已经做过”作为恢复依据。
+
+### 仓库已创建，但 installation 未授权
+
+```text
+completed: github_repository.create
+blocked: github_repository.ensure_installation_access
+not_run: branch / files / PR / Pages
+```
+
+返回仓库 `fullName`、`htmlUrl` 和 GitHub App installation 操作入口。用户完成授权后，先重新调用 `ensure_installation_access`；不得再次调用 `create`。
+
+### 文件已写入，但本地验证失败
+
+保留施工分支和文件，明确失败在依赖安装、TypeScript、内容发现还是静态构建。Pages 必须保持 `not_run`。修复时从失败层继续，不重新初始化整个站点。
+
+### PR 或 Actions 失败
+
+保留现有 PR，在同一施工分支修复。先读取最新 PR、commit 和 Actions 状态，不能创建第二张重复 PR 来逃避失败。
+
+### Pages 配置失败
+
+先调用 `github_repository.get_pages` 读取当前状态，再决定是否重试 `configure_pages`。仓库、站点文件和 PR 已经完成时，不因 Pages 失败而重复写入或回滚正确内容。
+
+## 9. 完成标准
 
 只有同时满足以下条件，才能说站点已创建：
 
@@ -248,6 +274,7 @@ github_repository.configure_pages
 - 首页和启用的内容入口可被发现；
 - 用户要求部署时，Pages 配置、Actions 与最终 URL 已回读；
 - 用户能看到本地路径或仓库、分支、PR、预览或部署地址；
+- 每个步骤的 `completed`、`blocked`、`failed` 或 `not_run` 状态明确；
 - 失败步骤和剩余配置被明确列出。
 
 不能仅凭模板文件已生成宣布建站完成。
