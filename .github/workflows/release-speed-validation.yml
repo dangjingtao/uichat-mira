@@ -68,16 +68,28 @@ jobs:
         id: tests
         continue-on-error: true
         run: node scripts/release/run-test-scope.mjs --scope=client --shard=${{ matrix.shard }}/2 --timeout-seconds=480
+      - name: Stage shard evidence outside hidden directory
+        if: always()
+        shell: pwsh
+        run: |
+          $source = '.artifacts\release-validation\windows-x64\shards\client\${{ matrix.shard }}-of-2'
+          if (-not (Test-Path -LiteralPath $source)) {
+            Write-Host 'Expected shard directory missing. Existing release artifacts:'
+            Get-ChildItem -LiteralPath '.artifacts' -Force -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            throw "Missing shard evidence: $source"
+          }
+          $target = 'release-validation-shards\client\${{ matrix.shard }}-of-2'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+          Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
       - name: Upload shard evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: speed-client-${{ matrix.shard }}-${{ github.sha }}
-          path: .artifacts/release-validation/windows-x64/shards/client/${{ matrix.shard }}-of-2
+          path: release-validation-shards/client/${{ matrix.shard }}-of-2
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
-          include-hidden-files: true
       - name: Enforce shard
         if: always()
         shell: pwsh
@@ -107,15 +119,24 @@ jobs:
         id: merge
         continue-on-error: true
         run: node scripts/release/run-test-scope.mjs --scope=client --merge-dir=.artifacts/release-validation/windows-x64/shards/client --expected-shards=2
+      - name: Stage merged evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $source = '.artifacts\release-validation\windows-x64\reports\client'
+          if (Test-Path -LiteralPath $source) {
+            $target = 'release-validation-merged\reports\client'
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+            Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
+          }
       - name: Upload merged evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: speed-client-merged-${{ github.sha }}
-          path: .artifacts/release-validation/windows-x64/reports/client
+          path: release-validation-merged
           if-no-files-found: warn
           retention-days: 1
-          include-hidden-files: true
       - name: Enforce merge
         if: always()
         shell: pwsh
@@ -184,16 +205,28 @@ jobs:
         id: tests
         continue-on-error: true
         run: node scripts/release/run-test-scope.mjs --scope=server --shard=${{ matrix.shard }}/4 --timeout-seconds=480
+      - name: Stage shard evidence outside hidden directory
+        if: always()
+        shell: pwsh
+        run: |
+          $source = '.artifacts\release-validation\windows-x64\shards\server\${{ matrix.shard }}-of-4'
+          if (-not (Test-Path -LiteralPath $source)) {
+            Write-Host 'Expected shard directory missing. Existing release artifacts:'
+            Get-ChildItem -LiteralPath '.artifacts' -Force -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            throw "Missing shard evidence: $source"
+          }
+          $target = 'release-validation-shards\server\${{ matrix.shard }}-of-4'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+          Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
       - name: Upload shard evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: speed-server-${{ matrix.shard }}-${{ github.sha }}
-          path: .artifacts/release-validation/windows-x64/shards/server/${{ matrix.shard }}-of-4
+          path: release-validation-shards/server/${{ matrix.shard }}-of-4
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
-          include-hidden-files: true
       - name: Enforce shard
         if: always()
         shell: pwsh
@@ -223,15 +256,24 @@ jobs:
         id: merge
         continue-on-error: true
         run: node scripts/release/run-test-scope.mjs --scope=server --merge-dir=.artifacts/release-validation/windows-x64/shards/server --expected-shards=4
+      - name: Stage merged evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $source = '.artifacts\release-validation\windows-x64\reports\server'
+          if (Test-Path -LiteralPath $source) {
+            $target = 'release-validation-merged\reports\server'
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+            Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
+          }
       - name: Upload merged evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: speed-server-merged-${{ github.sha }}
-          path: .artifacts/release-validation/windows-x64/reports/server
+          path: release-validation-merged
           if-no-files-found: warn
           retention-days: 1
-          include-hidden-files: true
       - name: Enforce merge
         if: always()
         shell: pwsh
