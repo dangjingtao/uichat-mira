@@ -9,7 +9,7 @@ source: Mira
 status: review
 execution.context: fork
 execution.agent: miradocs
-execution.allowedTools: read_discover, read_open, edit_file, terminal_session, web_search, github_repository, github_pull_request, github_actions
+execution.allowedTools: read_discover, read_open, terminal_session, github_repository, github_pull_request, github_actions
 ---
 
 # MiraDocs Skill V1
@@ -211,19 +211,46 @@ MiraDocs Skill 负责：
 
 | 任务 | 能力 |
 | --- | --- |
-| 读取站点、配置和内容 | Harness Read |
-| 修改本地文件 | `edit_file` |
-| 安装、检查、构建和本地预览 | `terminal_session` |
-| 查询当前公共文档 | `web_search` |
-| 已有仓库、分支、文件、PR、Actions | 现有 GitHub 领域工具与 `github-collaboration` Skill |
-| 创建 GitHub 仓库 | `github_repository.create` |
-| 检查新仓库授权 | `github_repository.ensure_installation_access` |
-| 读取 Pages 状态 | `github_repository.get_pages` |
-| 启用或修改 Pages | `github_repository.configure_pages` |
+| 定位本地站点、目录和文件 | `read_discover` |
+| 打开已知文件与 Skill 参考资源 | `read_open` |
+| 本地写入、修改、删除、重命名、安装、检查、构建和预览 | `terminal_session` |
+| GitHub 仓库、分支和远程文件 | `github_repository` |
+| 创建或维护 PR | `github_pull_request` |
+| 检查或操作 CI / Pages 工作流 | `github_actions` |
 
-`execution.allowedTools` 是 MiraDocs fork 执行的受控工具集合。它描述允许并需要校验的工具边界，不注册工具、不扩大 ToolExposure，也不绕过 Policy 或审批。委派执行只能从这个集合与当前真实可用能力的交集中选择；缺失关键能力时必须阻塞并明确返回缺口，不能拿半套工具悄悄开工。
+`execution.allowedTools` 是 fork 执行的最大工具边界，不是每次任务都必须具备的工具清单。每个操作只校验当前步骤真正需要的工具；未被当前步骤使用的可选工具不可成为阻塞条件。
 
-Skill 命中不代表工具已经进入本轮 ToolExposure。Planner 只能使用当前真实暴露并通过 Policy 的能力；但已经真实暴露的能力，不应被 Skill 人为回避。
+按操作取用：
+
+```text
+create_site / local
+→ read_discover + read_open + terminal_session
+
+create_site / github
+→ github_repository
+→ 用户要求 PR 时再取 github_pull_request
+→ 用户要求上线或需要诊断 CI 时再取 github_actions
+
+publish_content / local
+→ read_open + terminal_session
+
+publish_content / github
+→ github_repository
+→ 需要 PR 时再取 github_pull_request
+→ 需要上线验证时再取 github_actions
+
+maintain_site / local
+→ read_discover 或 read_open
+→ 需要实际修改、诊断或构建时取 terminal_session
+
+maintain_site / github
+→ github_repository
+→ 只在 PR、CI 或部署步骤分别取 github_pull_request / github_actions
+```
+
+本地文件施工统一由 `terminal_session` 承担，不要求 Skill 感知 `write_file`、`replace_block`、`delete_path`、`move_path` 或兼容层 `edit_file` 等实现细节。具体命令仍走终端审批、工作区边界和执行回读。
+
+Skill 命中不代表工具已经进入本轮 ToolExposure。Planner 只能使用当前真实暴露并通过 Policy 的能力；但已经真实暴露且当前步骤需要的能力，不应被 Skill 人为回避。
 
 # 交付格式
 
@@ -289,7 +316,7 @@ PR 已创建，但 Actions 失败
 13. 当前环境已暴露且用户目标需要的 GitHub 能力应实际调用，不得用“V1 暂不做”替代能力执行。
 14. 新仓库创建后必须检查 installation 授权；Pages 配置后必须回读最终状态和 URL。
 15. 恢复任务时先回读 checkpoint，禁止重复创建仓库、重复发布同一内容或重复执行已完成的远程写入。
-16. fork 执行不得调用 `execution.allowedTools` 之外的工具；关键工具缺失时必须先报告 capability 缺口。
+16. fork 执行不得调用 `execution.allowedTools` 之外的工具；只在当前步骤关键工具缺失时报告 capability 缺口，不得因未使用的可选工具缺失而阻塞。
 
 # Completion Criteria
 
