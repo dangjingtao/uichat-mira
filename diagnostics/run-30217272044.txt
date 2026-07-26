@@ -1,0 +1,17 @@
+run_id: 30217272044
+name: .github/workflows/release-factory-v2.yml
+display_title: ci(release): trigger Release Factory V2
+event: push
+status: completed
+conclusion: failure
+head_branch: feature/release-factory-v2
+head_sha: 6520039b002c0c58e512273bfd81825d47fd2bf4
+path: .github/workflows/release-factory-v2.yml
+created_at: 2026-07-26T19:38:21Z
+run_started_at: 2026-07-26T19:38:21Z
+updated_at: 2026-07-26T19:38:21Z
+check_suite_id: 81883323581
+jobs_count: 0
+
+
+check_runs_count: 0
