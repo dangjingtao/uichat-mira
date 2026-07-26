@@ -5,6 +5,7 @@ on:
     branches:
       - feature/release-factory-v2
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: release-factory-v2-${{ github.ref }}
