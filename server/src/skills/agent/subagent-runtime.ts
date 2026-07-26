@@ -133,7 +133,10 @@ type PrepareSubAgentInput = {
   onRuntimeEvent?: (event: SubAgentRuntimeEvent) => Promise<void> | void;
 };
 
-const capabilityRequirement = (skillId: string, capabilityId: string): SubAgentRequirement => ({
+const capabilityRequirement = (
+  skillId: string,
+  capabilityId: string,
+): SubAgentRequirement => ({
   id: `capability:${skillId}:${capabilityId}`,
   kind: "capability",
   description: `Skill ${skillId} requires capability ${capabilityId}, but no governed adapter is currently available to this subAgent.`,
@@ -187,7 +190,8 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
   const profile = resolveSubAgentExecutionProfile(primary);
 
   const selectedWorkspace = getWorkspaceSelection();
-  const workspaceRoot = input.workspaceRoot?.trim() || selectedWorkspace.rootPath || undefined;
+  const workspaceRoot =
+    input.workspaceRoot?.trim() || selectedWorkspace.rootPath || undefined;
   if (profile.workspaceBound && !workspaceRoot) {
     throw new Error(`Skill ${skillId} requires an active workspace`);
   }
@@ -206,10 +210,14 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
 
   const tools: SubAgentToolBinding[] = [createSkillResourceTool(skillId)];
   const missingCapabilities: SubAgentRequirement[] = [];
+  let availableCapabilityCount = 0;
+  const declaredCapabilityCount =
+    profile.allowedHarnessToolIds.length + profile.runtimeBindings.length;
 
   for (const toolId of profile.allowedHarnessToolIds) {
     try {
       tools.push(createHarnessSkillAgentToolBinding({ toolId, execution }));
+      availableCapabilityCount += 1;
     } catch {
       missingCapabilities.push(capabilityRequirement(skillId, toolId));
     }
@@ -226,6 +234,7 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
           execution,
         }),
       );
+      availableCapabilityCount += 1;
     } catch {
       missingCapabilities.push(capabilityRequirement(skillId, binding.id));
     }
@@ -236,6 +245,8 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
     execution,
     tools,
     missingCapabilities,
+    availableCapabilityCount,
+    declaredCapabilityCount,
   };
 };
 
@@ -246,7 +257,11 @@ export const runSubAgent = async (
   if (deterministicNeedsInput) return deterministicNeedsInput;
 
   const prepared = prepareSubAgent(input);
-  if (prepared.missingCapabilities.length > 0) {
+  if (
+    prepared.declaredCapabilityCount > 0 &&
+    prepared.availableCapabilityCount === 0 &&
+    prepared.missingCapabilities.length > 0
+  ) {
     const published = await publishBlockedCapabilityState({
       skillId: prepared.profile.skillId,
       requirements: prepared.missingCapabilities,
@@ -254,7 +269,8 @@ export const runSubAgent = async (
     });
     return {
       status: "needs_input",
-      summary: "The Skill instruction was loaded, but one or more declared capabilities are unavailable.",
+      summary:
+        "The Skill instruction was loaded, but none of its declared governed capabilities are currently available.",
       requirements: prepared.missingCapabilities,
       evidence: [],
       artifacts: [],
@@ -275,9 +291,8 @@ export const runSubAgent = async (
     tools: prepared.tools,
   });
 
-  const requiresAuthoritativeRuntimeEvidence = prepared.profile.runtimeBindings.some(
-    (binding) => binding.status === "ready",
-  );
+  const requiresAuthoritativeRuntimeEvidence =
+    prepared.profile.runtimeBindings.some((binding) => binding.status === "ready");
   if (
     requiresAuthoritativeRuntimeEvidence &&
     result.status === "completed" &&
