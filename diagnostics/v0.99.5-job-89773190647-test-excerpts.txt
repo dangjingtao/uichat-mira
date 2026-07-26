@@ -1,0 +1,15 @@
+Source job: 89773190647
+Total lines: 782
+Matched lines: 1
+
+0750: 2026-07-26T08:37:56.1803115Z     throw new Error(
+0751: 2026-07-26T08:37:56.1803567Z           ^
+0752: 2026-07-26T08:37:56.1803816Z 
+0753: 2026-07-26T08:37:56.1804223Z Error: server release tests failed: 71 failed tests across 46 failed suites.
+0754: 2026-07-26T08:37:56.1805405Z     at readTestValidation (file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/scripts/release/build-payload.mjs:63:11)
+0755: 2026-07-26T08:37:56.1806710Z     at file:///D:/Mira%20%E6%9E%84%E5%BB%BA%E9%AA%8C%E8%AF%81/%E5%90%AB%20%E7%A9%BA%E6%A0%BC%20&%20%E7%AC%A6%E5%8F%B7/workspace/scripts/release/build-payload.mjs:95:13
+0756: 2026-07-26T08:37:56.1807682Z     at ModuleJob.run (node:internal/modules/esm/module_job:325:25)
+0757: 2026-07-26T08:37:56.1808446Z     at async ModuleLoader.import (node:internal/modules/esm/loader:606:24)
+0758: 2026-07-26T08:37:56.1809314Z     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+0759: 2026-07-26T08:37:56.1809808Z 
+0760: 2026-07-26T08:37:56.1810039Z Node.js v20.20.2
