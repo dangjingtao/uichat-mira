@@ -1,5 +1,8 @@
 import type { SkillContext } from "@/skills/context/types.js";
-import type { AgentToolExposureState } from "../types.js";
+import type {
+  AgentToolCallRequest,
+  AgentToolExposureState,
+} from "../types.js";
 
 export const GENERIC_TASK_DELEGATE_TOOL_ID = "delegate_task";
 export const GENERIC_TASK_SUBAGENT_SKILL_ID = "mira.generic-task";
@@ -104,9 +107,9 @@ const DELEGATE_TASK_TOOL_META: AgentToolExposureState["toolMeta"][number] = {
 };
 
 /**
- * Planner-only protocol surface. The underlying Harness exposure is not
- * mutated, so delegate_task is never handed to the child and recursion stays
- * impossible in V1.
+ * Planner-only protocol surface. A new exposure object is returned rather than
+ * mutating Harness state. Child construction and resume explicitly remove the
+ * protocol tool, so recursive delegation stays impossible in V1.
  */
 export const withGenericTaskDelegationTool = (
   exposure: AgentToolExposureState,
@@ -123,6 +126,53 @@ export const withGenericTaskDelegationTool = (
 
 export const isGenericTaskSubAgentSkillId = (skillId: string) =>
   skillId === GENERIC_TASK_SUBAGENT_SKILL_ID;
+
+const readFrozenGenericTaskToolIds = (
+  pendingToolCall: AgentToolCallRequest | undefined,
+): string[] => {
+  const call = isPlainObject(pendingToolCall) ? pendingToolCall : undefined;
+  if (call?.origin !== "skill_agent") return [];
+  if (call.skillId !== GENERIC_TASK_SUBAGENT_SKILL_ID) return [];
+
+  const checkpoint = isPlainObject(call.skillAgentCheckpoint)
+    ? call.skillAgentCheckpoint
+    : undefined;
+  const snapshot = isPlainObject(checkpoint?.skillContextSnapshot)
+    ? checkpoint.skillContextSnapshot
+    : undefined;
+  const primary = isPlainObject(snapshot?.primary) ? snapshot.primary : undefined;
+  const execution = isPlainObject(primary?.execution)
+    ? primary.execution
+    : undefined;
+  return (
+    uniqueNonEmptyStrings(execution?.allowedTools) ?? []
+  ).filter((toolId) => toolId !== GENERIC_TASK_DELEGATE_TOOL_ID);
+};
+
+/**
+ * Approval is a resume of one frozen task, not a fresh capability-selection
+ * turn. Rehydrate the child-visible ids from the checkpoint so a matcher result
+ * for an approval message cannot accidentally remove the exact pending tool.
+ * Harness registry lookup still happens when bindings are built, so a tool
+ * that was actually revoked or unregistered remains unavailable.
+ */
+export const createGenericTaskResumeExposure = (input: {
+  currentExposure?: AgentToolExposureState;
+  pendingToolCall?: AgentToolCallRequest;
+}): AgentToolExposureState => {
+  const current = input.currentExposure ?? { exposedTools: [], toolMeta: [] };
+  const currentHarnessToolIds = current.exposedTools.filter(
+    (toolId) => toolId !== GENERIC_TASK_DELEGATE_TOOL_ID,
+  );
+  const frozenToolIds = readFrozenGenericTaskToolIds(input.pendingToolCall);
+  return {
+    ...current,
+    exposedTools: [...new Set([...currentHarnessToolIds, ...frozenToolIds])],
+    toolMeta: current.toolMeta.filter(
+      (tool) => tool.toolId !== GENERIC_TASK_DELEGATE_TOOL_ID,
+    ),
+  };
+};
 
 export const createGenericTaskSkillContext = (input: {
   task: GenericTaskSpec;
