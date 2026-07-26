@@ -296,8 +296,12 @@ const normalizeMalformedCompletion = async (input: {
     return null;
   }
 
+  const governedToolCalls = (input.result.trace?.toolCalls ?? []).filter(
+    (toolId) => toolId !== "skill_read_resource",
+  );
   const hasAuthoritativeOutput =
-    input.result.evidence.length > 0 || input.result.artifacts.length > 0;
+    governedToolCalls.length > 0 &&
+    (input.result.evidence.length > 0 || input.result.artifacts.length > 0);
   const runId = input.result.trace?.runId ?? crypto.randomUUID();
   const seq = input.result.trace?.nextSeq ?? 1;
   const timestamp = Date.now();
@@ -315,7 +319,7 @@ const normalizeMalformedCompletion = async (input: {
       ? "把 Evidence 与 Artifact 交还给 Main Agent"
       : "重新执行并取得至少一项受管工具结果",
     ...(!hasAuthoritativeOutput
-      ? { blockingReason: "Invalid completion envelope without Evidence or Artifact" }
+      ? { blockingReason: "Invalid completion envelope without governed Evidence or Artifact" }
       : {}),
     updatedAt: timestamp,
   };
@@ -331,6 +335,7 @@ const normalizeMalformedCompletion = async (input: {
     timestamp,
     details: {
       normalizedInvalidCompletionEnvelope: true,
+      governedToolCallCount: governedToolCalls.length,
       evidenceCount: input.result.evidence.length,
       artifactCount: input.result.artifacts.length,
     },
@@ -363,9 +368,9 @@ const normalizeMalformedCompletion = async (input: {
   return {
     status: "insufficient_evidence",
     summary:
-      "The subAgent returned an invalid completion envelope and produced no authoritative Evidence or Artifact.",
+      "The subAgent returned an invalid completion envelope and produced no authoritative governed Evidence or Artifact.",
     missingEvidence: [
-      "At least one governed tool result or a valid terminal completion envelope is required.",
+      "At least one governed task-tool result or a valid terminal completion envelope is required.",
     ],
     evidence: input.result.evidence,
     artifacts: input.result.artifacts,
