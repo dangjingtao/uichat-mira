@@ -55,7 +55,8 @@ jobs:
           text = path.read_text(encoding='utf-8')
           merge_start = text.index('async function mergeShards()')
           insert_at = text.index('  fs.rmSync(reportDir, { recursive: true, force: true });', merge_start)
-          block = '''  const blobFiles = fs
+          if 'const vitestMergeDir = path.join(validationRoot, "merge-input", scope);' not in text:
+              block = '''  const blobFiles = fs
             .readdirSync(mergeDir)
             .filter((filename) => filename.endsWith(".blob.json"))
             .map((filename) => path.join(mergeDir, filename));
@@ -73,11 +74,11 @@ jobs:
           }
 
           '''
-          text = text[:insert_at] + block + text[insert_at:]
+              text = text[:insert_at] + block + text[insert_at:]
+          merge_start = text.index('async function mergeShards()')
           old = '`--merge-reports=${mergeDir}`'
-          if old not in text[merge_start:]:
-              raise SystemExit('Expected merge-reports argument was not found')
-          text = text[:merge_start] + text[merge_start:].replace(old, '`--merge-reports=${vitestMergeDir}`', 1)
+          if old in text[merge_start:]:
+              text = text[:merge_start] + text[merge_start:].replace(old, '`--merge-reports=${vitestMergeDir}`', 1)
           path.write_text(text, encoding='utf-8')
           '@ | python -
           node --check scripts/release/run-test-scope.mjs
@@ -95,32 +96,26 @@ jobs:
 
       - name: Merge existing client shards
         id: merge
-        continue-on-error: true
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path 'merge-probe' | Out-Null
           node scripts/release/run-test-scope.mjs --scope=client --merge-dir=.artifacts/release-validation/windows-x64/shards/client --expected-shards=2 *> 'merge-probe\merge-output.txt'
-          $exitCode = $LASTEXITCODE
+          $testExitCode = $LASTEXITCODE
           $reportReady = (Test-Path -LiteralPath '.artifacts\release-validation\windows-x64\reports\client\test-report.json') -and (Test-Path -LiteralPath '.artifacts\release-validation\windows-x64\reports\client\coverage-report.json')
-          $files = @(Get-ChildItem -LiteralPath '.artifacts\release-validation\windows-x64' -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-            @{
-              path = [System.IO.Path]::GetRelativePath((Resolve-Path '.artifacts\release-validation\windows-x64'), $_.FullName)
-              bytes = $_.Length
-            }
-          })
           @{
-            exitCode = $exitCode
+            testExitCode = $testExitCode
             reportReady = $reportReady
-            files = $files
-          } | ConvertTo-Json -Depth 5 | Out-File -LiteralPath 'merge-probe\diagnostic.json' -Encoding utf8
-          if (Test-Path -LiteralPath '.artifacts\release-validation\windows-x64\reports\client') {
+          } | ConvertTo-Json | Out-File -LiteralPath 'merge-probe\diagnostic.json' -Encoding utf8
+          if ($reportReady) {
             Copy-Item -LiteralPath '.artifacts\release-validation\windows-x64\reports\client' -Destination 'merge-probe\client-report' -Recurse -Force
+            "report_ready=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
           }
-          Get-Content -LiteralPath 'merge-probe\merge-output.txt' -Tail 80
-          if (-not $reportReady) { exit 1 }
+          "report_ready=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          exit 1
 
       - name: Commit tested blob-only merge fix
-        if: steps.merge.outcome == 'success'
+        if: steps.merge.outputs.report_ready == 'true'
         shell: pwsh
         run: |
           git config user.name 'github-actions[bot]'
@@ -145,17 +140,17 @@ jobs:
         if: always()
         uses: actions/github-script@v7
         env:
-          MERGE_OUTCOME: ${{ steps.merge.outcome }}
+          REPORT_READY: ${{ steps.merge.outputs.report_ready }}
         with:
           script: |
-            const passed = process.env.MERGE_OUTCOME === 'success';
+            const passed = process.env.REPORT_READY === 'true';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
               state: passed ? 'success' : 'failure',
               context: 'release-merge-probe',
-              description: passed ? 'Client shard merge produced fresh reports' : 'Client shard merge still failed',
+              description: passed ? 'Client shard merge produced fresh reports' : 'Client shard merge did not produce reports',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
             if (!passed) core.setFailed('Client shard merge did not produce reports');
