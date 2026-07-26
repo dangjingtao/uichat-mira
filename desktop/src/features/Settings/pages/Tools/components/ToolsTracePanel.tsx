@@ -80,6 +80,9 @@ export default function ToolsTracePanel({
             : "",
       };
     }) ?? [];
+  const hasActivity = Boolean(trace) || eventLines.length > 0;
+  const runMessageClassName =
+    runStatus === "awaiting_approval" ? "text-warning-text" : "text-danger-text";
 
   return (
     <TerminalPanel
@@ -104,10 +107,12 @@ export default function ToolsTracePanel({
       className="h-full min-h-0"
       variant="plain"
     >
-      {runError ? (
-        <div className="whitespace-pre-wrap break-words text-sm text-danger-text">{runError}</div>
-      ) : eventLines.length > 0 ? (
+      {runError || hasActivity ? (
         <div className="space-y-4 whitespace-pre-wrap break-words text-[12px]">
+          {runError ? (
+            <div className={`text-sm ${runMessageClassName}`}>{runError}</div>
+          ) : null}
+
           {trace ? (
             <div className="space-y-2 rounded-ui-control border border-border bg-surface-secondary/60 p-3">
               <div className="flex items-center gap-2">
@@ -127,11 +132,13 @@ export default function ToolsTracePanel({
             </div>
           ) : null}
 
-          <div className="space-y-3">
-            {eventLines.map((line, index) => (
-              <div key={`${line}-${index}`}>{line}</div>
-            ))}
-          </div>
+          {eventLines.length > 0 ? (
+            <div className="space-y-3">
+              {eventLines.map((line, index) => (
+                <div key={`${line}-${index}`}>{line}</div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="text-sm text-text-secondary">{emptyPlaceholder}</div>
