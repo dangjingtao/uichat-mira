@@ -7,6 +7,7 @@ on:
       - '.github/workflows/tag-v0.99.2.yml'
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -39,3 +40,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "${RELEASE_TAG}" "${TARGET_SHA}"
           git push origin "refs/tags/${RELEASE_TAG}"
+
+      - name: Trigger desktop release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v0.99.2
+        shell: bash
+        run: gh workflow run build-desktop.yml --ref "${RELEASE_TAG}"
