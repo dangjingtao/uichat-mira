@@ -104,6 +104,21 @@ runPnpm(
   { cwd: projectRoot },
 );
 
+if (!manifest.releaseEligible) {
+  fs.writeFileSync(
+    path.join(outputRoot, "DIAGNOSTIC_ONLY.txt"),
+    [
+      "UIChat Mira diagnostic Electron package",
+      "",
+      "This package was produced to validate the packaging pipeline.",
+      "It is not eligible for publication because product validation did not fully pass.",
+      `Version: ${manifest.version}`,
+      `Commit: ${manifest.gitCommit}`,
+      "",
+    ].join("\n"),
+  );
+}
+
 const outputs = listFilesRecursive(outputRoot);
 const setupExecutables = outputs.filter((file) =>
   /setup.*\.exe$/i.test(file.relativePath),
