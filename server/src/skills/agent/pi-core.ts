@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   Agent,
   type AgentMessage,
@@ -14,6 +15,12 @@ import type {
   SkillAgentExecutionResult,
   SkillAgentRequirement,
   SkillAgentToolBinding,
+  SkillAgentTrace,
+  SubAgentRuntimeEvent,
+  SubAgentTraceEvent,
+  SubAgentTraceEventType,
+  SubAgentWorkingPhase,
+  SubAgentWorkingState,
 } from "./types.js";
 import { renderSkillAgentToolResult } from "./tool-adapters.js";
 
@@ -26,6 +33,9 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+
+const asNonEmptyString = (value: unknown) =>
+  typeof value === "string" && value.trim() ? value.trim() : undefined;
 
 type PiModel = NonNullable<NonNullable<AgentOptions["initialState"]>["model"]>;
 type BindingExecution = Awaited<ReturnType<SkillAgentToolBinding["execute"]>>;
@@ -174,7 +184,7 @@ const normalizeCompletionRequirements = (
 
 const buildSystemPrompt = (input: SkillAgentExecutionInput) => {
   const primary = input.skillContext.primary;
-  if (!primary) throw new Error("Forked Skill agent requires one primary SkillContext");
+  if (!primary) throw new Error("subAgent requires one primary SkillContext");
 
   const disclosed = input.skillContext.disclosedResources
     .map((resource) => `<resource uri="${resource.uri}">\n${resource.content}\n</resource>`)
@@ -182,15 +192,18 @@ const buildSystemPrompt = (input: SkillAgentExecutionInput) => {
   const availableUris = input.skillContext.resources.map((resource) => resource.uri);
 
   return [
-    "You are an isolated professional Skill execution agent inside Mira.",
+    "You are an isolated professional subAgent inside Mira, assigned to exactly one Skill.",
     "You own task-local planning, tool use, observation, evidence coverage and repair until you can return a terminal execution status.",
+    "You cannot create or delegate to another agent.",
     "You are not Mira's final conversational spokesperson. Do not address the user conversationally and do not fabricate success.",
-    "Only use the tools exposed to this agent. Never assume access to Main Agent tools that are not present.",
+    "Only use the tools exposed to this subAgent. Never assume access to Main Agent tools that are not present.",
     "All file paths and artifacts must stay inside the bound workspace unless a provided tool explicitly returns another managed artifact reference.",
     "When deterministic runtime execution fails, treat the runtime result as authoritative. Never reinterpret failure as success.",
     "If evidence is insufficient, keep working while an allowed tool can materially close the gap. If the gap cannot be closed, return insufficient_evidence or needs_input.",
     "Approval requirements are emitted only by tools. Never invent an approval requirement in your final JSON.",
     "For needs_input, requirements must be objects with kind user_input|evidence|resource|capability, description, and requiredFor.",
+    "Use subagent_report_state before substantial work, whenever your judgment or next action changes, before waiting, and before completion.",
+    "subagent_report_state is a user-visible safe work summary: state your current judgment, current action and next action without revealing hidden chain-of-thought, private scratch work or secrets.",
     "At the end, output exactly one JSON object and no prose outside it:",
     '{"status":"completed|insufficient_evidence|needs_input|failed","summary":"...","missingEvidence":[],"requirements":[{"kind":"user_input","description":"...","requiredFor":"..."}],"recoverable":true}',
     "",
@@ -225,6 +238,107 @@ const toAgentToolResult = (
   ...(executed.terminate ? { terminate: true } : {}),
 });
 
+type Ledger = {
+  runId: string;
+  getNextSeq: () => number;
+  getWorkingState: () => SubAgentWorkingState | undefined;
+  getEvents: () => SubAgentTraceEvent[];
+  emitTrace: (
+    type: SubAgentTraceEventType,
+    title: string,
+    details?: Record<string, unknown>,
+  ) => Promise<SubAgentTraceEvent>;
+  updateWorkingState: (input: {
+    phase: SubAgentWorkingPhase;
+    currentJudgement?: string;
+    currentAction: string;
+    nextAction?: string;
+    blockingReason?: string;
+  }) => Promise<SubAgentWorkingState>;
+};
+
+const createLedger = (input: {
+  execution: SkillAgentExecutionInput;
+  skillId: string;
+}): Ledger => {
+  const checkpoint = input.execution.checkpoint;
+  const runId = checkpoint?.subAgentRunId ?? crypto.randomUUID();
+  let nextSeq = Math.max(1, checkpoint?.nextTraceSeq ?? 1);
+  let workingState = checkpoint?.workingState
+    ? structuredClone(checkpoint.workingState)
+    : undefined;
+  const events = checkpoint?.traceEvents
+    ? structuredClone(checkpoint.traceEvents)
+    : [];
+
+  const publish = async (event: SubAgentRuntimeEvent) => {
+    await input.execution.onRuntimeEvent?.(event);
+  };
+
+  const emitTrace: Ledger["emitTrace"] = async (type, title, details) => {
+    const event: SubAgentTraceEvent = {
+      runId,
+      seq: nextSeq,
+      eventId: crypto.randomUUID(),
+      skillId: input.skillId,
+      type,
+      title,
+      timestamp: Date.now(),
+      ...(details ? { details: structuredClone(details) } : {}),
+    };
+    nextSeq += 1;
+    events.push(event);
+    await publish({ kind: "trace", event: structuredClone(event) });
+    return event;
+  };
+
+  const updateWorkingState: Ledger["updateWorkingState"] = async (stateInput) => {
+    workingState = {
+      runId,
+      skillId: input.skillId,
+      phase: stateInput.phase,
+      ...(stateInput.currentJudgement
+        ? { currentJudgement: stateInput.currentJudgement }
+        : {}),
+      currentAction: stateInput.currentAction,
+      ...(stateInput.nextAction ? { nextAction: stateInput.nextAction } : {}),
+      ...(stateInput.blockingReason
+        ? { blockingReason: stateInput.blockingReason }
+        : {}),
+      updatedAt: Date.now(),
+    };
+    await emitTrace("working_state.updated", stateInput.currentAction, {
+      phase: stateInput.phase,
+    });
+    await publish({ kind: "working_state", state: structuredClone(workingState) });
+    return workingState;
+  };
+
+  return {
+    runId,
+    getNextSeq: () => nextSeq,
+    getWorkingState: () =>
+      workingState ? structuredClone(workingState) : undefined,
+    getEvents: () => structuredClone(events),
+    emitTrace,
+    updateWorkingState,
+  };
+};
+
+const buildTrace = (input: {
+  ledger: Ledger;
+  skillId: string;
+  toolCalls: string[];
+}): SkillAgentTrace => ({
+  engine: "pi-agent-core",
+  skillId: input.skillId,
+  toolCalls: [...input.toolCalls],
+  runId: input.ledger.runId,
+  nextSeq: input.ledger.getNextSeq(),
+  workingState: input.ledger.getWorkingState(),
+  events: input.ledger.getEvents(),
+});
+
 const executeBinding = async (input: {
   binding: SkillAgentToolBinding;
   toolCallId: string;
@@ -235,24 +349,67 @@ const executeBinding = async (input: {
   requirements: SkillAgentRequirement[];
   toolCalls: string[];
   recordToolCall: boolean;
+  ledger: Ledger;
+  resumedFromApproval?: boolean;
 }) => {
   if (input.recordToolCall) input.toolCalls.push(input.binding.id);
-  const raw = await input.binding.execute(input.args, input.signal);
-  const requirement = raw.requirement
-    ? { ...raw.requirement, toolCallId: input.toolCallId }
-    : undefined;
-  const executed: BindingExecution = requirement
-    ? { ...raw, requirement }
-    : raw;
+  await input.ledger.emitTrace("tool.started", `正在执行 ${input.binding.label}`, {
+    toolId: input.binding.id,
+    toolCallId: input.toolCallId,
+    resumedFromApproval: Boolean(input.resumedFromApproval),
+  });
 
-  if (executed.evidence !== undefined) input.evidence.push(executed.evidence);
-  if (executed.artifacts?.length) input.artifacts.push(...executed.artifacts);
-  if (executed.requirement) input.requirements.push(executed.requirement);
+  try {
+    const raw = await input.binding.execute(input.args, input.signal);
+    const requirement = raw.requirement
+      ? { ...raw.requirement, toolCallId: input.toolCallId }
+      : undefined;
+    const executed: BindingExecution = requirement
+      ? { ...raw, requirement }
+      : raw;
 
-  return {
-    executed,
-    toolResult: toAgentToolResult(input.binding, executed),
-  };
+    if (executed.evidence !== undefined) input.evidence.push(executed.evidence);
+    if (executed.artifacts?.length) input.artifacts.push(...executed.artifacts);
+    if (executed.requirement) input.requirements.push(executed.requirement);
+
+    if (executed.requirement?.kind === "approval") {
+      await input.ledger.updateWorkingState({
+        phase: "waiting_approval",
+        currentJudgement: `当前动作需要对 ${input.binding.id} 的精确调用进行审批。`,
+        currentAction: `等待批准 ${input.binding.label}`,
+        nextAction: "审批通过后从当前检查点继续执行",
+        blockingReason: executed.requirement.description,
+      });
+      await input.ledger.emitTrace(
+        "approval.required",
+        `${input.binding.label} 等待审批`,
+        {
+          toolId: input.binding.id,
+          toolCallId: input.toolCallId,
+          inputHash: executed.requirement.inputHash ?? null,
+        },
+      );
+    } else {
+      await input.ledger.emitTrace("tool.completed", `${input.binding.label} 已完成`, {
+        toolId: input.binding.id,
+        toolCallId: input.toolCallId,
+        artifactCount: executed.artifacts?.length ?? 0,
+        evidenceAdded: executed.evidence !== undefined,
+      });
+    }
+
+    return {
+      executed,
+      toolResult: toAgentToolResult(input.binding, executed),
+    };
+  } catch (error) {
+    await input.ledger.emitTrace("tool.failed", `${input.binding.label} 执行失败`, {
+      toolId: input.binding.id,
+      toolCallId: input.toolCallId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 };
 
 const toPiTool = (input: {
@@ -261,6 +418,7 @@ const toPiTool = (input: {
   artifacts: unknown[];
   requirements: SkillAgentRequirement[];
   toolCalls: string[];
+  ledger: Ledger;
 }): AgentTool<any> => ({
   name: input.binding.id,
   label: input.binding.label,
@@ -278,8 +436,58 @@ const toPiTool = (input: {
       requirements: input.requirements,
       toolCalls: input.toolCalls,
       recordToolCall: true,
+      ledger: input.ledger,
     });
     return toolResult;
+  },
+});
+
+const createStateReportingTool = (input: {
+  ledger: Ledger;
+}): AgentTool<any> => ({
+  name: "subagent_report_state",
+  label: "Report subAgent Working State",
+  description:
+    "Publish a concise user-visible work summary. Do not include hidden chain-of-thought, private scratch work, secrets or raw prompts.",
+  parameters: {
+    type: "object",
+    required: ["currentAction"],
+    additionalProperties: false,
+    properties: {
+      phase: {
+        type: "string",
+        enum: ["planning", "working", "waiting_input", "blocked", "completed", "failed"],
+      },
+      currentJudgement: { type: "string" },
+      currentAction: { type: "string" },
+      nextAction: { type: "string" },
+      blockingReason: { type: "string" },
+    },
+  } as any,
+  executionMode: "sequential",
+  execute: async (_toolCallId, params) => {
+    const record = asRecord(params) ?? {};
+    const requestedPhase = asNonEmptyString(record.phase) as
+      | SubAgentWorkingPhase
+      | undefined;
+    const currentAction =
+      asNonEmptyString(record.currentAction) ?? "正在按 Skill 说明书继续处理任务";
+    const state = await input.ledger.updateWorkingState({
+      phase: requestedPhase ?? "working",
+      currentJudgement: asNonEmptyString(record.currentJudgement),
+      currentAction,
+      nextAction: asNonEmptyString(record.nextAction),
+      blockingReason: asNonEmptyString(record.blockingReason),
+    });
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ status: "recorded", phase: state.phase }),
+        },
+      ],
+      details: { workingState: state },
+    };
   },
 });
 
@@ -294,6 +502,8 @@ const findApprovalRequirement = (requirements: SkillAgentRequirement[]) =>
   );
 
 const createApprovalCheckpoint = (input: {
+  execution: SkillAgentExecutionInput;
+  ledger: Ledger;
   messages: AgentMessage[];
   requirement: SkillAgentRequirement;
   evidence: unknown[];
@@ -322,6 +532,13 @@ const createApprovalCheckpoint = (input: {
     evidence: structuredClone(input.evidence),
     artifacts: structuredClone(input.artifacts),
     toolCalls: [...input.toolCalls],
+    subAgentRunId: input.ledger.runId,
+    nextTraceSeq: input.ledger.getNextSeq(),
+    workingState: input.ledger.getWorkingState(),
+    traceEvents: input.ledger.getEvents(),
+    skillId: input.execution.skillContext.primary?.id,
+    skillVersion: input.execution.skillContext.primary?.version,
+    skillContextSnapshot: structuredClone(input.execution.skillContext),
   };
 };
 
@@ -366,7 +583,7 @@ const replaceApprovalPlaceholder = (input: {
   }
 
   throw new Error(
-    `Pi Skill checkpoint is missing the approval placeholder for ${input.toolId}:${input.toolCallId}`,
+    `subAgent checkpoint is missing the approval placeholder for ${input.toolId}:${input.toolCallId}`,
   );
 };
 
@@ -377,17 +594,24 @@ const failResult = (input: {
   evidence: unknown[];
   artifacts: unknown[];
   toolCalls: string[];
+  ledger?: Ledger;
 }): SkillAgentExecutionResult => ({
   status: "failed",
   recoverable: input.recoverable,
   error: input.error instanceof Error ? input.error.message : String(input.error),
   evidence: input.evidence,
   artifacts: input.artifacts,
-  trace: {
-    engine: "pi-agent-core",
-    skillId: input.skillId,
-    toolCalls: input.toolCalls,
-  },
+  trace: input.ledger
+    ? buildTrace({
+        ledger: input.ledger,
+        skillId: input.skillId,
+        toolCalls: input.toolCalls,
+      })
+    : {
+        engine: "pi-agent-core",
+        skillId: input.skillId,
+        toolCalls: input.toolCalls,
+      },
 });
 
 export const runPiSkillAgent = async (input: {
@@ -399,7 +623,7 @@ export const runPiSkillAgent = async (input: {
     return {
       status: "failed",
       recoverable: false,
-      error: "Forked Skill agent cannot start without a primary SkillContext",
+      error: "subAgent cannot start without a primary SkillContext",
       evidence: [],
       artifacts: [],
     };
@@ -414,42 +638,77 @@ export const runPiSkillAgent = async (input: {
     : [];
   const requirements: SkillAgentRequirement[] = [];
   const toolCalls: string[] = checkpoint ? [...checkpoint.toolCalls] : [];
+  const ledger = createLedger({ execution: input.execution, skillId: primary.id });
   const { model, apiKey } = resolvePiModel();
-  const tools = input.tools.map((binding) =>
-    toPiTool({ binding, evidence, artifacts, requirements, toolCalls }),
+  const tools: AgentTool<any>[] = [createStateReportingTool({ ledger })];
+  tools.push(
+    ...input.tools.map((binding) =>
+      toPiTool({ binding, evidence, artifacts, requirements, toolCalls, ledger }),
+    ),
   );
 
   let restoredMessages: AgentMessage[] | undefined;
   if (checkpoint) {
     const pending = checkpoint.pendingInvocation;
     if (checkpoint.version !== 1) {
+      await ledger.updateWorkingState({
+        phase: "failed",
+        currentAction: "无法恢复 subAgent",
+        blockingReason: `Unsupported checkpoint version: ${String(checkpoint.version)}`,
+      });
+      await ledger.emitTrace("subagent.failed", "subAgent 恢复失败");
       return failResult({
         skillId: primary.id,
-        error: `Unsupported Pi Skill checkpoint version: ${String(checkpoint.version)}`,
+        error: `Unsupported subAgent checkpoint version: ${String(checkpoint.version)}`,
         recoverable: false,
         evidence,
         artifacts,
         toolCalls,
+        ledger,
+      });
+    }
+    if (checkpoint.skillId && checkpoint.skillId !== primary.id) {
+      return failResult({
+        skillId: primary.id,
+        error: `subAgent checkpoint belongs to Skill ${checkpoint.skillId}, not ${primary.id}.`,
+        recoverable: false,
+        evidence,
+        artifacts,
+        toolCalls,
+        ledger,
+      });
+    }
+    if (checkpoint.skillVersion && checkpoint.skillVersion !== primary.version) {
+      return failResult({
+        skillId: primary.id,
+        error: `subAgent checkpoint is bound to Skill ${primary.id}@${checkpoint.skillVersion}, not ${primary.version}.`,
+        recoverable: false,
+        evidence,
+        artifacts,
+        toolCalls,
+        ledger,
       });
     }
     if (createInvocationInputHash(pending.input) !== pending.inputHash) {
       return failResult({
         skillId: primary.id,
-        error: "Pi Skill checkpoint inputHash does not match its frozen invocation input.",
+        error: "subAgent checkpoint inputHash does not match its frozen invocation input.",
         recoverable: false,
         evidence,
         artifacts,
         toolCalls,
+        ledger,
       });
     }
     if (!hasExactApprovedInvocation(input.execution, pending.toolId, pending.inputHash)) {
       return failResult({
         skillId: primary.id,
-        error: "Pi Skill checkpoint resume is missing approval for the exact frozen invocation.",
+        error: "subAgent checkpoint resume is missing approval for the exact frozen invocation.",
         recoverable: false,
         evidence,
         artifacts,
         toolCalls,
+        ledger,
       });
     }
 
@@ -457,13 +716,22 @@ export const runPiSkillAgent = async (input: {
     if (!binding) {
       return failResult({
         skillId: primary.id,
-        error: `Pi Skill checkpoint runtime is unavailable: ${pending.toolId}`,
+        error: `subAgent checkpoint runtime is unavailable: ${pending.toolId}`,
         recoverable: false,
         evidence,
         artifacts,
         toolCalls,
+        ledger,
       });
     }
+
+    await ledger.emitTrace("subagent.resumed", "审批已通过，继续执行");
+    await ledger.updateWorkingState({
+      phase: "working",
+      currentJudgement: "精确审批与冻结调用一致，可以从原检查点继续。",
+      currentAction: `继续执行 ${binding.label}`,
+      nextAction: "读取执行结果并按 Skill 计划继续",
+    });
 
     try {
       const resumed = await executeBinding({
@@ -475,16 +743,19 @@ export const runPiSkillAgent = async (input: {
         requirements,
         toolCalls,
         recordToolCall: false,
+        ledger,
+        resumedFromApproval: true,
       });
       if (resumed.executed.requirement || resumed.executed.terminate) {
         return failResult({
           skillId: primary.id,
           error:
-            "Approved Pi Skill invocation did not consume its exact approval; resume was blocked to prevent an approval loop.",
+            "Approved subAgent invocation did not consume its exact approval; resume was blocked to prevent an approval loop.",
           recoverable: false,
           evidence,
           artifacts,
           toolCalls,
+          ledger,
         });
       }
       restoredMessages = replaceApprovalPlaceholder({
@@ -494,6 +765,12 @@ export const runPiSkillAgent = async (input: {
         result: resumed.toolResult,
       });
     } catch (error) {
+      await ledger.updateWorkingState({
+        phase: "failed",
+        currentAction: `恢复执行 ${binding.label} 失败`,
+        blockingReason: error instanceof Error ? error.message : String(error),
+      });
+      await ledger.emitTrace("subagent.failed", "subAgent 恢复执行失败");
       return failResult({
         skillId: primary.id,
         error,
@@ -501,8 +778,20 @@ export const runPiSkillAgent = async (input: {
         evidence,
         artifacts,
         toolCalls,
+        ledger,
       });
     }
+  } else {
+    await ledger.emitTrace("subagent.started", `${primary.name} subAgent 已启动`, {
+      skillId: primary.id,
+      skillVersion: primary.version,
+    });
+    await ledger.updateWorkingState({
+      phase: "planning",
+      currentJudgement: "已读取当前 Skill 说明书，正在把用户目标转换为本次执行顺序。",
+      currentAction: "梳理任务目标与可用能力",
+      nextAction: "按说明书选择所需资源或工具",
+    });
   }
 
   const agent = new Agent({
@@ -514,7 +803,7 @@ export const runPiSkillAgent = async (input: {
     },
     getApiKey: () => apiKey || undefined,
     toolExecution: "sequential",
-    sessionId: `mira-skill:${primary.id}:${input.execution.threadId ?? "standalone"}`,
+    sessionId: `mira-subagent:${primary.id}:${ledger.runId}`,
   });
 
   try {
@@ -524,12 +813,20 @@ export const runPiSkillAgent = async (input: {
       await agent.prompt(
         [
           `<goal>${input.execution.goal}</goal>`,
-          `<workspace>${input.execution.workspaceRoot}</workspace>`,
+          input.execution.workspaceRoot
+            ? `<workspace>${input.execution.workspaceRoot}</workspace>`
+            : "<workspace>not-required</workspace>",
           "Execute the goal using only the supplied Skill context and tools.",
         ].join("\n"),
       );
     }
   } catch (error) {
+    await ledger.updateWorkingState({
+      phase: "failed",
+      currentAction: "subAgent 执行中断",
+      blockingReason: error instanceof Error ? error.message : String(error),
+    });
+    await ledger.emitTrace("subagent.failed", "subAgent 执行失败");
     return failResult({
       skillId: primary.id,
       error,
@@ -537,6 +834,7 @@ export const runPiSkillAgent = async (input: {
       evidence,
       artifacts,
       toolCalls,
+      ledger,
     });
   }
 
@@ -547,6 +845,8 @@ export const runPiSkillAgent = async (input: {
     const approvalRequirement = findApprovalRequirement(requirements);
     const approvalCheckpoint = approvalRequirement
       ? createApprovalCheckpoint({
+          execution: input.execution,
+          ledger,
           messages: agent.state.messages,
           requirement: approvalRequirement,
           evidence,
@@ -558,42 +858,96 @@ export const runPiSkillAgent = async (input: {
     if (approvalRequirement && !approvalCheckpoint) {
       return failResult({
         skillId: primary.id,
-        error: "Pi Skill approval boundary did not produce a resumable exact checkpoint.",
+        error: "subAgent approval boundary did not produce a resumable exact checkpoint.",
         recoverable: false,
         evidence,
         artifacts,
         toolCalls,
+        ledger,
       });
     }
 
     return {
       status: "needs_input",
-      summary: "Forked Skill agent stopped at a governed requirement boundary.",
+      summary: "subAgent stopped at a governed requirement boundary.",
       requirements,
       ...(approvalCheckpoint ? { checkpoint: approvalCheckpoint } : {}),
       evidence,
       artifacts,
-      trace: { engine: "pi-agent-core", skillId: primary.id, toolCalls },
+      trace: buildTrace({ ledger, skillId: primary.id, toolCalls }),
     };
   }
 
   const finalText = extractAssistantText(agent.state.messages as unknown[]);
   const completion = parseCompletionEnvelope(finalText);
   if (!completion) {
+    await ledger.updateWorkingState({
+      phase: "failed",
+      currentAction: "无法确认 subAgent 的最终交付状态",
+      blockingReason: "Invalid completion envelope",
+    });
+    await ledger.emitTrace("subagent.failed", "subAgent 返回格式无效");
     return {
       status: "failed",
       recoverable: true,
-      error: "Pi Skill agent returned an invalid completion envelope",
+      error: "subAgent returned an invalid completion envelope",
       evidence,
       artifacts,
-      trace: { engine: "pi-agent-core", skillId: primary.id, toolCalls },
+      trace: buildTrace({ ledger, skillId: primary.id, toolCalls }),
     };
   }
 
   const status = completion.status as SkillAgentExecutionResult["status"];
+  const summary = asNonEmptyString(completion.summary);
+  const completionRequirements =
+    status === "needs_input"
+      ? normalizeCompletionRequirements(completion.requirements)
+      : [];
+
+  if (status === "completed") {
+    await ledger.updateWorkingState({
+      phase: "completed",
+      currentJudgement: summary ?? "Skill 的完成条件已经满足。",
+      currentAction: "subAgent 已完成本次任务",
+      nextAction: "把 Evidence 与 Artifact 交还给 Main Agent",
+    });
+    await ledger.emitTrace("subagent.completed", `${primary.name} subAgent 已完成`);
+  } else if (status === "needs_input") {
+    await ledger.updateWorkingState({
+      phase: "waiting_input",
+      currentJudgement: summary,
+      currentAction: "等待补充继续执行所需的信息",
+      nextAction: "收到缺失信息后继续原任务",
+      blockingReason: completionRequirements.map((item) => item.description).join("；") || undefined,
+    });
+    await ledger.emitTrace("input.required", "subAgent 等待用户补充信息");
+  } else if (status === "insufficient_evidence") {
+    await ledger.updateWorkingState({
+      phase: "blocked",
+      currentJudgement: summary,
+      currentAction: "当前证据不足，不能宣称任务完成",
+      nextAction: "补充证据或调整目标后继续",
+      blockingReason: Array.isArray(completion.missingEvidence)
+        ? completion.missingEvidence.map(String).join("；")
+        : undefined,
+    });
+    await ledger.emitTrace("input.required", "subAgent 发现证据缺口");
+  } else {
+    await ledger.updateWorkingState({
+      phase: "failed",
+      currentJudgement: summary,
+      currentAction: "subAgent 未能完成任务",
+      blockingReason:
+        typeof completion.error === "string"
+          ? completion.error
+          : "Skill agent reported failure",
+    });
+    await ledger.emitTrace("subagent.failed", `${primary.name} subAgent 执行失败`);
+  }
+
   return {
     status,
-    ...(typeof completion.summary === "string" ? { summary: completion.summary } : {}),
+    ...(summary ? { summary } : {}),
     evidence,
     artifacts,
     ...(status === "insufficient_evidence"
@@ -604,7 +958,7 @@ export const runPiSkillAgent = async (input: {
         }
       : {}),
     ...(status === "needs_input"
-      ? { requirements: normalizeCompletionRequirements(completion.requirements) }
+      ? { requirements: completionRequirements }
       : {}),
     ...(status === "failed"
       ? {
@@ -615,6 +969,6 @@ export const runPiSkillAgent = async (input: {
               : "Skill agent reported failure",
         }
       : {}),
-    trace: { engine: "pi-agent-core", skillId: primary.id, toolCalls },
+    trace: buildTrace({ ledger, skillId: primary.id, toolCalls }),
   };
 };
