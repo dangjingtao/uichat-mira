@@ -53,7 +53,6 @@ const narrowParentRecoveryToolExposure = (input: {
 }): AgentToolExposureState | undefined => {
   if (!input.toolExposure) return undefined;
   const profile = getSkillAgentExecutionProfile(input.skillId);
-  if (!profile) return input.toolExposure;
   const allowed = new Set(profile.allowedHarnessToolIds);
   return {
     exposedTools: input.toolExposure.exposedTools.filter((toolId) => allowed.has(toolId)),
@@ -62,12 +61,11 @@ const narrowParentRecoveryToolExposure = (input: {
 };
 
 /**
- * Compatibility wrapper for profiled forked Skills.
+ * Compatibility wrapper for Skill-owned subAgent execution.
  *
- * A matched Skill with an execution profile delegates task-local work to the
- * isolated Pi executor by default. Parent retains approval, recovery and final
- * response governance without taking construction ownership back from the
- * Skill Agent.
+ * A matched Skill delegates task-local work to one isolated subAgent. Parent
+ * retains approval, recovery and final response governance without taking
+ * construction ownership back from the subAgent.
  */
 export const prepareContextWithForkedSkillAgentNode = async (
   state: AgentNodeState,
@@ -95,17 +93,17 @@ export const prepareContextWithForkedSkillAgentNode = async (
     ...evidence,
   };
   const delegatedResult = readDelegatedResult(delegatedObservation);
-  const skillId = delegatedObservation.stepId.replace(/^skill_agent:/, "") || "skill";
+  const skillId =
+    delegatedObservation.stepId.replace(/^(?:skill_agent|subagent):/, "") || "skill";
 
-  // Approval is Parent-governed and wins over needs_input. The Pi loop pauses
-  // immediately on pendingApproval, preserving the frozen exact invocation.
+  // Approval is Parent-governed and wins over needs_input. The Main runtime
+  // pauses immediately, preserving the frozen exact invocation and checkpoint.
   if (delegated.pendingApproval) {
     return committed;
   }
 
-  // needs_input is a terminal handoff from the delegated executor, not an
-  // invitation for Main Planner to take construction ownership back. Route it
-  // directly into the existing Parent ask_user / waiting_user finalization path.
+  // needs_input is a terminal handoff from the subAgent, not an invitation for
+  // Main Planner to take construction ownership back.
   if (
     delegatedObservation.status === "partial" &&
     delegatedResult.status === "needs_input"
@@ -116,14 +114,14 @@ export const prepareContextWithForkedSkillAgentNode = async (
         type: "ask_user",
         question: buildNeedsInputQuestion(delegatedResult.requirements),
         reason:
-          "Forked Skill Agent reached a governed needs_input boundary; Parent must ask for the missing information before replaying delegated execution.",
+          "subAgent reached a governed needs_input boundary; Parent must ask for the missing information before replaying delegated execution.",
       },
     };
   }
 
   // insufficient_evidence and recoverable failure remain Parent recovery paths,
-  // but recovery may only use the Skill profile's read-only Harness surface.
-  // Parent must not bypass the private runtime through terminal/edit/code tools.
+  // but recovery may only use the active Skill profile's declared Harness
+  // surface. Parent must not bypass private runtimes through unrelated tools.
   if (
     delegatedObservation.status === "partial" ||
     delegatedObservation.status === "failed"
@@ -137,12 +135,12 @@ export const prepareContextWithForkedSkillAgentNode = async (
     };
   }
 
-  // A terminal Skill failure must preserve the existing Main Agent terminal C
-  // contract: Graph failed, finishReason/error path, Generate never runs.
+  // A terminal subAgent failure preserves the existing Main Agent terminal C
+  // contract: failed status, error finish path, Generate never runs.
   if (delegatedObservation.status === "blocked") {
     const errorMessage =
       delegatedObservation.errorMessage ??
-      "Forked Skill Agent reported a terminal execution failure.";
+      "subAgent reported a terminal execution failure.";
     return {
       ...committed,
       errorMessage,
@@ -152,13 +150,12 @@ export const prepareContextWithForkedSkillAgentNode = async (
   }
 
   // completed means task-local execution ownership has finished. Freeze a
-  // Parent finalization packet over the committed Skill observation so the Pi
-  // loop can go directly to Generate instead of asking Main Planner to rebuild
-  // the deliverable a second time.
+  // Parent finalization packet over the committed observation so the Main loop
+  // can go directly to Generate instead of rebuilding the deliverable.
   const evidenceRef = `observation:${observationIndex}` as AgentEvidenceReference;
   const finalizationPacket: AgentFinalizationPacket = {
     type: "answer",
-    reason: `Forked Skill Agent ${skillId} completed the delegated task-local execution; Parent finalization may now deliver the grounded result without replanning construction.`,
+    reason: `subAgent for Skill ${skillId} completed the delegated task-local execution; Parent finalization may now deliver the grounded result without replanning construction.`,
     completionProof: [
       {
         criterion: `Complete delegated ${skillId} Skill execution and preserve its Evidence/Artifact result.`,
