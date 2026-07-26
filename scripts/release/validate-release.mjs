@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { generateReleaseTestReports } from "../generate-test-report.js";
 import { projectRoot } from "./payload-utils.mjs";
-import { runPnpm } from "./process-utils.mjs";
+import { runExecutable, runPnpm } from "./process-utils.mjs";
 import {
   copyOfficialReports,
   printFailedTestDetails,
@@ -22,6 +22,30 @@ console.log("=== Release Factory: validate Windows release ===");
 console.log(`Project root: ${projectRoot}`);
 
 resetValidationRoot();
+
+for (const directory of [
+  path.join(projectRoot, ".test-artifact", "server"),
+  path.join(projectRoot, ".test-artifact", "server", "workspace"),
+  path.join(projectRoot, "server", ".test-artifact"),
+]) {
+  fs.mkdirSync(directory, { recursive: true });
+}
+
+console.log("Checking release validation runtime prerequisites...");
+runExecutable(
+  "python",
+  [
+    "-c",
+    [
+      "import docx",
+      "import pptx",
+      "import openpyxl",
+      "print('Python Office validation dependencies are available')",
+    ].join(";"),
+  ],
+  { cwd: projectRoot },
+);
+runExecutable("where.exe", ["pdftotext.exe"], { cwd: projectRoot });
 
 const validation = {
   typecheck: {
