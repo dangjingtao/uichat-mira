@@ -72,6 +72,12 @@ jobs:
           path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\piper'
           key: windows-release-factory-piper-${{ hashFiles('scripts/prepare-piper-runtime.mjs') }}
 
+      - name: Cache Vivliostyle Runtime
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\vivliostyle'
+          key: windows-release-factory-vivliostyle-${{ hashFiles('scripts/prepare-vivliostyle-runtime.mjs') }}
+
       - name: Cache local model sources
         uses: actions/cache@v4
         with:
@@ -118,6 +124,9 @@ jobs:
           - Commit: `$($manifest.gitCommit)`
           - Files: `$($manifest.totalFiles)`
           - Bytes: `$($manifest.totalBytes)`
+          - Typecheck: `$($manifest.validation.typecheck.status)`
+          - Client tests: `$($manifest.validation.tests.client.status)`
+          - Server tests: `$($manifest.validation.tests.server.status)`
           - Source path: hostile Windows path with Chinese, spaces, and `&`
           - Publishing: disabled
           "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
@@ -151,19 +160,110 @@ jobs:
           name: release-payload-windows-x64-${{ github.sha }}
           path: .artifacts/release-payload/windows-x64
 
-      - name: Verify every payload file and SHA-256
+      - name: Verify every payload file, validation result, and SHA-256
         run: node scripts/release/verify-payload.mjs
 
-      - name: Confirm validation-only behavior
-        shell: pwsh
-        run: |
-          @"
-          ### Release Factory Safety Gate
+  package-electron-from-payload:
+    name: Package Electron from frozen payload
+    needs: verify-downloaded-payload
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout Electron consumer
+        uses: actions/checkout@v4
 
-          - Windows payload build passed
-          - Cross-job artifact transfer passed
-          - Per-file SHA-256 verification passed
-          - No tag created
-          - No GitHub Release created
-          - No Cloudflare R2 upload executed
-          "@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Cache Electron builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron-builder/Cache
+            ~/.cache/electron-builder
+          key: windows-release-factory-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            windows-release-factory-electron-
+
+      - name: Install packaging dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download frozen shared payload
+        uses: actions/download-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: .artifacts/release-payload/windows-x64
+
+      - name: Package Electron without rebuilding product payload
+        run: pnpm release:package:electron:win
+
+      - name: Upload Electron validation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-factory-electron-${{ github.sha }}
+          path: |
+            .artifacts/release-packages/electron/**/*Setup*.exe
+            .artifacts/release-packages/electron/**/*Setup*.exe.blockmap
+            .artifacts/release-packages/electron/package-manifest.json
+          if-no-files-found: error
+          retention-days: 2
+
+  package-tauri-from-payload:
+    name: Package Tauri from frozen payload
+    needs: verify-downloaded-payload
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Tauri consumer
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust / Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri
+          cache-targets: false
+
+      - name: Install packaging dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download frozen shared payload
+        uses: actions/download-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: .artifacts/release-payload/windows-x64
+
+      - name: Package Tauri without rebuilding product payload
+        run: pnpm release:package:tauri:win
+
+      - name: Upload Tauri validation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-factory-tauri-${{ github.sha }}
+          path: |
+            .artifacts/release-packages/tauri/**/*.msi
+            .artifacts/release-packages/tauri/**/*setup.exe
+            .artifacts/release-packages/tauri/package-manifest.json
+          if-no-files-found: error
+          retention-days: 2
