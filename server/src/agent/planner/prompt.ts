@@ -27,7 +27,7 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
         : tool.toolId === "read_discover"
         ? "Discover candidate files, directories, symbols, or keyword locations without opening file bodies."
         : tool.toolId === "read_open"
-          ? "Open a known target and optionally read only a selected section; do not use it for fuzzy discovery or to mechanically reopen CodeGraph-verified source excerpts."
+          ? "Open one known target when that single read completes the requested action. If the unfinished package requires another source, cross-source comparison, later mutation, or verification after this read, delegate the whole package instead of starting with read_open. Do not use it for fuzzy discovery or to mechanically reopen CodeGraph-verified source excerpts."
           : tool.toolId === "codebase_explore"
             ? "Primary local code-understanding tool. Successful results include bounded workspace-verified source excerpts with paths and line ranges. Those verified excerpts already count as source-body evidence; use read_open only for a specific unresolved target or missing surrounding context."
             : tool.description;
@@ -108,8 +108,10 @@ const buildProgressionRules = (input: {
     "Skill requirement 当前不阻塞主线时，不要追问；继续其他可执行工作，并把未解决缺口保留在 remainingWork。不要把 skillRuntime、sessionId 或 stateRef 当作 workspace 文件线索去搜索。",
     "Skill 内部 TaskModel 调用属于 Skill Runtime 的受治理内部执行步骤，不需要你申请、调度或转换成用户追问。",
     "Main Planner owns the complete user goal, task decomposition, dependencies, acceptance, and final answer. A generic subAgent owns one bounded local work package and returns to Main Planner for acceptance and the next decision.",
-    "When one work package has a clear boundary, can be independently accepted, and is expected to require multiple sequential tool calls, execution-time verification, or local recovery, prefer one use_tool(delegate_task) for the complete package.",
+    "Before applying any tool-specific guidance, first decide whether the entire current unfinished work package qualifies for delegation. Do not judge only the first concrete action inside that package.",
+    "When one work package has a clear boundary, can be independently accepted, and is expected to require multiple sequential tool calls, execution-time verification, or local recovery, select one use_tool(delegate_task) for the complete package before considering concrete tools.",
     "delegate_task.goal must state the complete local objective, not one intermediate tool call. acceptanceCriteria must list observable completion conditions, including required reads, comparisons or mutations, verification, and evidence when applicable.",
+    'The only valid delegation shape is {"type":"use_tool","toolId":"delegate_task","args":{"goal":"complete local objective","acceptanceCriteria":["observable condition"]},"reason":"..."}. goal and acceptanceCriteria must be inside args, never at the top level.',
     "Only a single concrete tool call that completes the requested action should be selected directly by Main Planner. Do not split one bounded package into multiple Main Planner tool turns.",
     "A pure response task needs answer directly and a trivial one-step read or action may use its normal tool; delegation is not mandatory for simple tasks.",
     "当 active Skill 是 docx、pdf、pptx 或 xlsx 时，禁止通过 terminal_session 执行 Python、python -m、python3、pip、conda 或手工设置 PYTHONPATH；必须由 Skill 内部 WenShu Runtime invocation 使用受控 runtime/script 标识执行。",
@@ -178,7 +180,8 @@ const buildSchemaReplanMessages = (input: {
       "Skill requirements 只是缺失条件事实；只有 Planner 可以在判断其阻塞完整目标后选择 ask_user 并组织用户问题。不要把 Skill stateRef 当作 workspace 路径。",
       "CodeGraph verifiedSource 是已重新读取原文件的正文证据；不要机械 read_open 同一批已验证文件，只补明确缺口。",
       "Main Planner owns the complete user goal, dependencies, acceptance, and final answer; a generic subAgent owns one bounded local work package and returns structured evidence for Main Planner acceptance.",
-      "Prefer one use_tool(delegate_task) when a work package has a clear independent acceptance boundary and is expected to need multiple sequential tools, post-execution verification, or local recovery. Keep its goal complete and its acceptanceCriteria observable.",
+      "Before applying tool-specific guidance, judge the entire unfinished work package. Select one use_tool(delegate_task) when it has a clear independent acceptance boundary and is expected to need multiple sequential tools, post-execution verification, or local recovery.",
+      'Delegation must use {"type":"use_tool","toolId":"delegate_task","args":{"goal":"complete local objective","acceptanceCriteria":["observable condition"]},"reason":"..."}; never put goal or acceptanceCriteria at the top level.',
       "Use a normal tool directly only when one concrete call completes the action. Do not split the same bounded package into Main Planner's separate tool turns; delegation is not mandatory for trivial one-step work or pure answer requests.",
       "这次 replan 的目标是修正上一次失败动作：你可以改参数、换工具、ask_user，或在确实无法继续时输出明确终局。",
       "answer 是终止动作；只有完整用户目标已经覆盖，或确实无法继续且会明确报告未完成项时才能选择。",
@@ -236,6 +239,15 @@ export const buildNextActionPlannerMessages = (input: {
         "你是 Agent graph 的 nextAction planner。",
         "你的唯一任务是决定当前这一轮的下一步动作。",
         "你是完整用户任务的唯一语义控制器：Harness 和 Evidence 只报告事实，不能替你宣布任务完成。",
+        "DELEGATION DECISION CONTRACT:",
+        "Before considering any concrete tool, evaluate the entire current unfinished work package against its completion criteria.",
+        "If that package has a clear independent acceptance boundary and completing it is expected to require more than one tool call, a tool call followed by verification, or local recovery, choose one use_tool(delegate_task) now. Do not start with the first concrete tool.",
+        "A direct concrete tool is appropriate only when that one call completes the requested action and the next step can be answer without another tool call or execution verification.",
+        "Apply that direct-tool rule strictly: if any explicit completion criterion will still require another evidence-producing action after the proposed call returns, do not choose that call; delegate the whole bounded package instead.",
+        "Reading multiple inputs before comparing them, or mutating state and then reading or testing it, are multi-action package structures even though their first action is a single read or edit.",
+        'The delegation JSON must be {"type":"use_tool","toolId":"delegate_task","args":{"goal":"complete local objective","acceptanceCriteria":["observable condition"]},"reason":"..."}. goal and acceptanceCriteria are always inside args.',
+        "When delegating, return that one decision object only. Do not emit a separate planPatch object or additional concrete tool decisions before or after it.",
+        "Pure answers and genuinely one-call tasks remain direct; do not delegate them.",
         "currentTaskFrame.globalGoal 是稳定总目标：普通追问回答、补充信息、授权、执行结果和 planPatch 都不能把它改写成当前一句话或当前步骤。",
         "currentUserRequest 必须按用户原文保留；recentConversationHistory 是受限长度的最近对话，只用于你理解本轮请求与未完成任务的关系。",
         "当前请求可能只是对最近具体任务的授权、继续执行指示或执行方式修正。如果有限历史唯一确定了一个尚未完成的具体任务，你必须把当前请求与该任务合并理解，不能仅因本轮省略了目标就要求用户重新描述。",

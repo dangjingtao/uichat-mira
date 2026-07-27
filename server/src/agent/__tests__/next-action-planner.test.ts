@@ -1179,7 +1179,7 @@ test.each([
       "已返回文件路径和验证 Evidence",
     ],
   },
-])("Planner delegates one bounded multi-step work package: $name", async ({
+])("Planner contract accepts one bounded delegation decision: $name", async ({
   question,
   goal,
   acceptanceCriteria,

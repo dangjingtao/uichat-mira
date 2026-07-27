@@ -14,6 +14,7 @@
     "test:protocol": "tsx --tsconfig tsconfig.test.json --test src/**/*.test.ts",
     "smoke:pi-skill-agent": "tsx scripts/smoke-pi-skill-agent.ts",
     "smoke:subagent-skill": "tsx scripts/smoke-subagent-skill.ts",
+    "smoke:planner-delegation": "tsx scripts/smoke-planner-delegation-selection.ts 5",
     "bench:sandbox:direct": "tsx src/harness/sandbox/bench/runner.ts",
     "bench:context:read": "tsx src/harness/context/bench/runner.ts"
   },
