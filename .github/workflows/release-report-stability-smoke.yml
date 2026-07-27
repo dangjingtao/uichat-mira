@@ -1,0 +1,17 @@
+name: Release Report Stability Smoke
+
+on:
+  push:
+    branches:
+      - wip/release-report-stability
+    paths:
+      - 'scripts/release/run-test-scope.mjs'
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  factory:
+    uses: ./.github/workflows/release-factory-v2.yml
+    secrets: inherit
