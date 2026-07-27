@@ -21,6 +21,12 @@ export const routeAfterPrepareContext = (state: AgentGraphStateType) => {
     return "policyStep";
   }
 
+  // Approval resume may finish the delegated worker at a structured
+  // needs_input boundary. Preserve that exact question and skip Main Planner.
+  if (state.nextAction?.type === "ask_user") {
+    return "generate";
+  }
+
   return "nextActionPlanner";
 };
 
@@ -143,6 +149,12 @@ export const routeAfterEvidence = (state: AgentGraphStateType) => {
 
   if (state.pendingApproval) {
     return "approval";
+  }
+
+  // A delegated needs_input action is already a governed Parent decision.
+  // Evidence must be committed first, but Main Planner must not rewrite it.
+  if (state.nextAction?.type === "ask_user") {
+    return "generate";
   }
 
   return "nextActionPlanner";
