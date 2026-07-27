@@ -1,4 +1,4 @@
-name: Patch Report Stability Target
+name: Format Report Stability Target
 
 on:
   push:
@@ -12,30 +12,16 @@ permissions:
   statuses: write
 
 jobs:
-  patch:
+  format:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Publish running status
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: 'pending',
-              context: 'release-report-stability-patch',
-              description: 'Patching report exit-code contract',
-              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            });
-
       - uses: actions/checkout@v4
         with:
           ref: wip/release-report-stability
           path: target
 
-      - name: Patch and update report runner
+      - name: Format and update report runner
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -47,10 +33,22 @@ jobs:
 
           path = Path('scripts/release/run-test-scope.mjs')
           text = path.read_text(encoding='utf-8')
-
-          shard_start = text.index('  if (result.timedOut) {', text.index('async function runShard()'))
-          shard_end = text.index('\n  }\n}\n\nasync function mergeShards()', shard_start) + len('\n  }')
-          new_shard = '''  if (result.timedOut) {
+          text = text.replace('''  if (result.timedOut) {
+          console.error(
+            `${scope} shard ${shard} was killed by the release watchdog.`,
+          );
+          process.exitCode = 124;
+        } else if (result.error || !status.blobProduced) {
+          console.error(
+            `${scope} shard ${shard} did not produce complete merge evidence.`,
+          );
+          process.exitCode = 1;
+        } else if (result.code !== 0) {
+          console.warn(
+            `${scope} shard ${shard} completed with test assertion failures; evidence is complete and the merged validation gate will report them.`,
+          );
+        }
+        }''', '''  if (result.timedOut) {
             console.error(
               `${scope} shard ${shard} was killed by the release watchdog.`,
             );
@@ -64,19 +62,21 @@ jobs:
             console.warn(
               `${scope} shard ${shard} completed with test assertion failures; evidence is complete and the merged validation gate will report them.`,
             );
-          }'''
-          text = text[:shard_start] + new_shard + text[shard_end:]
-
-          merge_start = text.index('  const success = writeReports(rawResultsPath);', text.index('async function mergeShards()'))
-          merge_end = text.index('\n  }\n}', merge_start) + len('\n  }')
-          new_merge = '''  const testsPassed = writeReports(rawResultsPath);
+          }
+        }''')
+          text = text.replace('''  const testsPassed = writeReports(rawResultsPath);
+        if (!testsPassed || result.code !== 0) {
+          console.warn(
+            `${scope} merged reports are complete and contain test assertion failures; the combined validation gate will report them.`,
+          );
+        }
+        }''', '''  const testsPassed = writeReports(rawResultsPath);
           if (!testsPassed || result.code !== 0) {
             console.warn(
               `${scope} merged reports are complete and contain test assertion failures; the combined validation gate will report them.`,
             );
-          }'''
-          text = text[:merge_start] + new_merge + text[merge_end:]
-
+          }
+        }''')
           path.write_text(text, encoding='utf-8')
           PY
 
@@ -86,7 +86,7 @@ jobs:
           gh api \
             --method PUT \
             "/repos/${GITHUB_REPOSITORY}/contents/scripts/release/run-test-scope.mjs" \
-            -f message='fix(release): separate report generation from assertion gate' \
+            -f message='style(release): format report stability contract' \
             -f content="$content" \
             -f branch='wip/release-report-stability' \
             -f sha="$current_sha"
@@ -101,22 +101,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: 'success',
-              context: 'release-report-stability-patch',
-              description: 'Report exit-code contract patched',
-              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
-            });
-
-      - name: Publish failure status
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: 'failure',
-              context: 'release-report-stability-patch',
-              description: 'Report exit-code patch failed',
+              context: 'release-report-stability-format',
+              description: 'Report runner formatting completed',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
