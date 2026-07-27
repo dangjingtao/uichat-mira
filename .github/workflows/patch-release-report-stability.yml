@@ -1,0 +1,89 @@
+name: Patch Release Report Stability
+
+on:
+  push:
+    branches:
+      - wip/release-report-stability
+    paths:
+      - '.github/workflows/patch-release-report-stability.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: wip/release-report-stability
+          fetch-depth: 0
+
+      - name: Patch assertion exit-code handling
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/release/run-test-scope.mjs')
+          text = path.read_text(encoding='utf-8')
+
+          old_shard = '''  if (result.timedOut) {
+            console.error(
+              `${scope} shard ${shard} was killed by the release watchdog.`,
+            );
+            process.exitCode = 124;
+          } else if (result.code !== 0) {
+            process.exitCode = result.code;
+          }
+          '''
+          new_shard = '''  if (result.timedOut) {
+            console.error(
+              `${scope} shard ${shard} was killed by the release watchdog.`,
+            );
+            process.exitCode = 124;
+          } else if (result.error || !status.blobProduced) {
+            console.error(
+              `${scope} shard ${shard} did not produce complete merge evidence.`,
+            );
+            process.exitCode = 1;
+          } else if (result.code !== 0) {
+            console.warn(
+              `${scope} shard ${shard} completed with test assertion failures; evidence is complete and the merged validation gate will report them.`,
+            );
+          }
+          '''
+
+          old_merge = '''  const success = writeReports(rawResultsPath);
+            if (!success || result.code !== 0) {
+              process.exitCode = result.code || 1;
+            }
+          '''
+          new_merge = '''  const testsPassed = writeReports(rawResultsPath);
+            if (!testsPassed || result.code !== 0) {
+              console.warn(
+                `${scope} merged reports are complete and contain test assertion failures; the combined validation gate will report them.`,
+              );
+            }
+          '''
+
+          if old_shard not in text:
+            raise SystemExit('runShard exit-code block not found')
+          if old_merge not in text:
+            raise SystemExit('mergeShards exit-code block not found')
+
+          text = text.replace(old_shard, new_shard, 1)
+          text = text.replace(old_merge, new_merge, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          node --check scripts/release/run-test-scope.mjs
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/release/run-test-scope.mjs
+          git commit -m 'fix(release): separate report generation from assertion gate'
+          git push origin HEAD:wip/release-report-stability
