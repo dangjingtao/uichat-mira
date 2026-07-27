@@ -119,8 +119,8 @@ export const withGenericTaskDelegationTool = (
   }
   return {
     ...exposure,
-    exposedTools: [...exposure.exposedTools, GENERIC_TASK_DELEGATE_TOOL_ID],
-    toolMeta: [...exposure.toolMeta, DELEGATE_TASK_TOOL_META],
+    exposedTools: [GENERIC_TASK_DELEGATE_TOOL_ID, ...exposure.exposedTools],
+    toolMeta: [DELEGATE_TASK_TOOL_META, ...exposure.toolMeta],
   };
 };
 
