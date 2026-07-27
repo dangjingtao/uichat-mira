@@ -1,0 +1,53 @@
+name: Branch Policy
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - test
+      - prod
+
+permissions:
+  contents: read
+
+jobs:
+  validate-branch-flow:
+    name: Validate branch flow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source and target branches
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          work_branch_pattern='^(feature|fix|hotfix|refactor|perf|docs|test|chore)/[a-z0-9][a-z0-9._-]*$'
+          hotfix_pattern='^hotfix/[a-z0-9][a-z0-9._-]*$'
+
+          case "$BASE_BRANCH" in
+            dev)
+              if [[ ! "$HEAD_BRANCH" =~ $work_branch_pattern ]]; then
+                echo "PR 到 dev 必须来自 feature/*、fix/*、hotfix/*、refactor/*、perf/*、docs/*、test/* 或 chore/*。"
+                exit 1
+              fi
+              ;;
+            test)
+              if [[ "$HEAD_BRANCH" != "dev" && ! "$HEAD_BRANCH" =~ $hotfix_pattern ]]; then
+                echo "PR 到 test 只能来自 dev 或 hotfix/*。"
+                exit 1
+              fi
+              ;;
+            prod)
+              if [[ "$HEAD_BRANCH" != "test" && ! "$HEAD_BRANCH" =~ $hotfix_pattern ]]; then
+                echo "PR 到 prod 只能来自 test 或 hotfix/*。"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "无需校验目标分支：$BASE_BRANCH"
+              ;;
+          esac
+
+          echo "允许的分支流转：$HEAD_BRANCH → $BASE_BRANCH"
