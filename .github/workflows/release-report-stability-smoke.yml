@@ -6,6 +6,7 @@ on:
       - wip/release-report-stability
     paths:
       - 'scripts/release/run-test-scope.mjs'
+      - '.github/workflows/release-report-stability-smoke.yml'
 
 permissions:
   contents: read
