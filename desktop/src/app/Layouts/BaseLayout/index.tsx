@@ -6,6 +6,7 @@ import {
   ChatRouteModelConfigRefresher,
 } from "./chatRuntime";
 import { SettingsWorkspace } from "./SettingsWorkspace";
+import { DashboardWorkspace } from "./DashboardWorkspace";
 
 /**
  * AppWorkspaceLayout is the authenticated shell that orchestrates long-lived
@@ -15,12 +16,14 @@ import { SettingsWorkspace } from "./SettingsWorkspace";
 function AppWorkspaceLayout() {
   const location = useLocation();
   const isSettingsRoute = location.pathname.startsWith("/settings");
+  const isDashboardRoute = location.pathname === "/dashboard";
 
   return (
     <>
       <ChatRouteModelConfigRefresher />
-      <ChatWorkspace visible={!isSettingsRoute} />
+      <ChatWorkspace visible={!isSettingsRoute && !isDashboardRoute} />
       <SettingsWorkspace visible={isSettingsRoute} />
+      <DashboardWorkspace visible={isDashboardRoute} />
     </>
   );
 }

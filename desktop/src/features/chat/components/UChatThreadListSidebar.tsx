@@ -23,6 +23,7 @@ type WorkspaceGroup = {
   id: string;
   name: string;
   rootPath?: string | null;
+  isDefault?: boolean;
   threads: ChatThreadSummary[];
 };
 
@@ -77,6 +78,7 @@ export function UChatThreadListSidebar() {
       id: workspace.id,
       name: workspace.name,
       rootPath: workspace.rootPath,
+      isDefault: workspace.isDefault,
       threads: [...threads]
         .filter((thread) => thread.workspaceId === workspace.id)
         .sort(sortByUpdatedAtDesc),

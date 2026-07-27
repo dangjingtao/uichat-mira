@@ -67,6 +67,48 @@ const providerTemplateCodeSchema = {
   enum: PROVIDER_TEMPLATE_CODE_ENUM,
 } as const;
 
+const modelSettingsBackupSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["format", "version", "exportedAt", "connections", "assignments"],
+  properties: {
+    format: { type: "string", const: "uichat-mira-model-settings" },
+    version: { type: "integer", const: 1 },
+    exportedAt: { type: "string", format: "date-time" },
+    connections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "templateCode", "providerCode", "displayName", "baseUrl", "apiKey"],
+        properties: {
+          id: providerIdSchema,
+          templateCode: providerTemplateCodeSchema,
+          providerCode: { anyOf: [{ type: "string" }, { type: "null" }] },
+          displayName: { type: "string" },
+          baseUrl: { type: "string" },
+          apiKey: { type: "string" },
+        },
+      },
+    },
+    assignments: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["type", "name", "providerConnectionId", "remoteModelId", "params"],
+        properties: {
+          type: modelTypeSchema,
+          name: { type: "string" },
+          providerConnectionId: { anyOf: [{ type: "string" }, { type: "null" }] },
+          remoteModelId: { anyOf: [{ type: "string" }, { type: "null" }] },
+          params: { type: "object", additionalProperties: true },
+        },
+      },
+    },
+  },
+} as const;
+
 export const providerSummarySchema = {
   type: "object",
   required: [
@@ -342,6 +384,35 @@ const providerConnectionResponseSchema = {
 // OpenAPI route schemas for provider settings. The split mirrors the route
 // groups: connections, model sync, and role assignment.
 export const providerSettingsRouteSchemas = {
+  exportModelSettings: {
+    tags: ["Provider Settings"],
+    summary: "Export model settings backup",
+    description: "Export provider connections, plain API keys, and default model assignments.",
+    operationId: "exportModelSettings",
+    response: {
+      200: successEnvelope(modelSettingsBackupSchema),
+      500: errorEnvelope,
+    },
+  },
+  importModelSettings: {
+    tags: ["Provider Settings"],
+    summary: "Import model settings backup",
+    description: "Validate and atomically restore provider connections and default model assignments.",
+    operationId: "importModelSettings",
+    body: modelSettingsBackupSchema,
+    response: {
+      200: successEnvelope({
+        type: "object",
+        required: ["connectionCount", "assignmentCount"],
+        properties: {
+          connectionCount: { type: "integer" },
+          assignmentCount: { type: "integer" },
+        },
+      }),
+      400: errorEnvelope,
+      500: errorEnvelope,
+    },
+  },
   listProviderTemplates: {
     tags: ["Provider Settings"],
     summary: "List provider templates",

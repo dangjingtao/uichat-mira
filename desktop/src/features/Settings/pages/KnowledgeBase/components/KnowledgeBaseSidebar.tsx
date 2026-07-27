@@ -1,7 +1,6 @@
 import { Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/ui/Button";
-import Card from "@/shared/ui/Card";
 import Skeleton from "@/shared/ui/Skeleton";
 import type { KnowledgeBaseSummary } from "@/shared/api/knowledgeBase";
 
@@ -68,8 +67,8 @@ export default function KnowledgeBaseSidebar({
   const { t } = useTranslation();
 
   return (
-    <Card className="flex h-full min-h-0 flex-col" padding="sm">
-      <div className="flex items-center gap-1">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center gap-1 px-3 pt-3">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-icon-secondary" />
           <input
@@ -84,13 +83,13 @@ export default function KnowledgeBaseSidebar({
         </Button>
       </div>
 
-      <div className="stable-scrollbar mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
-        <div className="space-y-1">
+      <div className="stable-scrollbar mt-3 min-h-0 flex-1 overflow-y-auto px-3 pb-3 pr-1">
+        <div className="divide-y divide-border">
           {loading
             ? Array.from({ length: 6 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-lg border border-transparent px-3 py-2"
+                  className="px-3 py-2.5"
                 >
                   <div className="flex items-center gap-2">
                     <Skeleton height={16} width={`${54 + index * 4}%`} />
@@ -120,33 +119,16 @@ export default function KnowledgeBaseSidebar({
                 key={item.id}
                 type="button"
                 onClick={() => onSelectKnowledgeBase(item.id)}
-                className={`group flex w-full items-start gap-2 rounded-lg border px-3 py-2 text-left transition-all duration-150 ${
+                className={`group grid w-full grid-cols-[minmax(0,1fr)_24px] items-start gap-3 px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 ${
                   isActive
-                    ? "border-primary/30 bg-primary/5 text-text-primary"
-                    : "border-transparent text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
+                    ? "bg-surface-soft text-text-primary"
+                    : "text-text-secondary hover:bg-surface-secondary hover:text-text-primary"
                 }`}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`truncate text-sm font-medium ${
-                        isActive
-                          ? "text-text-primary"
-                          : "text-text-primary group-hover:text-text-primary"
-                      }`}
-                    >
-                      {item.name}
-                    </span>
-                    <span
-                      className={`ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md px-1.5 text-[10px] font-medium tabular-nums transition-colors ${
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "bg-surface-secondary text-text-tertiary group-hover:bg-surface-primary"
-                      }`}
-                    >
-                      {formatKnowledgeBaseCount(item.documentCount)}
-                    </span>
-                  </div>
+                <div className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-text-primary">
+                    {item.name}
+                  </span>
                   {updatedAtLabel ? (
                     <div
                       className={`mt-0.5 truncate text-[11px] leading-4 tabular-nums ${
@@ -157,11 +139,20 @@ export default function KnowledgeBaseSidebar({
                     </div>
                   ) : null}
                 </div>
+                <span
+                  className={`mt-0.5 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-medium tabular-nums transition-colors ${
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "bg-surface-secondary text-text-tertiary group-hover:bg-surface-primary"
+                  }`}
+                >
+                  {formatKnowledgeBaseCount(item.documentCount)}
+                </span>
               </button>
             );
           })}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

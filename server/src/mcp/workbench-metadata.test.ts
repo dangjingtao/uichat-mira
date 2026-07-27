@@ -64,12 +64,34 @@ describe("withWorkbenchMetadata", () => {
       "browser_attached_transfer",
     ]);
     expect(projected.find((tool) => tool.id === "browser_observe")?.workbench).toMatchObject({
-      groupLabel: "Computer Use",
+      groupLabel: "智控",
       groupOrder: 50,
     });
     expect(projected.find((tool) => tool.id === "browser_attached_look")?.workbench).toMatchObject({
       groupLabel: "触界",
       groupOrder: 60,
+    });
+  });
+
+  it("uses the product label for the external expert workbench group", () => {
+    const projected = withWorkbenchMetadata([
+      {
+        id: "ask_external_expert",
+        title: "Ask External Expert",
+        description: "Ask an external expert.",
+        domain: "external_expert",
+        source: "internal",
+        mode: "sync",
+        inputSchema: {},
+        tags: [],
+        capabilities: { sideEffect: "network", requiresApproval: false, networkAccess: true },
+      },
+    ]);
+
+    expect(projected[0]?.workbench).toMatchObject({
+      groupId: "external_expert",
+      groupLabel: "问策",
+      icon: "external-expert",
     });
   });
 

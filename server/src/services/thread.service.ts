@@ -11,6 +11,7 @@ import { threadContextSummaryNode } from "@/services/shared-nodes/thread-context
 import { isValidWorkspaceRootPath } from "@/services/workspace-path-validation.js";
 import { THREAD_ACCESS_ERROR_MESSAGE } from "@/utils/errors.js";
 import { chatMediaService } from "@/services/chat-media.service.js";
+import { getHarnessEnvironmentSnapshot } from "@/harness/environment.js";
 import {
   removeFileAttachmentsFromParts,
   removeFileAttachmentsRemovedFromParts,
@@ -88,10 +89,13 @@ export interface CreateThreadInput {
 
 const normalizeWorkspaceRootPath = (value: string) => value.trim();
 
+const DEFAULT_WORKSPACE_NAME = "Mira BASE";
+
 export interface ChatWorkspaceResponse {
   id: string;
   name: string;
   rootPath: string | null;
+  isDefault: boolean;
   status: "active" | "archived";
   createdAt: string;
   updatedAt: string;
@@ -279,6 +283,9 @@ const toChatWorkspaceResponse = (
   id: workspace.id,
   name: workspace.name,
   rootPath: workspace.rootPath ?? null,
+  isDefault:
+    Boolean(workspace.rootPath) &&
+    workspace.rootPath === getHarnessEnvironmentSnapshot().workspace.rootPath,
   status: workspace.status,
   createdAt: workspace.createdAt,
   updatedAt: workspace.updatedAt,
@@ -386,9 +393,41 @@ export const threadService = {
   },
 
   listChatWorkspaces(userId: number): ChatWorkspaceResponse[] {
+    if (getHarnessEnvironmentSnapshot().workspace.rootPath?.trim()) {
+      this.ensureDefaultChatWorkspace(userId);
+    }
     return chatWorkspaceRepository
       .list({ userId, status: "active" })
       .map(toChatWorkspaceResponse);
+  },
+
+  ensureDefaultChatWorkspace(userId: number): ChatWorkspaceResponse {
+    const rootPath = getHarnessEnvironmentSnapshot().workspace.rootPath?.trim();
+    if (!rootPath) {
+      throw new Error("Default workspace root is not configured");
+    }
+
+    const existing = chatWorkspaceRepository
+      .list({ userId, status: "active", sortOrder: "asc" })
+      .find((workspace) => workspace.rootPath === rootPath);
+    if (existing) {
+      if (existing.name !== DEFAULT_WORKSPACE_NAME) {
+        const renamed = chatWorkspaceRepository.updateById(existing.id, {
+          name: DEFAULT_WORKSPACE_NAME,
+        });
+        return toChatWorkspaceResponse(renamed ?? existing);
+      }
+      return toChatWorkspaceResponse(existing);
+    }
+
+    return toChatWorkspaceResponse(
+      chatWorkspaceRepository.create({
+        userId,
+        name: DEFAULT_WORKSPACE_NAME,
+        rootPath,
+        status: "active",
+      }),
+    );
   },
 
   getThreadWorkspaceRoot(threadId: string, userId: number): string | null {
@@ -472,6 +511,11 @@ export const threadService = {
       return false;
     }
 
+    const defaultRootPath = getHarnessEnvironmentSnapshot().workspace.rootPath?.trim();
+    if (defaultRootPath && existing.rootPath === defaultRootPath) {
+      throw new Error("Default workspace cannot be deleted");
+    }
+
     const activeThreads = threadRepository.list({
       userId,
       status: "active",
@@ -489,10 +533,13 @@ export const threadService = {
   },
 
   createThread(input: CreateThreadInput): ThreadResponse {
-    const workspaceId = input.workspaceId?.trim();
+    let workspaceId = input.workspaceId?.trim();
     const knowledgeBaseId = input.knowledgeBaseId?.trim();
     const roleId = input.roleId?.trim();
     const agentEnabled = input.agentEnabled;
+    if (agentEnabled === true && !workspaceId) {
+      workspaceId = this.ensureDefaultChatWorkspace(input.userId).id;
+    }
     const ttsEnabled = input.ttsEnabled;
     const imageEnabled = input.imageEnabled;
     const contextSummary = input.contextSummary?.trim();
@@ -573,7 +620,10 @@ export const threadService = {
       updateData.workspaceId = workspaceId;
     }
     if (input.workspaceId === null) {
-      updateData.workspaceId = null;
+      updateData.workspaceId =
+        input.agentEnabled === true || (input.agentEnabled === undefined && existing.agentEnabled)
+          ? this.ensureDefaultChatWorkspace(userId).id
+          : null;
     }
     if (typeof input.knowledgeBaseId === "string") {
       const knowledgeBaseId = input.knowledgeBaseId.trim();
@@ -599,6 +649,9 @@ export const threadService = {
     }
     if (typeof input.agentEnabled === "boolean") {
       updateData.agentEnabled = input.agentEnabled;
+      if (input.agentEnabled && input.workspaceId === undefined && !existing.workspaceId) {
+        updateData.workspaceId = this.ensureDefaultChatWorkspace(userId).id;
+      }
     }
     if (input.agentEnabled === null) {
       updateData.agentEnabled = null;
@@ -711,6 +764,10 @@ export const threadService = {
       ...chatWorkspaceRepository.list({ userId, status: "archived", sortOrder: "asc" }),
     ];
     for (const workspace of workspacesToDelete) {
+      const defaultRootPath = getHarnessEnvironmentSnapshot().workspace.rootPath?.trim();
+      if (defaultRootPath && workspace.rootPath === defaultRootPath) {
+        continue;
+      }
       if (chatWorkspaceRepository.deleteById(workspace.id)) {
         deletedWorkspaces += 1;
       }

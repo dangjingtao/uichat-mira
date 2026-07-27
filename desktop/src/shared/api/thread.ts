@@ -101,6 +101,7 @@ export interface ChatWorkspace {
   id: string;
   name: string;
   rootPath: string | null;
+  isDefault: boolean;
   status: "active" | "archived";
   createdAt: string;
   updatedAt: string;

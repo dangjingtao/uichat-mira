@@ -51,6 +51,7 @@ const settingsPending = {
     },
     navigation: {
       general: "General",
+      dashboard: "Dashboard",
       model: "Model",
       knowledgeBase: "Knowledge Base",
       roles: "Roles",

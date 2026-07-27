@@ -52,6 +52,7 @@ const settingsPending = {
     },
     navigation: {
       general: "通用",
+      dashboard: "工作台",
       model: "模型设置",
       knowledgeBase: "知识库",
       roles: "角色",

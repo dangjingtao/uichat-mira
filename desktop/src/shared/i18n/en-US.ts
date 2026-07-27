@@ -982,9 +982,29 @@ const enUS = {
           "This page separates default role models, provider connections, model sync, and built-in local models so the current binding state is easier to read and adjust.",
       },
       actions: {
+        import: "Import",
+        export: "Export",
         resetDefault: "Reset Default Models",
         openSettings: "Model Settings",
+        confirmImport: "Import",
+        confirmExport: "Export",
         confirmReset: "Confirm Reset",
+      },
+      exportModal: {
+        title: "Export Model Settings",
+        description:
+          "The backup contains provider URLs, default models, and API keys in plain text. Store it securely and do not share it.",
+        success: "Model settings backup exported",
+        failed: "Export failed",
+      },
+      importModal: {
+        title: "Import Model Settings",
+        description:
+          "Restore provider connections and default model settings from {{fileName}}. Connections with the same ID and existing model assignments will be updated.",
+        success:
+          "Imported {{connectionCount}} provider connections and {{assignmentCount}} model assignments",
+        invalidFile: "Unable to read this backup. Select a valid JSON file.",
+        failed: "Import failed",
       },
       resetModal: {
         title: "Confirm Reset Default Models",

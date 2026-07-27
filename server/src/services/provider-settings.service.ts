@@ -3,6 +3,7 @@ import {
   providerConnectionRepository,
   providerModelRepository,
 } from "@/db/repositories";
+import { getSqlite } from "@/db/index.js";
 import type {
   ModelType,
   ProviderCode,
@@ -33,6 +34,41 @@ import {
 } from "@/utils/errors.js";
 import { fetchJsonWithTimeout } from "@/utils/http.js";
 import { nowIso } from "@/utils/time.js";
+import { MODEL_TYPE_VALUES } from "@/constants/domain.js";
+import { PROVIDER_TEMPLATE_CODE_VALUES } from "@/providers/codes.js";
+import { z } from "zod";
+
+const MODEL_SETTINGS_BACKUP_FORMAT = "uichat-mira-model-settings" as const;
+const MODEL_SETTINGS_BACKUP_VERSION = 1 as const;
+
+const modelSettingsBackupSchema = z
+  .object({
+    format: z.literal(MODEL_SETTINGS_BACKUP_FORMAT),
+    version: z.literal(MODEL_SETTINGS_BACKUP_VERSION),
+    exportedAt: z.string().datetime(),
+    connections: z.array(
+      z.object({
+        id: z.string().trim().min(1),
+        templateCode: z.enum(PROVIDER_TEMPLATE_CODE_VALUES),
+        providerCode: z.enum(PROVIDER_CODE_ENUM).nullable(),
+        displayName: z.string().trim().min(1),
+        baseUrl: z.string().trim().min(1),
+        apiKey: z.string(),
+      }),
+    ),
+    assignments: z.array(
+      z.object({
+        type: z.enum(MODEL_TYPE_VALUES),
+        name: z.string(),
+        providerConnectionId: z.string().trim().min(1).nullable(),
+        remoteModelId: z.string().trim().min(1).nullable(),
+        params: z.record(z.unknown()),
+      }),
+    ),
+  })
+  .strict();
+
+export type ModelSettingsBackup = z.infer<typeof modelSettingsBackupSchema>;
 
 export interface ProviderSummaryResponse {
   id: string;
@@ -315,6 +351,135 @@ const clearDefaultRoleBindingsForConnection = (providerConnectionId: string) => 
 };
 
 export const providerSettingsService = {
+  exportModelSettings(): ModelSettingsBackup {
+    return {
+      format: MODEL_SETTINGS_BACKUP_FORMAT,
+      version: MODEL_SETTINGS_BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      connections: providerConnectionRepository.findAll().map((connection) => ({
+        id: connection.id,
+        templateCode: connection.templateCode,
+        providerCode: connection.providerCode ?? null,
+        displayName: connection.displayName,
+        baseUrl: connection.baseUrl,
+        apiKey: decryptSecret(connection.apiKeyEncrypted),
+      })),
+      assignments: modelConfigRepository.findAllDefaults().map((config) => ({
+        type: config.type,
+        name: config.name,
+        providerConnectionId: config.providerConnectionId ?? null,
+        remoteModelId: config.remoteModelId ?? null,
+        params: JSON.parse(config.params) as Record<string, unknown>,
+      })),
+    };
+  },
+
+  importModelSettings(input: unknown) {
+    const backup = modelSettingsBackupSchema.parse(input);
+    const connectionIds = new Set<string>();
+    const assignmentTypes = new Set<ModelType>();
+
+    for (const connection of backup.connections) {
+      if (connectionIds.has(connection.id)) {
+        throw new Error(`Duplicate provider connection id: ${connection.id}`);
+      }
+      if (
+        connection.providerCode === null &&
+        connection.templateCode !== "openai-compatible-custom"
+      ) {
+        throw new Error(
+          `Custom connection ${connection.id} must use the openai-compatible-custom template.`,
+        );
+      }
+      connectionIds.add(connection.id);
+    }
+
+    for (const assignment of backup.assignments) {
+      if (assignmentTypes.has(assignment.type)) {
+        throw new Error(`Duplicate model role: ${assignment.type}`);
+      }
+      if (
+        (assignment.providerConnectionId === null) !==
+        (assignment.remoteModelId === null)
+      ) {
+        throw new Error(
+          `Model role ${assignment.type} must include both a provider connection and remote model, or neither.`,
+        );
+      }
+      if (
+        assignment.providerConnectionId &&
+        !connectionIds.has(assignment.providerConnectionId)
+      ) {
+        throw new Error(
+          `Model role ${assignment.type} references a provider connection that is not in the backup.`,
+        );
+      }
+      assignmentTypes.add(assignment.type);
+    }
+
+    const transaction = getSqlite().transaction(() => {
+      for (const connection of backup.connections) {
+        const existing = providerConnectionRepository.findById(connection.id);
+        if (
+          existing &&
+          (existing.templateCode !== connection.templateCode ||
+            (existing.providerCode ?? null) !== connection.providerCode)
+        ) {
+          throw new Error(
+            `Provider connection ${connection.id} conflicts with the current installation.`,
+          );
+        }
+
+        const values = {
+          templateCode: connection.templateCode,
+          providerCode: connection.providerCode,
+          displayName: connection.displayName,
+          baseUrl: connection.baseUrl,
+          apiKeyEncrypted: encryptSecret(connection.apiKey),
+          isSystem: connection.providerCode !== null,
+          isEnabled: true,
+          status: "idle" as const,
+          lastError: null,
+          lastSyncedAt: null,
+        };
+
+        if (existing) {
+          providerConnectionRepository.update(connection.id, values);
+        } else {
+          providerConnectionRepository.create({ id: connection.id, ...values });
+        }
+      }
+
+      for (const assignment of backup.assignments) {
+        const connection = assignment.providerConnectionId
+          ? providerConnectionRepository.findById(assignment.providerConnectionId)
+          : undefined;
+
+        if (connection && !supportsRoleForProvider(connection.templateCode, assignment.type)) {
+          throw new Error(
+            `Provider ${connection.displayName} no longer supports the ${assignment.type} role.`,
+          );
+        }
+
+        modelConfigRepository.upsertDefault({
+          type: assignment.type,
+          name: assignment.name,
+          providerCode: connection?.providerCode ?? null,
+          providerConnectionId: connection?.id ?? null,
+          remoteModelId: assignment.remoteModelId,
+          params: JSON.stringify(assignment.params),
+        });
+      }
+    });
+
+    transaction();
+
+    return {
+      connectionCount: backup.connections.length,
+      assignmentCount: backup.assignments.length,
+    };
+  },
+
   listProviderTemplates(): ProviderTemplateSummaryResponse[] {
     const templateCodes: ProviderTemplateCode[] = [
       "ollama",

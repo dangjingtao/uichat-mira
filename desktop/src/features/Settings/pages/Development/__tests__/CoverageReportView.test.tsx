@@ -47,4 +47,12 @@ describe("CoverageReportView", () => {
       );
     });
   });
+
+  it("shows one page skeleton while reports are loading", () => {
+    globalThis.fetch = vi.fn(() => new Promise(() => {}));
+
+    render(<CoverageReportView type="client" />);
+
+    expect(screen.getByTestId("development-page-skeleton")).toBeInTheDocument();
+  });
 });

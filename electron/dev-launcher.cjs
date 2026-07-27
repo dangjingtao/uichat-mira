@@ -16,9 +16,8 @@ function buildBackendEnv(baseEnv = process.env) {
   return {
     ...restEnv,
     UI_CHAT_ALLOW_BACKEND_REUSE: "1",
-    ...(explicitWorkspaceRoot
-      ? { UI_CHAT_WORKSPACE_ROOT: explicitWorkspaceRoot }
-      : {}),
+    UI_CHAT_WORKSPACE_ROOT:
+      explicitWorkspaceRoot || path.join(require("os").homedir(), "Documents", "UIChat Mira", "Default Workspace"),
   };
 }
 

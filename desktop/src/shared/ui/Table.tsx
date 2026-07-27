@@ -246,7 +246,7 @@ export function MinimalTable<T extends object>({
 
   return (
     <div
-      className={`relative h-full overflow-hidden rounded-ui-panel border border-border bg-surface-primary ${className}`}
+      className={`relative h-full overflow-hidden rounded-ui-control border border-border/70 bg-surface-primary ${className}`}
     >
       {showLeftShadow ? (
         <div className="pointer-events-none absolute inset-y-0 left-0 z-40 w-4 bg-gradient-to-r from-black/8 to-transparent" />
@@ -256,7 +256,7 @@ export function MinimalTable<T extends object>({
       ) : null}
 
       <div ref={scrollRef} className="h-full overflow-auto">
-        <table className="w-max min-w-full border-collapse">
+        <table className="w-max min-w-full border-collapse text-left text-xs">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               (() => {
@@ -282,8 +282,8 @@ export function MinimalTable<T extends object>({
                       return (
                         <th
                           key={header.id}
-                          className={`${resolveAlignClassName(meta.align)} border-b border-border text-[11px] font-medium tracking-[0.02em] text-text-tertiary ${
-                            compact ? "px-3 py-2" : "px-4 py-2.5"
+                          className={`${resolveAlignClassName(meta.align)} border-b border-border text-xs font-medium text-text-secondary ${
+                            compact ? "px-2.5 py-1.5" : "px-3 py-2"
                           } ${
                             stickyHeader ? "sticky top-0 z-20 bg-surface-secondary" : ""
                           } ${
@@ -330,9 +330,9 @@ export function MinimalTable<T extends object>({
                   <tr
                     key={row.id}
                     {...rowProps}
-                    className={`group transition-colors duration-150 hover:bg-surface-secondary/80 ${
-                      index > 0 ? "border-t border-border/80" : ""
-                    } ${rowProps?.className ?? ""}`}
+                    className={`group border-b border-border/70 transition-colors duration-150 last:border-b-0 hover:bg-surface-secondary/40 ${
+                      rowProps?.className ?? ""
+                    }`}
                   >
                     {row.getVisibleCells().map((cell, columnIndex) => {
                       const meta = resolveColumnMeta(cell.column.columnDef);
@@ -358,15 +358,13 @@ export function MinimalTable<T extends object>({
                       return (
                         <td
                           key={cell.id}
-                          className={`${meta.nowrap === false ? "" : "whitespace-nowrap"} ${resolveAlignClassName(meta.align)} text-sm text-text-primary ${
+                          className={`${meta.nowrap === false ? "" : "whitespace-nowrap"} ${resolveAlignClassName(meta.align)} text-xs text-text-primary ${
                             meta.mono ? "font-mono" : ""
                           } ${meta.muted ? "text-text-secondary" : ""} ${
-                            compact ? "px-3 py-2" : "px-4 py-2.5"
-                          } ${
-                            index === 0 ? "border-t-0" : ""
+                            compact ? "px-2.5 py-1.5" : "px-3 py-2"
                           } ${
                             stickyLeft
-                              ? "sticky z-10 bg-surface-primary shadow-[1px_0_0_0_rgb(var(--color-border)),8px_0_16px_-12px_rgba(15,23,42,0.18)] group-hover:bg-surface-secondary/80"
+                              ? "sticky z-10 bg-surface-primary shadow-[1px_0_0_0_rgb(var(--color-border)),8px_0_16px_-12px_rgba(15,23,42,0.18)] group-hover:bg-surface-secondary/40"
                               : ""
                           }`}
                           style={{

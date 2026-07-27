@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, spawnSync } = require("child_process");
 const { pathToFileURL } = require("url");
+const os = require("os");
 
 const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
@@ -234,6 +235,9 @@ async function main() {
       spawnManagedProcess("server", serverDir, "pnpm dev", {
         env: {
           UI_CHAT_ALLOW_BACKEND_REUSE: "1",
+          UI_CHAT_WORKSPACE_ROOT:
+            process.env.UI_CHAT_WORKSPACE_ROOT?.trim() ||
+            path.join(os.homedir(), "Documents", "UIChat Mira", "Default Workspace"),
         },
         readyWhen: (_text, combined) =>
           combined.includes(`Server running on http://${backendHost}:${backendPort}`),

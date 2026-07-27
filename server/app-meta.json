@@ -38,11 +38,11 @@
         {
           "version": "0.99.4",
           "commit": {
-            "hash": "b8b252bdaf3704cd080f11e5147fb71279c1a3e5",
-            "shortHash": "b8b252b",
-            "message": "fix: correct tauri command names in desktopRuntime",
-            "author": "Tomz",
-            "date": "2026-07-26T13:37:20+08:00"
+            "hash": "9aed6092f9737918f446a71779d21bfc23736704",
+            "shortHash": "9aed609",
+            "message": "fix(chat): make execution trace non-linear and fade inner status",
+            "author": "DangJingtao",
+            "date": "2026-07-27T06:13:20+08:00"
           }
         },
         {

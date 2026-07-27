@@ -361,8 +361,7 @@ export function AgentSkillComposerSuggestion({
       .filter((skill) => {
         const haystack = `${skill.id} ${skill.name} ${skill.description}`.toLowerCase();
         return haystack.includes(query);
-      })
-      .slice(0, 8);
+      });
   }, [query, skills]);
 
   const { activeIndex, setActiveIndex } = useSuggestionKeyboard({

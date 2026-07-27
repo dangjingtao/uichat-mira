@@ -4,10 +4,14 @@ import { useRuntimeHealth } from "@/features/system/hooks/useRuntimeHealth";
 import Card from "@/shared/ui/Card";
 import Badge from "@/shared/ui/Badge";
 import StatusIndicator from "@/shared/ui/StatusIndicator";
+import DevelopmentPageSkeleton from "../../components/DevelopmentPageSkeleton";
 
 export default function DevelopmentDatabasePage() {
   const { t } = useTranslation();
   const { backendState, databaseState, vectorState } = useRuntimeHealth();
+  const isLoading = [backendState, databaseState, vectorState].every(
+    (state) => state.status === "unknown",
+  );
 
   const getDetailText = (detailState: {
     detail?: string;
@@ -44,6 +48,10 @@ export default function DevelopmentDatabasePage() {
       icon: <Waypoints className="h-4 w-4" />,
     },
   ] as const;
+
+  if (isLoading) {
+    return <DevelopmentPageSkeleton />;
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">

@@ -282,13 +282,14 @@ export default function BaseInformationPanel({
         divided
       >
         <SectionCardRow>
-          <div>
-            <div className="text-xs text-text-tertiary">
-              {t("settings.about.currentBranch")}
-            </div>
-            <div className="text-sm font-medium text-text-primary">
-              {gitInfo?.branch}
-            </div>
+          <div className="text-xs text-text-tertiary">
+            {t("settings.about.currentBranch")}
+          </div>
+          <div
+            data-testid="git-current-branch"
+            className="justify-self-end text-sm font-medium text-text-primary"
+          >
+            {gitInfo?.branch}
           </div>
         </SectionCardRow>
         {gitInfo?.versions?.length ? (

@@ -28,6 +28,10 @@ export const router = createHashRouter([
                 element: <BaseLayout />,
               },
               {
+                path: "dashboard",
+                element: <BaseLayout />,
+              },
+              {
                 path: "settings",
                 element: <BaseLayout />,
                 children: settingsRoutes,

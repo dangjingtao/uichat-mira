@@ -936,9 +936,29 @@ const zhCN = {
           "这里把默认角色模型、服务商连接、模型同步和内置本地模型分开展示，方便你直接看清当前绑定关系和可编辑范围。",
       },
       actions: {
+        import: "导入",
+        export: "导出",
         resetDefault: "重置默认模型",
         openSettings: "模型设置",
+        confirmImport: "确认导入",
+        confirmExport: "确认导出",
         confirmReset: "确认重置",
+      },
+      exportModal: {
+        title: "导出模型设置",
+        description:
+          "备份文件包含服务商地址、默认模型和明文 API Key。请将文件保存在安全位置，不要发送给他人。",
+        success: "模型设置备份已导出",
+        failed: "导出失败",
+      },
+      importModal: {
+        title: "导入模型设置",
+        description:
+          "将从 {{fileName}} 恢复服务商连接和默认模型配置。同 ID 的连接及已有模型绑定会被更新。",
+        success:
+          "已导入 {{connectionCount}} 个服务商连接和 {{assignmentCount}} 个模型绑定",
+        invalidFile: "无法读取该备份文件，请选择有效的 JSON 文件",
+        failed: "导入失败",
       },
       resetModal: {
         title: "确认重置默认模型",

@@ -70,6 +70,7 @@ import wecomRoute from "@/routes/integrations/wecom.js";
 import agentRoute from "@/agent/routes.js";
 import mcpRoutes from "@/mcp/routes.js";
 import webbridgeRoute from "@/routes/webbridge.js";
+import dashboardController from "@/dashboard/dashboard-controller.js";
 import {
   initializeExternalMcpDatabase,
   registerAllExternalMcpCapabilities,
@@ -755,6 +756,7 @@ const setupRoutes = async () => {
   await app.register(agentRoute);
   await app.register(mcpRoutes);
   await app.register(webbridgeRoute);
+  await app.register(dashboardController);
 };
 
 const setupDatabase = async () => {

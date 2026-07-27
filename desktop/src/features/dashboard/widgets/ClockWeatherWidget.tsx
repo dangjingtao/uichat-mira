@@ -1,0 +1,4 @@
+import { CloudSun, Clock3 } from "lucide-react";
+import type { ClockWeatherData, DashboardWidget } from "../types/dashboard-types";
+import { WidgetCard } from "../components/WidgetCard";
+export function ClockWeatherWidget({ widget }: { widget: DashboardWidget<ClockWeatherData> }) { const d = widget.data; return <WidgetCard widget={widget}><div className="flex items-center justify-between"><div><div className="text-4xl font-semibold text-text-primary">{d.localTime}</div><div className="mt-1 text-xs text-text-secondary">{d.dateLabel}</div></div><Clock3 className="h-8 w-8 text-primary" /></div><div className="mt-6 flex items-center gap-3"><CloudSun className="h-6 w-6 text-warning" /><div><div className="font-medium text-text-primary">{d.weather} · {d.temperature}</div><div className="text-xs text-text-secondary">{d.forecast}</div></div></div></WidgetCard>; }

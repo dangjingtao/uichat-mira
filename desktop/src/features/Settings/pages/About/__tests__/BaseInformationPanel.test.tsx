@@ -83,6 +83,7 @@ describe("BaseInformationPanel", () => {
     expect(screen.getByText("commit-0")).toBeInTheDocument();
     expect(screen.getByText("commit-4")).toBeInTheDocument();
     expect(screen.queryByText("commit-5")).not.toBeInTheDocument();
+    expect(screen.getByTestId("git-current-branch")).toHaveClass("justify-self-end");
     expect(screen.getByTestId("git-version-list")).toHaveClass(
       "overflow-hidden",
       "rounded-ui-panel",

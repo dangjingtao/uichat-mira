@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ModelSettings from "../index";
 
@@ -9,11 +9,26 @@ const {
   messageSuccess,
   messageError,
   resetProviderRoleModelMock,
+  exportModelSettingsMock,
+  importModelSettingsMock,
+  refreshMock,
 } = vi.hoisted(() => ({
   confirmMock: vi.fn(),
   messageSuccess: vi.fn(),
   messageError: vi.fn(),
   resetProviderRoleModelMock: vi.fn(async () => undefined),
+  exportModelSettingsMock: vi.fn(async () => ({
+    format: "uichat-mira-model-settings",
+    version: 1,
+    exportedAt: "2026-07-27T00:00:00.000Z",
+    connections: [],
+    assignments: [],
+  })),
+  importModelSettingsMock: vi.fn(async () => ({
+    connectionCount: 1,
+    assignmentCount: 2,
+  })),
+  refreshMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("react-i18next", () => ({
@@ -37,11 +52,13 @@ vi.mock("@/shared/ui/Modal", () => ({
 
 vi.mock("@/shared/api/modelSettings", () => ({
   resetProviderRoleModel: resetProviderRoleModelMock,
+  exportModelSettings: exportModelSettingsMock,
+  importModelSettings: importModelSettingsMock,
 }));
 
 vi.mock("@/app/providers/RoleModelConfigProvider", () => ({
   useRoleModelConfigs: () => ({
-    refresh: vi.fn(async () => undefined),
+    refresh: refreshMock,
   }),
 }));
 
@@ -84,6 +101,48 @@ describe("ModelSettings", () => {
         tone: "danger",
       }),
     );
+  });
+
+  it("opens export confirmation modal", () => {
+    render(<ModelSettings />);
+
+    screen.getByText("settings.model.actions.export").click();
+
+    expect(confirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "settings.model.exportModal.title",
+      }),
+    );
+  });
+
+  it("imports a selected JSON backup after confirmation", async () => {
+    render(<ModelSettings />);
+    const file = new File(["{}"], "model-settings.json", {
+      type: "application/json",
+    });
+    Object.defineProperty(file, "text", {
+      value: async () =>
+        JSON.stringify({
+          format: "uichat-mira-model-settings",
+          version: 1,
+          exportedAt: "2026-07-27T00:00:00.000Z",
+          connections: [],
+          assignments: [],
+        }),
+    });
+
+    fireEvent.change(screen.getByLabelText("settings.model.actions.import"), {
+      target: { files: [file] },
+    });
+    await waitFor(() => expect(confirmMock).toHaveBeenCalled());
+
+    const { onConfirm } = confirmMock.mock.calls.at(-1)![0] as {
+      onConfirm: () => Promise<void>;
+    };
+    await onConfirm();
+
+    expect(importModelSettingsMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).toHaveBeenCalled();
   });
 
   it("resets all providers and refreshes when confirmed", async () => {

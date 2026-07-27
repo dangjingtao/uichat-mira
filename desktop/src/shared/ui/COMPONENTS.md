@@ -14,6 +14,7 @@
 - `Card`
 - `SectionCard`
 - `CodeBlock`
+- `CoverageReportPanel`
 - `CompactAudioPlayer`
 - `CollapsiblePanel`
 - `Drawer`
@@ -848,6 +849,23 @@ message.destroy();
 - 不承担带文案的主操作，通常与 Tooltip 或标签搭配
 - 打开态使用 `primary`，关闭态使用 `surface-secondary + border`，保证浅色模式下滑轨仍然可辨识
 
+## CoverageReportPanel
+
+用于展示客户端或服务端的测试结果和覆盖率文件摘要。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `src` | `string` | - | 覆盖率报告地址 |
+| `resultSrc` | `string` | - | 测试结果报告地址 |
+| `loadingFallback` | `React.ReactNode` | - | 调用页可传入单一页面级骨架屏，替代组件默认加载卡片 |
+
+### 使用约束
+
+- 业务页面需要统一页面级加载态时，优先通过 `loadingFallback` 注入，不在组件外再叠加第二个骨架屏
+- 文件摘要必须复用共享 `Table`，保留统一的粘性表头、横向滚动和列样式
+
 ## Table
 
 轻量表格容器，适合简单数据行展示。
@@ -865,18 +883,20 @@ message.destroy();
 ### 设计约束
 
 - 用边框和留白建立结构
+- 默认采用开发报告表格的紧凑基线：表头和数据行使用 `px-3 py-2`、`text-xs`
 - 表头弱化，不做厚重报表风格
-- 行 hover 仅做轻提示
+- 行使用轻量底部分隔，hover 仅做轻提示
 - 当列总宽度超过容器时，允许整表横向滚动，不强行压缩列内容
 - 多个左侧固定列并存时，必须按列宽累积计算 `left` 偏移，避免 selection 列和首列相互覆盖
 
 ### 色彩建议
 
 - 表格主体优先 `bg-surface-primary`
-- 行 hover 优先 `bg-surface-secondary/80`
+- 默认容器使用 `rounded-ui-control + border-border/70`，保持轻边框和小圆角
+- 行 hover 优先 `bg-surface-secondary/40`
 - Sticky 列继续使用 `surface-*`，不要额外换一套灰色体系
 - 表头分隔线应落在 `th` 的底边，避免 sticky 表头时边线丢失
-- 表体首行不额外加上边线，分隔线从第二行开始统一出现
+- 表体行使用 `border-b border-border/70`，最后一行不保留底边
 
 ### 列级配置
 

@@ -116,6 +116,9 @@ Related:
 - 输入组件只渲染通用 `composerTools` 节点，不包含 Agent 状态判断或切换实现
 - `resolveUChatAgentSubmission` 在 composer 外部选择普通发送或 Agent 发送；composer 只接收通用提交属性
 - `UChatAgentMessageStatus` 在对应消息内处理审批、拒绝、阻塞、失败和操作错误
+- Agent 线程必须绑定工作空间。未显式选择项目时，桌面壳层为 backend 注入用户 Documents 下的 `UIChat Mira/Default Workspace`，backend 为当前用户复用或创建名为 `Mira BASE` 的 `chat_workspaces` 记录，并把该记录的数据库 `id` 写入线程 `workspaceId`。
+- `workspaceId` 始终是 `chat_workspaces.id`，不是文件系统路径；实际路径由 `chat_workspaces.root_path` 保存。
+- 默认工作空间不可删除；普通聊天线程仍可以不绑定工作空间。
 - execution trace 仍由 `UChatMessageTrace` 和 `UChatExecutionTrace` 表达，不与 Agent 审批重复
 - 本次没有调整 runtime、canonical message、协议、审批接口或后端
 

@@ -72,7 +72,7 @@ const INTERNAL_PROFILE_BLUEPRINTS: Array<{
     preferredToolId: "browser_observe",
     supportingToolIds: ["browser_observe", "browser_act", "browser_assert"],
     workbench: {
-      label: "Computer Use",
+      label: "智控",
       description: "Playwright / Managed Browser 浏览器自动化工具。",
       order: 50,
       icon: "mouse-pointer",

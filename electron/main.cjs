@@ -353,6 +353,11 @@ async function startBackend() {
   const dataDir = path.join(userDataDir, "data");
   const logDir = path.join(userDataDir, "logs");
   const secretsDir = path.join(userDataDir, "secrets");
+  const defaultWorkspaceRoot = path.join(
+    app.getPath("documents"),
+    "UIChat Mira",
+    "Default Workspace",
+  );
   fs.mkdirSync(dataDir, { recursive: true });
   fs.mkdirSync(logDir, { recursive: true });
 
@@ -380,6 +385,7 @@ async function startBackend() {
       UI_CHAT_DESKTOP_RESOURCES_ROOT: process.resourcesPath,
       UI_CHAT_DATABASE_DIR: dataDir,
       UI_CHAT_LOG_DIR: logDir,
+      UI_CHAT_WORKSPACE_ROOT: defaultWorkspaceRoot,
       LOCAL_MODEL_RESOURCE_ROOT: localModelResourceRoot,
       LOCAL_MODEL_USER_DATA_DIR: userDataDir,
       LOCAL_ONNX_WASM_ROOT: localOnnxWasmRoot,
