@@ -20,7 +20,7 @@ export type SkillAgentExecutionProfile = {
   engine: "pi-agent-core";
   allowedHarnessToolIds: string[];
   runtimeBindings: SkillAgentRuntimeBinding[];
-  workspaceBound: true;
+  workspaceBound: boolean;
 };
 
 export type SkillAgentRequirement = {
@@ -41,11 +41,66 @@ export type SkillAgentPendingInvocation = {
   inputHash: string;
 };
 
+export type SubAgentWorkingPhase =
+  | "planning"
+  | "working"
+  | "waiting_approval"
+  | "waiting_input"
+  | "blocked"
+  | "completed"
+  | "failed";
+
 /**
- * Serializable Pi transcript checkpoint captured at a governed approval boundary.
- * Resume replaces the approval placeholder tool result with the exact runtime
- * result, then continues this transcript instead of prompting the original goal
- * again.
+ * User-visible, safe work summary. This is deliberately not raw model
+ * chain-of-thought. It tells the user what the subAgent currently judges,
+ * does and plans to do next.
+ */
+export type SubAgentWorkingState = {
+  runId: string;
+  skillId: string;
+  phase: SubAgentWorkingPhase;
+  currentJudgement?: string;
+  currentAction: string;
+  nextAction?: string;
+  blockingReason?: string;
+  updatedAt: number;
+};
+
+export type SubAgentTraceEventType =
+  | "subagent.started"
+  | "subagent.resumed"
+  | "working_state.updated"
+  | "tool.started"
+  | "tool.completed"
+  | "tool.failed"
+  | "approval.required"
+  | "input.required"
+  | "plan.revised"
+  | "subagent.completed"
+  | "subagent.failed";
+
+export type SubAgentTraceEvent = {
+  runId: string;
+  seq: number;
+  eventId: string;
+  skillId: string;
+  type: SubAgentTraceEventType;
+  title: string;
+  timestamp: number;
+  details?: Record<string, unknown>;
+};
+
+export type SubAgentRuntimeEvent =
+  | { kind: "trace"; event: SubAgentTraceEvent }
+  | { kind: "working_state"; state: SubAgentWorkingState };
+
+/**
+ * Serializable pi-agent-core transcript checkpoint captured at a governed
+ * approval boundary. Product/runtime code refers to the owner as subAgent;
+ * the engine-specific message type remains an implementation detail here.
+ *
+ * The new ledger fields are optional so already persisted v1 checkpoints can
+ * still resume. New checkpoints always write them.
  */
 export type SkillAgentCheckpoint = {
   version: 1;
@@ -54,6 +109,23 @@ export type SkillAgentCheckpoint = {
   evidence: unknown[];
   artifacts: unknown[];
   toolCalls: string[];
+  subAgentRunId?: string;
+  nextTraceSeq?: number;
+  workingState?: SubAgentWorkingState;
+  traceEvents?: SubAgentTraceEvent[];
+  skillId?: string;
+  skillVersion?: string;
+  skillContextSnapshot?: SkillContext;
+};
+
+export type SkillAgentTrace = {
+  engine: "pi-agent-core";
+  skillId: string;
+  toolCalls: string[];
+  runId?: string;
+  nextSeq?: number;
+  workingState?: SubAgentWorkingState;
+  events?: SubAgentTraceEvent[];
 };
 
 export type SkillAgentExecutionResult = {
@@ -66,11 +138,7 @@ export type SkillAgentExecutionResult = {
   checkpoint?: SkillAgentCheckpoint;
   recoverable?: boolean;
   error?: string;
-  trace?: {
-    engine: "pi-agent-core";
-    skillId: string;
-    toolCalls: string[];
-  };
+  trace?: SkillAgentTrace;
 };
 
 export type SkillAgentApprovedInvocation = {
@@ -82,12 +150,13 @@ export type SkillAgentApprovedInvocation = {
 export type SkillAgentExecutionInput = {
   goal: string;
   skillContext: SkillContext;
-  workspaceRoot: string;
+  workspaceRoot?: string;
   userId?: number;
   threadId?: string;
   turnId?: string;
   approvedInvocations?: SkillAgentApprovedInvocation[];
   checkpoint?: SkillAgentCheckpoint;
+  onRuntimeEvent?: (event: SubAgentRuntimeEvent) => Promise<void> | void;
 };
 
 export type SkillAgentToolBinding = {
@@ -106,3 +175,17 @@ export type SkillAgentToolBinding = {
     requirement?: SkillAgentRequirement;
   }>;
 };
+
+// Public product/architecture aliases. Existing SkillAgent* imports remain
+// temporarily valid so the migration does not turn into a broad rename patch.
+export type SubAgentExecutionStatus = SkillAgentExecutionStatus;
+export type SubAgentRuntimeBinding = SkillAgentRuntimeBinding;
+export type SubAgentExecutionProfile = SkillAgentExecutionProfile;
+export type SubAgentRequirement = SkillAgentRequirement;
+export type SubAgentPendingInvocation = SkillAgentPendingInvocation;
+export type SubAgentCheckpoint = SkillAgentCheckpoint;
+export type SubAgentTrace = SkillAgentTrace;
+export type SubAgentExecutionResult = SkillAgentExecutionResult;
+export type SubAgentApprovedInvocation = SkillAgentApprovedInvocation;
+export type SubAgentExecutionInput = SkillAgentExecutionInput;
+export type SubAgentToolBinding = SkillAgentToolBinding;

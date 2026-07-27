@@ -1,4 +1,5 @@
 import { END } from "@langchain/langgraph";
+import { GENERIC_TASK_DELEGATE_TOOL_ID } from "../delegation/contract.js";
 import type { AgentGraphStateType } from "./state";
 
 const hasFrozenPendingToolCall = (
@@ -18,6 +19,12 @@ export const routeAfterPrepareContext = (state: AgentGraphStateType) => {
 
   if (hasFrozenPendingToolCall(state.pendingToolCall)) {
     return "policyStep";
+  }
+
+  // Approval resume may finish the delegated worker at a structured
+  // needs_input boundary. Preserve that exact question and skip Main Planner.
+  if (state.nextAction?.type === "ask_user") {
+    return "generate";
   }
 
   return "nextActionPlanner";
@@ -40,12 +47,37 @@ export const routeAfterNextAction = (state: AgentGraphStateType) => {
     case "ask_user":
       return "generate";
     case "use_tool":
-      return "toolCallNormalize";
+      return state.nextAction.toolId === GENERIC_TASK_DELEGATE_TOOL_ID
+        ? "genericTaskSubAgent"
+        : "toolCallNormalize";
     case "error":
       return "error";
     default:
       return "error";
   }
+};
+
+export const routeAfterGenericTaskSubAgent = (state: AgentGraphStateType) => {
+  // Commit the subAgent observation before pausing so the approval screen and
+  // resumed run both retain the task-local trace. routeAfterEvidence then goes
+  // straight to Approval without invoking Main Planner again.
+  if (state.pendingEvidenceObservation) {
+    return "evidenceStage";
+  }
+
+  if (state.schemaReplanDiagnostics) {
+    return "nextActionPlanner";
+  }
+
+  if (state.errorMessage) {
+    return "error";
+  }
+
+  if (state.pendingApproval) {
+    return "approval";
+  }
+
+  return "error";
 };
 
 export const routeAfterToolCallNormalize = (state: AgentGraphStateType) => {
@@ -113,6 +145,16 @@ export const routeAfterRetrieve = (state: AgentGraphStateType) => {
 export const routeAfterEvidence = (state: AgentGraphStateType) => {
   if (state.errorMessage) {
     return "error";
+  }
+
+  if (state.pendingApproval) {
+    return "approval";
+  }
+
+  // A delegated needs_input action is already a governed Parent decision.
+  // Evidence must be committed first, but Main Planner must not rewrite it.
+  if (state.nextAction?.type === "ask_user") {
+    return "generate";
   }
 
   return "nextActionPlanner";

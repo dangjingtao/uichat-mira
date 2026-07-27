@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +8,7 @@ const MAX_IMPORTED_SKILL_BYTES = 512 * 1024;
 const RESERVED_SKILL_IDS = new Set(["docx", "xlsx", "pdf", "pptx"]);
 const DEFAULT_CATEGORY = "内容创作";
 const BLOCKED_VISIBILITIES = new Set(["internal", "private", "hidden"]);
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 type SkillVisibility = "public" | "internal" | "private" | "hidden";
 
@@ -96,6 +97,14 @@ const normalizeVisibility = (value: unknown): SkillVisibility => {
     : "public";
 };
 
+const normalizeVersion = (value: string) => {
+  const version = value.trim() || "1.0.0";
+  if (!SEMVER_PATTERN.test(version)) {
+    throw new Error(`Skill version must use semantic versioning (for example 1.0.0): ${version}`);
+  }
+  return version;
+};
+
 const yamlValue = (value: string) => JSON.stringify(value);
 
 const booleanValue = (value: unknown) => {
@@ -112,6 +121,14 @@ const fileExists = async (target: string) => {
   }
 };
 
+const directoryExists = async (target: string) => {
+  try {
+    return (await fs.stat(target)).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
 const userSkillIdExists = async (root: string, id: string) => {
   if (await fileExists(path.join(root, id, "SKILL.md"))) return true;
   let categories: Dirent[];
@@ -123,6 +140,7 @@ const userSkillIdExists = async (root: string, id: string) => {
   for (const category of categories) {
     if (!category.isDirectory()) continue;
     if (await fileExists(path.join(root, category.name, id, "SKILL.md"))) return true;
+    if (await fileExists(path.join(root, category.name, `.disabled-${id}`, "SKILL.md"))) return true;
   }
   return false;
 };
@@ -153,6 +171,70 @@ const requireUserSkillEntry = (entry: string) => {
   return resolvedEntry;
 };
 
+const hasSection = (body: string, pattern: RegExp) =>
+  body.split(/\r?\n/).some((line) => /^#{1,4}\s+/.test(line.trim()) && pattern.test(line));
+
+/**
+ * Imported Markdown may be a polished Skill package or a short prompt. Mira
+ * keeps the author's content intact and appends only missing execution-contract
+ * sections so every installed Skill is a usable subAgent instruction manual.
+ */
+const ensureExecutionGuide = (input: {
+  body: string;
+  name: string;
+  description: string;
+}) => {
+  const sourceBody = input.body.trim() || `# ${input.name}\n\n${input.description}`;
+  const additions: string[] = [];
+
+  if (!hasSection(sourceBody, /何时使用|适用范围|适用场景|when to use|scope|use cases/i)) {
+    additions.push(
+      "## 何时使用",
+      "",
+      `当用户的目标与“${input.name}”描述的专业任务一致时使用；若目标明显属于其他领域，应停止并交还 Main Agent 重新匹配。`,
+    );
+  }
+  if (!hasSection(sourceBody, /工作方法|执行计划|执行流程|步骤|workflow|process|procedure|instructions/i)) {
+    additions.push(
+      "## 执行计划",
+      "",
+      "1. 复述并确认本次目标、输入和期望交付。",
+      "2. 按本说明书完成任务；只有已暴露且已授权的能力才可以调用。",
+      "3. 检查结果是否满足完成标准；发现缺口时继续修复或明确请求补充信息。",
+      "4. 向 Main Agent 返回结论、Evidence、Artifact 和仍未解决的缺口。",
+    );
+  }
+  if (!hasSection(sourceBody, /边界|限制|不适用|安全|hard rules|constraints|limitations|boundaries/i)) {
+    additions.push(
+      "## 边界与安全",
+      "",
+      "- Skill 是说明书，不是权限声明；不得假设拥有未暴露的工具、网络、文件系统或远程写入权限。",
+      "- 不得伪造已经执行、已经验证、已经保存或已经发布的结果。",
+      "- 缺少输入、资源、能力或审批时，返回明确 Requirement，不得绕过治理边界。",
+      "- subAgent 不得创建下一级 Agent。",
+    );
+  }
+  if (!hasSection(sourceBody, /完成标准|验收标准|completion criteria|definition of done|done criteria/i)) {
+    additions.push(
+      "## 完成标准",
+      "",
+      "- 用户目标已被完整覆盖，结果与本说明书一致。",
+      "- 所有执行性结论都有对应 Evidence 或 Artifact；纯分析结论明确标注依据与缺口。",
+      "- 未完成、阻塞、需要审批或需要用户补充的部分被清楚列出。",
+    );
+  }
+
+  return additions.length > 0
+    ? `${sourceBody}\n\n${additions.join("\n")}\n`
+    : `${sourceBody}\n`;
+};
+
+const EXECUTION_METADATA_KEYS = new Set([
+  "executionContext",
+  "agent",
+  "workspaceBound",
+]);
+
 const buildSkillMarkdown = (input: {
   id: string;
   name: string;
@@ -175,11 +257,21 @@ const buildSkillMarkdown = (input: {
     `source: ${yamlValue(input.source)}`,
     `category: ${yamlValue(input.category)}`,
     `visibility: ${input.visibility}`,
+    "executionContext: fork",
+    "agent: subAgent",
+    "workspaceBound: false",
     ...(input.featured ? ["featured: true"] : []),
-    ...(input.preservedMetadata ?? []).map(([key, value]) => `${key}: ${yamlValue(value)}`),
+    ...(input.preservedMetadata ?? [])
+      .filter(([key]) => !EXECUTION_METADATA_KEYS.has(key))
+      .map(([key, value]) => `${key}: ${yamlValue(value)}`),
     "---",
   ].join("\n");
-  return `${frontmatter}\n\n${input.body || `# ${input.name}\n\n${input.description}`}\n`;
+  const body = ensureExecutionGuide({
+    body: input.body,
+    name: input.name,
+    description: input.description,
+  });
+  return `${frontmatter}\n\n${body}`;
 };
 
 export type ImportedMarkdownSkill = {
@@ -220,9 +312,10 @@ export const importMarkdownSkill = async (input: {
   const parsed = parseMarkdown(input.content);
   const fallbackTitle = deriveTitle(parsed.body, input.fileName);
   const name = String(parsed.metadata.displayName || parsed.metadata.title || fallbackTitle).trim();
+  if (!name) throw new Error("Skill display name is required");
   const requestedId = slugify(parsed.metadata.id || parsed.metadata.name || name);
   const id = await resolveAvailableSkillId(requestedId);
-  const version = String(parsed.metadata.version || "1.0.0").trim();
+  const version = normalizeVersion(String(parsed.metadata.version || "1.0.0"));
   const source = String(parsed.metadata.source || "用户导入").trim();
   const category = normalizeCategory(String(parsed.metadata.category || DEFAULT_CATEGORY));
   const description = String(
@@ -260,11 +353,29 @@ export const importMarkdownSkill = async (input: {
   });
 
   const root = resolveUserSkillsRoot();
-  const skillDir = path.join(root, category, id);
-  await fs.mkdir(skillDir, { recursive: true });
-  const entry = path.join(skillDir, "SKILL.md");
-  await fs.writeFile(entry, content, "utf8");
+  const categoryDir = path.join(root, category);
+  const skillDir = path.join(categoryDir, id);
+  const stagingRoot = path.join(root, ".staging");
+  const stagingDir = path.join(stagingRoot, `${id}-${randomUUID()}`);
+  const stagingEntry = path.join(stagingDir, "SKILL.md");
+  await fs.mkdir(stagingDir, { recursive: true });
+  try {
+    await fs.writeFile(stagingEntry, content, { encoding: "utf8", flag: "wx" });
+    await fs.mkdir(categoryDir, { recursive: true });
+    await fs.rename(stagingDir, skillDir);
+  } catch (error) {
+    await fs.rm(stagingDir, { recursive: true, force: true });
+    throw error;
+  } finally {
+    try {
+      const remaining = await fs.readdir(stagingRoot);
+      if (remaining.length === 0) await fs.rmdir(stagingRoot);
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
 
+  const entry = path.join(skillDir, "SKILL.md");
   return { id, name, version, source, category, description, visibility, entry, content, featured };
 };
 
@@ -278,7 +389,7 @@ export const updateUserSkill = async (
   const id = String(parsed.metadata.id || parsed.metadata.name || path.basename(path.dirname(resolvedEntry))).trim();
   const currentName = String(parsed.metadata.displayName || parsed.metadata.title || deriveTitle(parsed.body, "SKILL.md")).trim();
   const name = input.name?.trim() || currentName;
-  const version = input.version?.trim() || String(parsed.metadata.version || "1.0.0").trim();
+  const version = normalizeVersion(input.version?.trim() || String(parsed.metadata.version || "1.0.0"));
   const source = input.source?.trim() || String(parsed.metadata.source || "用户导入").trim();
   const category = normalizeCategory(
     input.category?.trim() || String(parsed.metadata.category || DEFAULT_CATEGORY),
@@ -343,6 +454,42 @@ export const updateUserSkill = async (
     content,
     featured,
   };
+};
+
+const findUserSkillDirectory = async (id: string, enabled: boolean) => {
+  const root = resolveUserSkillsRoot();
+  const targetName = enabled ? id : `.disabled-${id}`;
+  const flat = path.join(root, targetName);
+  if (await fileExists(path.join(flat, "SKILL.md"))) return flat;
+
+  let categories: Dirent[] = [];
+  try {
+    categories = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const category of categories) {
+    if (!category.isDirectory() || category.name.startsWith(".")) continue;
+    const candidate = path.join(root, category.name, targetName);
+    if (await fileExists(path.join(candidate, "SKILL.md"))) return candidate;
+  }
+  return null;
+};
+
+export const setUserSkillEnabled = async (id: string, enabled: boolean) => {
+  const source = await findUserSkillDirectory(id, !enabled);
+  if (!source) {
+    const already = await findUserSkillDirectory(id, enabled);
+    if (already) return { id, enabled, entry: path.join(already, "SKILL.md") };
+    throw new Error(`User Skill not found: ${id}`);
+  }
+  const parent = path.dirname(source);
+  const target = path.join(parent, enabled ? id : `.disabled-${id}`);
+  if (await directoryExists(target)) {
+    throw new Error(`Cannot change Skill enabled state because target already exists: ${target}`);
+  }
+  await fs.rename(source, target);
+  return { id, enabled, entry: path.join(target, "SKILL.md") };
 };
 
 export const deleteUserSkill = async (entry: string) => {

@@ -164,7 +164,7 @@ export async function downloadBrowserExtension(): Promise<string> {
 
   const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
   if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
-    return String(await tauriInvoke("download_browser_extension"));
+    return String(await tauriInvoke("download_browser_extension_command"));
   }
 
   throw new Error("浏览器扩展下载仅支持 Electron 或 Tauri 桌面端");
@@ -177,7 +177,7 @@ export async function installNativeMessagingHost(): Promise<unknown> {
   }
   const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
   if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
-    return tauriInvoke("install_native_messaging_host");
+    return tauriInvoke("install_native_messaging_host_command");
   }
   throw new Error("Native Messaging 安装仅支持 Electron 或 Tauri 桌面端");
 }
@@ -189,7 +189,7 @@ export async function getNativeMessagingHostStatus(): Promise<NativeMessagingHos
   }
   const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
   if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
-    return tauriInvoke("get_native_messaging_host_status") as Promise<NativeMessagingHostStatus>;
+    return tauriInvoke("get_native_messaging_host_status_command") as Promise<NativeMessagingHostStatus>;
   }
   return {
     status: "unsupported",
@@ -205,7 +205,7 @@ export async function uninstallNativeMessagingHost(): Promise<unknown> {
   }
   const tauriInvoke = (globalThis.window as any)?.__TAURI_INTERNALS__?.invoke;
   if (runtime.hostKind === "tauri" && typeof tauriInvoke === "function") {
-    return tauriInvoke("uninstall_native_messaging_host");
+    return tauriInvoke("uninstall_native_messaging_host_command");
   }
   throw new Error("Native Messaging 注销仅支持 Electron 或 Tauri 桌面端");
 }

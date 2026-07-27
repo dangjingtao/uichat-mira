@@ -1,6 +1,6 @@
 import type { GitHubReadClientDependencies } from "@/microapps/github/read-client.js";
 import { createGitHubDomainRuntime } from "./github-domain.shared.js";
-import { createRepositoryTool } from "./github-repository.tool.js";
+import { createExtendedRepositoryTool } from "./github-repository-extended.tool.js";
 import { createIssueTool } from "./github-issue.tool.js";
 import { createPullRequestTool } from "./github-pull-request.tool.js";
 import { createActionsTool } from "./github-actions.tool.js";
@@ -10,7 +10,7 @@ export const createGitHubDomainTools = (
 ) => {
   const { client, api, baseTools } = createGitHubDomainRuntime(dependencies);
   return {
-    githubRepositoryTool: createRepositoryTool(
+    githubRepositoryTool: createExtendedRepositoryTool(
       client,
       api,
       baseTools.githubRepoReadTool,

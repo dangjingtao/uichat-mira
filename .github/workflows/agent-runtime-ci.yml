@@ -1,0 +1,94 @@
+name: Agent Runtime CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - "server/src/agent/**"
+      - "server/src/skills/agent/**"
+      - "server/package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/agent-runtime-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-runtime-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-agent:
+    name: Server Agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/.test-artifact/uichat-mira-agent-ci.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Prepare test artifact directory
+        run: mkdir -p .test-artifact
+
+      - name: Install server workspace dependencies
+        run: pnpm install --frozen-lockfile --filter @ui-chat-mira/server...
+
+      - name: Typecheck server
+        run: pnpm --filter @ui-chat-mira/server typecheck
+
+      - name: Run delegated-task contract regressions
+        id: delegated-task-tests
+        continue-on-error: true
+        run: >-
+          pnpm --filter @ui-chat-mira/server test --
+          src/agent/__tests__/generic-task-subagent.test.ts
+          src/agent/__tests__/generic-task-resume.test.ts
+          src/agent/__tests__/generic-task-default-runtime.test.ts
+          src/agent/__tests__/routes.test.ts
+          src/agent/__tests__/nodes.test.ts
+          src/agent/__tests__/approval-resume-scheduling.test.ts
+          src/agent/__tests__/runtime-checkpoint.test.ts
+          src/agent/__tests__/policy.test.ts
+          src/agent/__tests__/planner-direct-tool-action.test.ts
+          src/agent/__tests__/planner-task-plan.test.ts
+          src/agent/__tests__/tool-call-normalize.test.ts
+          src/agent/__tests__/tool-node.test.ts
+          src/agent/__tests__/execution-observation.test.ts
+          src/agent/__tests__/generic-tool-evidence.test.ts
+          src/agent/__tests__/t06-evidence-boundary.test.ts
+          src/agent/__tests__/pi-agent-loop-runtime.test.ts
+          src/agent/__tests__/pi-loop-semantic-compat.test.ts
+          src/agent/__tests__/unbounded-agent-iterations.test.ts
+          --maxWorkers=1
+          --fileParallelism=false
+          --reporter=json
+          --outputFile=delegated-task-test-report.json
+
+      - name: Upload delegated-task regression report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delegated-task-test-report
+          path: server/delegated-task-test-report.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce delegated-task regressions
+        if: steps.delegated-task-tests.outcome == 'failure'
+        run: exit 1

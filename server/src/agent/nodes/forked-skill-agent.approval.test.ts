@@ -9,9 +9,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/skills/agent/profiles.js", () => ({
   getSkillAgentExecutionProfile: mocks.getProfile,
+  resolveSubAgentExecutionProfile: mocks.getProfile,
 }));
 vi.mock("@/skills/agent/wenshu-pilot.js", () => ({
   runWenShuPiSkillAgentPilot: mocks.runPilot,
+}));
+vi.mock("@/skills/agent/subagent-runtime.js", () => ({
+  runSubAgent: mocks.runPilot,
 }));
 
 import { forkedSkillAgentNode } from "./forked-skill-agent.js";

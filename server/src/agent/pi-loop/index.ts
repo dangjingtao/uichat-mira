@@ -3,6 +3,7 @@ import {
   finishWithError,
   finalizeRun,
   generateNode,
+  genericTaskSubAgentNode,
   nextActionPlannerNode,
   normalizeAndFreezeToolCall,
   pauseForApproval,
@@ -11,6 +12,7 @@ import {
   retrieveNode,
   toolNode,
 } from "../nodes/index";
+import { GENERIC_TASK_DELEGATE_TOOL_ID } from "../delegation/contract.js";
 import { mapGraphStateToOutput } from "../graph/output";
 import {
   createInitialAgentGraphState,
@@ -48,6 +50,7 @@ export type PiAgentLoopNodeHandler = PiAgentLoopStepHandler;
 export interface PiAgentLoopSemantics {
   prepareContext: PiAgentLoopStepHandler;
   planner: PiAgentLoopStepHandler;
+  delegateTask?: PiAgentLoopStepHandler;
   normalizeAndFreeze: PiAgentLoopStepHandler;
   evaluatePolicy: PiAgentLoopStepHandler;
   pauseForApproval: PiAgentLoopStepHandler;
@@ -66,6 +69,7 @@ export interface PiAgentLoopSemantics {
 export interface PiAgentLoopNodes {
   prepareContext: PiAgentLoopNodeHandler;
   planner: PiAgentLoopNodeHandler;
+  delegateTask?: PiAgentLoopNodeHandler;
   normalizeToolCall: PiAgentLoopNodeHandler;
   policy: PiAgentLoopNodeHandler;
   approval: PiAgentLoopNodeHandler;
@@ -80,6 +84,7 @@ export interface PiAgentLoopNodes {
 const defaultSemantics: PiAgentLoopSemantics = {
   prepareContext: prepareContextNode,
   planner: nextActionPlannerNode,
+  delegateTask: genericTaskSubAgentNode,
   normalizeAndFreeze: normalizeAndFreezeToolCall,
   evaluatePolicy: policyNode,
   pauseForApproval,
@@ -99,12 +104,16 @@ const resolveSemantics = (
   runtime: PiAgentLoopSemantics | PiAgentLoopNodes,
 ): PiAgentLoopSemantics => {
   if (isSemanticRuntime(runtime)) {
-    return runtime;
+    return {
+      ...runtime,
+      delegateTask: runtime.delegateTask ?? genericTaskSubAgentNode,
+    };
   }
 
   return {
     prepareContext: runtime.prepareContext,
     planner: runtime.planner,
+    delegateTask: runtime.delegateTask ?? genericTaskSubAgentNode,
     normalizeAndFreeze: runtime.normalizeToolCall,
     evaluatePolicy: runtime.policy,
     pauseForApproval: runtime.approval,
@@ -268,6 +277,46 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
     return null;
   };
 
+  const executeDelegatedTask = async (
+    state: AgentGraphStateType,
+    emit?: EmitAgentExecutionNode,
+  ): Promise<AgentGraphOutput | null> => {
+    await runStep({
+      traceNodeName: "genericTaskSubAgent",
+      handler: steps.delegateTask ?? genericTaskSubAgentNode,
+      state,
+      emit,
+    });
+
+    // The delegated observation is part of the parent evidence ledger even when
+    // the worker pauses for approval or terminates. Commit it before deciding the
+    // parent boundary so resume and UI state see the same task-local facts.
+    if (
+      state.pendingEvidenceObservation ||
+      state.pendingToolExecution ||
+      state.pendingRetrievalEvidence
+    ) {
+      await commitPendingEvidence(state, emit);
+    }
+
+    if (state.pendingApproval) {
+      return pauseRunForApproval(state, emit);
+    }
+    if (state.errorMessage) {
+      return finishRunWithError(state, emit);
+    }
+    if (state.schemaReplanDiagnostics) {
+      return null;
+    }
+    if (state.nextAction?.type === "ask_user") {
+      return finishRunWithAnswer(state, emit);
+    }
+
+    // completed, insufficient_evidence and recoverable failure all return to
+    // Main Planner. The worker owns only its bounded task, never global finish.
+    return null;
+  };
+
   const run = async (input: AgentGraphInput): Promise<AgentGraphOutput> =>
     runWithAgentRunSpan({
       graphInput: input,
@@ -285,8 +334,8 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
           return finishRunWithError(state, emit);
         }
 
-        // A forked Skill Agent may surface an approval boundary while preparing
-        // its isolated execution. Pause before the Parent loop interprets the
+        // A subAgent may surface an approval boundary while preparing its
+        // isolated execution. Pause before the Parent loop interprets the
         // frozen Skill invocation as a normal Planner/Harness tool call.
         if (state.pendingApproval) {
           return pauseRunForApproval(state, emit);
@@ -299,10 +348,19 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
           }
         }
 
-        // A completed forked Skill Agent returns a frozen Parent finalization
-        // packet from prepareContext. Task-local construction is already done:
-        // go straight to Generate instead of handing control back to Main Planner.
-        if (state.nextAction?.type === "answer" && state.finalizationPacket) {
+        const preparedAction = state.nextAction;
+
+        // A completed subAgent returns a frozen Parent finalization packet from
+        // prepareContext. Task-local construction is already done: go straight
+        // to Generate instead of handing control back to Main Planner.
+        if (preparedAction?.type === "answer" && state.finalizationPacket) {
+          return finishRunWithAnswer(state, emit);
+        }
+
+        // needs_input is also a terminal subAgent handoff for this turn. Generate
+        // already has a deterministic ask_user path, so Main Planner must not
+        // rewrite the Skill/Flow-authored question or take construction ownership.
+        if (preparedAction?.type === "ask_user") {
           return finishRunWithAnswer(state, emit);
         }
 
@@ -340,6 +398,14 @@ const createPiAgentLoopRunner = (steps: PiAgentLoopSemantics) => {
               continue;
 
             case "use_tool": {
+              if (state.nextAction.toolId === GENERIC_TASK_DELEGATE_TOOL_ID) {
+                const delegatedResult = await executeDelegatedTask(state, emit);
+                if (delegatedResult) {
+                  return delegatedResult;
+                }
+                continue;
+              }
+
               await runStep({
                 traceNodeName: "toolCallNormalize",
                 handler: steps.normalizeAndFreeze,
