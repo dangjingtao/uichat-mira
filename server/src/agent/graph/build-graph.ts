@@ -57,6 +57,7 @@ export const compiledAgentStateGraph = new StateGraph(AgentGraphStateAnnotation)
   .addConditionalEdges("prepareContext", routeAfterPrepareContext, [
     "nextActionPlanner",
     "policyStep",
+    "generate",
     "error",
   ])
   .addConditionalEdges("nextActionPlanner", routeAfterNextAction, [
