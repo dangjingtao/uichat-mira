@@ -75,6 +75,9 @@ const createLocalTaskFrame = (input: {
     confirmedObjects: [],
     completionCriteria: input.acceptanceCriteria,
   }),
+  currentGoal: input.goal,
+  completionCriteria: [...input.acceptanceCriteria],
+  currentSubtask: input.goal,
   skillContext: input.skillContext,
 });
 
@@ -132,6 +135,12 @@ export const createGenericTaskSubAgentNode = (
     });
     const localState: AgentNodeState = {
       ...state,
+      question: parsed.task.goal,
+      goal: {
+        ...state.goal,
+        text: parsed.task.goal,
+        successCriteria: [...parsed.task.acceptanceCriteria],
+      },
       currentTaskFrame: createLocalTaskFrame({
         state,
         skillContext,
