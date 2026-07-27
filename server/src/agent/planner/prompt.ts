@@ -4,6 +4,7 @@ import type {
   AgentToolExposureState,
   PlannerObservationContext,
 } from "../types";
+import { GENERIC_TASK_DELEGATE_TOOL_ID } from "../delegation/contract";
 import { getRemainingPlannerRecoveryAttempts } from "../recovery";
 
 export const normalizeToolExposure = (
@@ -21,7 +22,9 @@ const summarizeToolSchemas = (toolExposure: AgentToolExposureState) =>
   toolExposure.toolMeta.map((tool) => {
     const capabilities = tool.capabilities;
     const plannerDescription =
-      tool.toolId === "read_discover"
+      tool.toolId === GENERIC_TASK_DELEGATE_TOOL_ID
+        ? "Planner-only protocol: delegate one bounded, independently verifiable work package when it has a clear boundary, requires multiple sequential tool calls, execution-time verification, or local recovery. The child owns that package's tool loop and returns structured evidence; do not split the same package into Main Planner tool-by-tool turns."
+        : tool.toolId === "read_discover"
         ? "Discover candidate files, directories, symbols, or keyword locations without opening file bodies."
         : tool.toolId === "read_open"
           ? "Open a known target and optionally read only a selected section; do not use it for fuzzy discovery or to mechanically reopen CodeGraph-verified source excerpts."
@@ -104,6 +107,11 @@ const buildProgressionRules = (input: {
     "currentTaskFrame.skillRuntime.requirements 是 Skill 执行返回的结构化缺失条件，只描述缺什么和影响什么；它不是用户问题，也不是 nextAction。只有你可以判断它是否阻塞 globalGoal，并在确实阻塞时输出 ask_user、自己组织面向用户的问题。",
     "Skill requirement 当前不阻塞主线时，不要追问；继续其他可执行工作，并把未解决缺口保留在 remainingWork。不要把 skillRuntime、sessionId 或 stateRef 当作 workspace 文件线索去搜索。",
     "Skill 内部 TaskModel 调用属于 Skill Runtime 的受治理内部执行步骤，不需要你申请、调度或转换成用户追问。",
+    "Main Planner owns the complete user goal, task decomposition, dependencies, acceptance, and final answer. A generic subAgent owns one bounded local work package and returns to Main Planner for acceptance and the next decision.",
+    "When one work package has a clear boundary, can be independently accepted, and is expected to require multiple sequential tool calls, execution-time verification, or local recovery, prefer one use_tool(delegate_task) for the complete package.",
+    "delegate_task.goal must state the complete local objective, not one intermediate tool call. acceptanceCriteria must list observable completion conditions, including required reads, comparisons or mutations, verification, and evidence when applicable.",
+    "Only a single concrete tool call that completes the requested action should be selected directly by Main Planner. Do not split one bounded package into multiple Main Planner tool turns.",
+    "A pure response task needs answer directly and a trivial one-step read or action may use its normal tool; delegation is not mandatory for simple tasks.",
     "当 active Skill 是 docx、pdf、pptx 或 xlsx 时，禁止通过 terminal_session 执行 Python、python -m、python3、pip、conda 或手工设置 PYTHONPATH；必须由 Skill 内部 WenShu Runtime invocation 使用受控 runtime/script 标识执行。",
     "answer 是终止动作。只有完整用户目标中的每一项明确要求都已被执行证据覆盖时，才能选择 answer。",
     "不要只看 latestEvidenceSummary；必须同时检查 currentTaskFrame.completionCriteria、累计 executionHistory 和 evidenceHistory。",
@@ -169,6 +177,9 @@ const buildSchemaReplanMessages = (input: {
       "工具包偏好不扩大允许工具列表、不绕过权限，也不保证必须调用。状态为 unavailable 或 unknown 时不得发明工具调用。",
       "Skill requirements 只是缺失条件事实；只有 Planner 可以在判断其阻塞完整目标后选择 ask_user 并组织用户问题。不要把 Skill stateRef 当作 workspace 路径。",
       "CodeGraph verifiedSource 是已重新读取原文件的正文证据；不要机械 read_open 同一批已验证文件，只补明确缺口。",
+      "Main Planner owns the complete user goal, dependencies, acceptance, and final answer; a generic subAgent owns one bounded local work package and returns structured evidence for Main Planner acceptance.",
+      "Prefer one use_tool(delegate_task) when a work package has a clear independent acceptance boundary and is expected to need multiple sequential tools, post-execution verification, or local recovery. Keep its goal complete and its acceptanceCriteria observable.",
+      "Use a normal tool directly only when one concrete call completes the action. Do not split the same bounded package into Main Planner's separate tool turns; delegation is not mandatory for trivial one-step work or pure answer requests.",
       "这次 replan 的目标是修正上一次失败动作：你可以改参数、换工具、ask_user，或在确实无法继续时输出明确终局。",
       "answer 是终止动作；只有完整用户目标已经覆盖，或确实无法继续且会明确报告未完成项时才能选择。",
       "不要假装上一次工具已经成功，也不要重复同一个错误参数。",
