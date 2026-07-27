@@ -6,7 +6,6 @@ on:
       - prod
     tags:
       - 'v*'
-  workflow_dispatch: {}
 
 concurrency:
   group: release-production-${{ github.ref }}
