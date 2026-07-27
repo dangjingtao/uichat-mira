@@ -16,6 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Publish running status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'release-report-stability-patch',
+              description: 'Patching report exit-code contract',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
       - uses: actions/checkout@v4
 
       - uses: actions/checkout@v4
@@ -90,3 +104,33 @@ jobs:
           git add scripts/release/run-test-scope.mjs
           git commit -m 'fix(release): separate report generation from assertion gate'
           git push origin HEAD:wip/release-report-stability
+
+      - name: Publish success status
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              context: 'release-report-stability-patch',
+              description: 'Report exit-code contract patched',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
+      - name: Publish failure status
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'failure',
+              context: 'release-report-stability-patch',
+              description: 'Report exit-code patch failed',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
