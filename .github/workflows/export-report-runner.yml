@@ -1,0 +1,40 @@
+name: Export Report Runner
+
+on:
+  push:
+    branches:
+      - diagnostic/release-r2-restore
+    paths:
+      - '.github/workflows/export-report-runner.yml'
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: wip/release-report-stability
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report-runner-source-${{ github.sha }}
+          path: scripts/release/run-test-scope.mjs
+          if-no-files-found: error
+          retention-days: 1
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'success',
+              context: 'report-runner-export',
+              description: 'Report runner source exported',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
