@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import CONFIG from "../src/config/index.js";
 import { providerProxyService } from "../src/services/provider-proxy.service/index.js";
 import { createAgentGoal } from "../src/agent/nodes/goal-plan.js";
 import { nextActionPlannerNode } from "../src/agent/planner/node.js";
@@ -17,6 +18,10 @@ import { codebaseExploreTool } from "../src/mcp/managed-codegraph/codebase-explo
 const runs = Number(process.argv[2] ?? 3);
 if (!Number.isInteger(runs) || runs < 3 || runs > 5) {
   throw new Error("Usage: pnpm exec tsx scripts/smoke-planner-delegation-selection.ts [3-5]");
+}
+
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = `file:${path.resolve(process.cwd(), CONFIG.DATABASE_DIR, CONFIG.DATABASE_NAME)}`;
 }
 
 const runtimeDefinitions = [
