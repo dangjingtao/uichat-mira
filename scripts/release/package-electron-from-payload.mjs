@@ -10,7 +10,7 @@ import {
   removePath,
   verifyPayload,
 } from "./payload-utils.mjs";
-import { runPnpm } from "./process-utils.mjs";
+import { runNode, runPnpm } from "./process-utils.mjs";
 
 if (process.platform !== "win32") {
   throw new Error(
@@ -89,10 +89,18 @@ copyOptional(
 );
 
 const relativeOutputPath = path.relative(electronRoot, outputRoot);
-runPnpm(
+const electronBuilderCli = path.join(
+  projectRoot,
+  "node_modules",
+  "electron-builder",
+  "cli.js",
+);
+if (!fs.existsSync(electronBuilderCli)) {
+  throw new Error(`Missing electron-builder CLI: ${electronBuilderCli}`);
+}
+runNode(
+  electronBuilderCli,
   [
-    "exec",
-    "electron-builder",
     "--win",
     "--projectDir",
     electronRoot,
