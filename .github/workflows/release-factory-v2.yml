@@ -1,0 +1,674 @@
+name: Release Factory V2 Validation
+
+on:
+  push:
+    branches:
+      - feature/release-factory-v2
+  workflow_dispatch: {}
+  workflow_call:
+    secrets:
+      MIRA_CLIPPER_CRX_PROD_PEM:
+        required: false
+      HF_TOKEN:
+        required: false
+
+concurrency:
+  group: release-factory-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  factory-start:
+    name: Start release factory
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Publish running factory status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'release-factory-v2',
+              description: 'Release Factory V2 is running',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
+  validate-typecheck:
+    name: Typecheck
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run workspace typecheck
+        id: typecheck
+        continue-on-error: true
+        run: pnpm -r --workspace-concurrency=2 typecheck
+
+      - name: Write typecheck fragment
+        if: always()
+        shell: pwsh
+        run: |
+          $status = if ('${{ steps.typecheck.outcome }}' -eq 'success') { 'passed' } else { 'failed' }
+          $target = '.artifacts\release-validation\windows-x64\fragments\typecheck.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+          @{ status = $status } | ConvertTo-Json | Out-File -LiteralPath $target -Encoding utf8
+
+      - name: Upload typecheck fragment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-typecheck-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Enforce typecheck result
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.typecheck.outcome }}' -ne 'success') { exit 1 }
+
+  validate-client-shards:
+    name: Client tests shard ${{ matrix.shard }}/2
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install client test dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/desktop...
+
+      - name: Run client shard with fresh coverage and watchdog
+        id: tests
+        continue-on-error: true
+        run: node scripts/release/run-test-scope.mjs --scope=client --shard=${{ matrix.shard }}/2 --timeout-seconds=480
+
+      - name: Upload client shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-client-shard-${{ matrix.shard }}-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64/shards/client/${{ matrix.shard }}-of-2
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+      - name: Enforce client shard result
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.tests.outcome }}' -ne 'success') { exit 1 }
+
+  merge-client-validation:
+    name: Merge client tests and coverage
+    needs: validate-client-shards
+    if: always()
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install client merge dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/desktop...
+
+      - name: Download client shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-validation-client-shard-*-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64/shards/client
+          merge-multiple: true
+
+      - name: Merge client reports and coverage
+        id: merge
+        continue-on-error: true
+        run: node scripts/release/run-test-scope.mjs --scope=client --merge-dir=.artifacts/release-validation/windows-x64/shards/client --expected-shards=2
+
+      - name: Upload merged client validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-client-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Enforce merged client result
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.merge.outcome }}' -ne 'success') { exit 1 }
+
+  validate-server-environment:
+    name: Validate server test prerequisites
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache Python validation modules
+        id: python-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\mira-python-validation
+          key: windows-python-validation-3.12-${{ hashFiles('scripts/release/requirements-validation.txt') }}
+
+      - name: Validate server prerequisites
+        id: environment
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $pythonTarget = Join-Path $env:RUNNER_TEMP 'mira-python-validation'
+          New-Item -ItemType Directory -Force -Path $pythonTarget | Out-Null
+          "PYTHONPATH=$pythonTarget" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ('${{ steps.python-cache.outputs.cache-hit }}' -ne 'true') {
+            python -m pip install `
+              --disable-pip-version-check `
+              --target "$pythonTarget" `
+              -r scripts/release/requirements-validation.txt
+          }
+          New-Item -ItemType Directory -Force -Path '.test-artifact\server\workspace' | Out-Null
+          New-Item -ItemType Directory -Force -Path 'server\.test-artifact' | Out-Null
+          python -c "import docx; import pptx; import openpyxl"
+          where.exe pdftotext.exe
+
+      - name: Write environment fragment
+        if: always()
+        shell: pwsh
+        run: |
+          $status = if ('${{ steps.environment.outcome }}' -eq 'success') { 'passed' } else { 'failed' }
+          $detail = if ($status -eq 'passed') { 'Release test prerequisites passed.' } else { 'Release test prerequisite check failed.' }
+          $target = '.artifacts\release-validation\windows-x64\fragments\environment.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+          @{
+            status = $status
+            detail = $detail
+            testArtifactDirectories = $status
+            pythonOfficeDependencies = $status
+            pdfTextExtractor = $status
+          } | ConvertTo-Json | Out-File -LiteralPath $target -Encoding utf8
+
+      - name: Upload environment fragment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-environment-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Enforce environment result
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.environment.outcome }}' -ne 'success') { exit 1 }
+
+  validate-server-shards:
+    name: Server tests shard ${{ matrix.shard }}/4
+    needs: validate-server-environment
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore Python validation modules
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\mira-python-validation
+          key: windows-python-validation-3.12-${{ hashFiles('scripts/release/requirements-validation.txt') }}
+
+      - name: Configure server test environment
+        shell: pwsh
+        run: |
+          $pythonTarget = Join-Path $env:RUNNER_TEMP 'mira-python-validation'
+          "PYTHONPATH=$pythonTarget" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          New-Item -ItemType Directory -Force -Path '.test-artifact\server\workspace' | Out-Null
+          New-Item -ItemType Directory -Force -Path 'server\.test-artifact' | Out-Null
+
+      - name: Install server test dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/server...
+
+      - name: Run server shard with fresh coverage and watchdog
+        id: tests
+        continue-on-error: true
+        run: node scripts/release/run-test-scope.mjs --scope=server --shard=${{ matrix.shard }}/4 --timeout-seconds=480
+
+      - name: Upload server shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-server-shard-${{ matrix.shard }}-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64/shards/server/${{ matrix.shard }}-of-4
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+      - name: Enforce server shard result
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.tests.outcome }}' -ne 'success') { exit 1 }
+
+  merge-server-validation:
+    name: Merge server tests and coverage
+    needs: validate-server-shards
+    if: always()
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install server merge dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline --filter @ui-chat-mira/server...
+
+      - name: Download server shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-validation-server-shard-*-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64/shards/server
+          merge-multiple: true
+
+      - name: Merge server reports and coverage
+        id: merge
+        continue-on-error: true
+        run: node scripts/release/run-test-scope.mjs --scope=server --merge-dir=.artifacts/release-validation/windows-x64/shards/server --expected-shards=4
+
+      - name: Upload merged server validation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-server-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+          if-no-files-found: error
+          retention-days: 2
+
+      - name: Enforce merged server result
+        if: always()
+        shell: pwsh
+        run: |
+          if ('${{ steps.merge.outcome }}' -ne 'success') { exit 1 }
+
+  assemble-validation:
+    name: Assemble validation evidence
+    needs:
+      - validate-typecheck
+      - validate-server-environment
+      - merge-client-validation
+      - merge-server-validation
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download typecheck fragment
+        uses: actions/download-artifact@v4
+        with:
+          name: release-validation-typecheck-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+
+      - name: Download environment fragment
+        uses: actions/download-artifact@v4
+        with:
+          name: release-validation-environment-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+
+      - name: Download merged client validation
+        uses: actions/download-artifact@v4
+        with:
+          name: release-validation-client-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+
+      - name: Download merged server validation
+        uses: actions/download-artifact@v4
+        with:
+          name: release-validation-server-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+
+      - name: Combine validation manifest
+        id: combine
+        continue-on-error: true
+        run: node scripts/release/combine-validation.mjs
+
+      - name: Upload combined validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-windows-x64-${{ github.sha }}
+          path: .artifacts/release-validation/windows-x64
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+
+      - name: Enforce combined validation result
+        if: always()
+        run: test '${{ steps.combine.outcome }}' = 'success'
+
+  build-windows-payload:
+    name: Build payload from passed validation
+    needs: assemble-validation
+    runs-on: windows-2022
+    timeout-minutes: 65
+    env:
+      MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
+      LOCAL_MODEL_RAW_ROOT: 'D:\Mira 构建验证\binary-cache\local-models'
+      LOCAL_MODEL_ALLOW_NETWORK: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Stage repository into hostile Windows path
+        shell: pwsh
+        run: |
+          $validationParent = Split-Path -Parent $env:MIRA_VALIDATION_ROOT
+          if (Test-Path -LiteralPath $validationParent) {
+            Remove-Item -LiteralPath $validationParent -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $env:MIRA_VALIDATION_ROOT | Out-Null
+          $sourceArchive = Join-Path $env:RUNNER_TEMP 'mira-release-payload-source.zip'
+          git archive --format=zip --output=$sourceArchive HEAD
+          Expand-Archive -LiteralPath $sourceArchive -DestinationPath $env:MIRA_VALIDATION_ROOT -Force
+
+      - name: Cache Terminal Runtime
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\terminal-dev'
+          key: windows-release-factory-terminal-${{ hashFiles('scripts/terminal-runtime.lock.json') }}
+
+      - name: Cache Piper Runtime
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\piper'
+          key: windows-release-factory-piper-${{ hashFiles('scripts/prepare-piper-runtime.mjs') }}
+
+      - name: Cache Vivliostyle Runtime
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\vivliostyle'
+          key: windows-release-factory-vivliostyle-${{ hashFiles('scripts/prepare-vivliostyle-runtime.mjs') }}
+
+      - name: Cache local model sources
+        uses: actions/cache@v4
+        with:
+          path: 'D:\Mira 构建验证\binary-cache\local-models'
+          key: windows-release-factory-models-${{ hashFiles('scripts/prepare-local-model-packs.mjs') }}
+          restore-keys: |
+            windows-release-factory-models-
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile --prefer-offline
+          npm ci --prefix "$env:MIRA_VALIDATION_ROOT\mira-clipper-ext" --ignore-scripts --prefer-offline
+
+      - name: Download passed validation evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: release-validation-windows-x64-${{ github.sha }}
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-validation\windows-x64'
+
+      - name: Configure clipper signing key
+        shell: pwsh
+        env:
+          MIRA_CLIPPER_CRX_PROD_PEM: ${{ secrets.MIRA_CLIPPER_CRX_PROD_PEM }}
+        run: |
+          $keyRoot = Join-Path $env:MIRA_VALIDATION_ROOT 'mira-clipper-ext\.keys'
+          New-Item -ItemType Directory -Force -Path $keyRoot | Out-Null
+          [System.IO.File]::WriteAllText(
+            (Join-Path $keyRoot 'mira-clipper-prod.pem'),
+            $env:MIRA_CLIPPER_CRX_PROD_PEM,
+            [System.Text.UTF8Encoding]::new($false)
+          )
+
+      - name: Build shared payload without repeating tests
+        shell: pwsh
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:validated
+
+      - name: Upload frozen shared payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-payload\windows-x64'
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+  package-electron-from-payload:
+    name: Package Electron
+    needs: build-windows-payload
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Electron builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron-builder/Cache
+            ~/.cache/electron-builder
+          key: windows-release-factory-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            windows-release-factory-electron-
+
+      - name: Install Electron packaging tools
+        run: pnpm install --frozen-lockfile --prefer-offline --filter ui-chat-mira
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: .artifacts/release-payload/windows-x64
+
+      - name: Package Electron from frozen payload
+        run: pnpm release:package:electron:win
+
+      - name: Upload Electron package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-factory-electron-${{ github.sha }}
+          path: |
+            .artifacts/release-packages/electron/**/*Setup*.exe
+            .artifacts/release-packages/electron/**/*Setup*.exe.blockmap
+            .artifacts/release-packages/electron/package-manifest.json
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+  package-tauri-from-payload:
+    name: Package Tauri
+    needs: build-windows-payload
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust and Tauri build outputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tauri
+          cache-on-failure: true
+
+      - name: Install Tauri packaging tools
+        run: pnpm install --frozen-lockfile --prefer-offline --filter ui-chat-mira
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: .artifacts/release-payload/windows-x64
+
+      - name: Package Tauri from frozen payload
+        run: pnpm release:package:tauri:win
+
+      - name: Upload Tauri package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-factory-tauri-${{ github.sha }}
+          path: |
+            .artifacts/release-packages/tauri/**/*.msi
+            .artifacts/release-packages/tauri/**/*setup.exe
+            .artifacts/release-packages/tauri/package-manifest.json
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+  release-readiness:
+    name: Release readiness gate
+    needs:
+      - assemble-validation
+      - build-windows-payload
+      - package-electron-from-payload
+      - package-tauri-from-payload
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish final factory status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATION_RESULT: ${{ needs.assemble-validation.result }}
+          PAYLOAD_RESULT: ${{ needs.build-windows-payload.result }}
+          ELECTRON_RESULT: ${{ needs.package-electron-from-payload.result }}
+          TAURI_RESULT: ${{ needs.package-tauri-from-payload.result }}
+        shell: bash
+        run: |
+          state='success'
+          description='Release Factory V2 passed'
+          for result in "$VALIDATION_RESULT" "$PAYLOAD_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
+            if [[ "$result" != 'success' ]]; then
+              state='failure'
+              description='Release Factory V2 is not release-ready'
+              break
+            fi
+          done
+
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" \
+            -f context='release-factory-v2' \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          {
+            echo '### Release Readiness'
+            echo
+            echo "- Validation: ${VALIDATION_RESULT}"
+            echo "- Shared payload: ${PAYLOAD_RESULT}"
+            echo "- Electron: ${ELECTRON_RESULT}"
+            echo "- Tauri: ${TAURI_RESULT}"
+            echo '- Tests: fresh for this commit'
+            echo '- Coverage: fresh and merged'
+            echo '- Publishing: disabled'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for result in "$VALIDATION_RESULT" "$PAYLOAD_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
+            [[ "$result" == 'success' ]] || exit 1
+          done
