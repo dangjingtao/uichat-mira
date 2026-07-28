@@ -73,30 +73,117 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ env.DIAGNOSTIC_SOURCE_RUN_ID }}
 
-      - name: Stage Electron project without invoking builder
+      - name: Stage Electron project without pnpm exec
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $env:GITHUB_SHA = $env:DIAGNOSTIC_SOURCE_COMMIT
-          $sourcePath = Join-Path $PWD 'scripts\release\package-electron-from-payload.mjs'
+          $diagRoot = Join-Path $PWD '.artifacts\release-diagnostics\electron'
+          New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
           $stagePath = Join-Path $PWD 'scripts\release\package-electron-stage-diagnostic.mjs'
-          $source = Get-Content -LiteralPath $sourcePath -Raw
-          $needle = 'const relativeOutputPath = path.relative(electronRoot, outputRoot);'
-          if (-not $source.Contains($needle)) {
-            throw 'Unable to locate Electron builder boundary in packaging script.'
+          $stageLog = Join-Path $diagRoot 'electron-stage.log'
+          @'
+          import path from "node:path";
+          import {
+            artifactsRoot,
+            copyOptional,
+            copyRequired,
+            payloadRoot,
+            projectRoot,
+            removePath,
+            verifyPayload,
+          } from "./payload-utils.mjs";
+          import { runPnpm } from "./process-utils.mjs";
+
+          if (process.platform !== "win32") {
+            throw new Error(`Electron Windows staging requires Windows. Current platform: ${process.platform}`);
           }
-          $source = $source.Replace(
-            $needle,
-            "console.log('Electron diagnostic staging complete; builder intentionally skipped.');`nprocess.exit(0);`n`n$needle"
-          )
-          [System.IO.File]::WriteAllText($stagePath, $source, [System.Text.UTF8Encoding]::new($false))
-          try {
-            node $stagePath
-            if ($LASTEXITCODE -ne 0) {
-              throw "Electron staging failed with exit code $LASTEXITCODE"
-            }
-          } finally {
-            Remove-Item -LiteralPath $stagePath -Force -ErrorAction SilentlyContinue
+
+          const allowFailedTests = ["1", "true"].includes(
+            process.env.MIRA_RELEASE_ALLOW_FAILED_TESTS?.trim().toLowerCase() ?? "",
+          );
+
+          runPnpm(["version:sync"], { cwd: projectRoot });
+          const manifest = verifyPayload({
+            allowFailedTests,
+            requireReleaseEligible: !allowFailedTests,
+          });
+
+          const electronRoot = path.join(
+            artifactsRoot,
+            "release-consumers",
+            "electron-app",
+          );
+          const outputRoot = path.join(artifactsRoot, "release-packages", "electron");
+
+          removePath(electronRoot);
+          removePath(outputRoot);
+          await import("node:fs").then(({ default: fs }) => {
+            fs.mkdirSync(electronRoot, { recursive: true });
+            fs.mkdirSync(outputRoot, { recursive: true });
+          });
+
+          for (const filename of ["main.cjs", "preload.cjs", "package.json"]) {
+            copyRequired(
+              path.join(projectRoot, "electron", filename),
+              path.join(electronRoot, filename),
+              `Electron ${filename}`,
+            );
+          }
+          copyRequired(
+            path.join(projectRoot, "electron-builder.yml"),
+            path.join(electronRoot, "electron-builder.yml"),
+            "Electron builder configuration",
+          );
+          copyRequired(
+            path.join(payloadRoot, "app"),
+            path.join(electronRoot, "desktop", "dist"),
+            "payload application",
+          );
+          copyRequired(
+            path.join(payloadRoot, "server"),
+            path.join(electronRoot, "backend"),
+            "payload server",
+          );
+
+          for (const name of [
+            "runtime.config.cjs",
+            "icons",
+            "browser-extension",
+            "node-runtime",
+            "terminal-runtime",
+            "micro-apps",
+          ]) {
+            copyRequired(
+              path.join(payloadRoot, name),
+              path.join(electronRoot, name),
+              `payload ${name}`,
+            );
+          }
+          copyOptional(
+            path.join(payloadRoot, "model-packs"),
+            path.join(electronRoot, "model-packs"),
+            "payload model packs",
+          );
+          copyOptional(
+            path.join(payloadRoot, "model-runtime"),
+            path.join(electronRoot, "model-runtime"),
+            "payload model runtime",
+          );
+
+          console.log(
+            `Electron staging ready: ${electronRoot}; releaseEligible=${manifest.releaseEligible}`,
+          );
+          '@ | Set-Content -LiteralPath $stagePath -Encoding utf8
+
+          $previousErrorAction = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          & node $stagePath *>&1 | Tee-Object -FilePath $stageLog
+          $stageExit = $LASTEXITCODE
+          $ErrorActionPreference = $previousErrorAction
+          Remove-Item -LiteralPath $stagePath -Force -ErrorAction SilentlyContinue
+          if ($stageExit -ne 0) {
+            throw "Electron staging failed with exit code $stageExit"
           }
 
       - name: Run Electron builder directly through Node
@@ -108,13 +195,23 @@ jobs:
           $outputRoot = Join-Path $PWD '.artifacts\release-packages\electron'
           $electronRoot = Join-Path $PWD '.artifacts\release-consumers\electron-app'
           $electronBuilderCli = Join-Path $PWD 'node_modules\electron-builder\cli.js'
-          New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
           $logPath = Join-Path $diagRoot 'direct-electron-builder.log'
           $summaryPath = Join-Path $diagRoot 'diagnostic-summary.txt'
           $treePath = Join-Path $diagRoot 'direct-output-tree.txt'
 
           if (-not (Test-Path -LiteralPath $electronRoot)) {
             throw "Staged Electron project is missing: $electronRoot"
+          }
+          if (-not (Test-Path -LiteralPath $electronBuilderCli)) {
+            $packageDir = Get-ChildItem -LiteralPath (Join-Path $PWD 'node_modules\.pnpm') -Directory |
+              Where-Object { $_.Name -like 'electron-builder@24.13.3*' } |
+              Select-Object -First 1
+            if ($null -ne $packageDir) {
+              $candidate = Join-Path $packageDir.FullName 'node_modules\electron-builder\cli.js'
+              if (Test-Path -LiteralPath $candidate) {
+                $electronBuilderCli = $candidate
+              }
+            }
           }
           if (-not (Test-Path -LiteralPath $electronBuilderCli)) {
             Get-ChildItem -LiteralPath (Join-Path $PWD 'node_modules') -Force |
@@ -124,6 +221,7 @@ jobs:
               Set-Content -LiteralPath (Join-Path $diagRoot 'node-modules-root.txt') -Encoding utf8
             throw "Electron builder CLI is missing: $electronBuilderCli"
           }
+          "electron_builder_cli=$electronBuilderCli" | Set-Content -LiteralPath (Join-Path $diagRoot 'resolved-cli.txt') -Encoding utf8
 
           if (Test-Path -LiteralPath $outputRoot) {
             Remove-Item -LiteralPath $outputRoot -Recurse -Force
