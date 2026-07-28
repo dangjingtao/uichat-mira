@@ -1,0 +1,58 @@
+name: Release v0.99.6
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - '.github/workflows/release-v0.99.6.yml'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  create-tag:
+    name: Create v0.99.6 tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version and create tag
+        env:
+          RELEASE_TAG: v0.99.6
+          RELEASE_VERSION: 0.99.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version=$(node -p "require('./package.json').version")
+          if [ "$package_version" != "$RELEASE_VERSION" ]; then
+            echo "package.json version ${package_version} does not match ${RELEASE_VERSION}." >&2
+            exit 1
+          fi
+
+          git fetch origin --tags --force
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            existing_sha=$(git rev-list -n 1 "${RELEASE_TAG}")
+            if [ "${existing_sha}" != "${GITHUB_SHA}" ]; then
+              echo "Tag ${RELEASE_TAG} already exists at ${existing_sha}, expected ${GITHUB_SHA}." >&2
+              exit 1
+            fi
+            echo "Tag ${RELEASE_TAG} already points to ${GITHUB_SHA}."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${RELEASE_TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${RELEASE_TAG}"
+          echo "Created ${RELEASE_TAG} at ${GITHUB_SHA}."
+
+  release-production:
+    name: Build and publish v0.99.6
+    needs: create-tag
+    uses: ./.github/workflows/release-production.yml
+    secrets: inherit
