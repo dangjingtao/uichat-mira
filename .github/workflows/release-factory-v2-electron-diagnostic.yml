@@ -1,0 +1,166 @@
+name: Release Factory V2 Electron Diagnostic
+
+on:
+  push:
+    branches:
+      - feature/release-factory-v2
+    paths:
+      - '.github/workflows/release-factory-v2-electron-diagnostic.yml'
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+jobs:
+  electron-diagnostic:
+    name: Diagnose Electron packaging failure
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      MIRA_RELEASE_ALLOW_FAILED_TESTS: '1'
+      DIAGNOSTIC_SOURCE_COMMIT: a3add7275d24d9beca45a1b293e971c0539a5272
+      DIAGNOSTIC_SOURCE_RUN_ID: '30323595789'
+      DIAGNOSTIC_PAYLOAD_NAME: release-benchmark-payload-windows-x64-a3add7275d24d9beca45a1b293e971c0539a5272
+    steps:
+      - name: Publish diagnostic pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'release-factory-v2-electron-diagnostic',
+              description: 'Electron packaging diagnosis is running',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DIAGNOSTIC_SOURCE_COMMIT }}
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Electron builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron-builder/Cache
+            ~/.cache/electron-builder
+          key: windows-release-factory-electron-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            windows-release-factory-electron-
+
+      - name: Install Electron packaging tools
+        run: pnpm install --frozen-lockfile --prefer-offline --filter ui-chat-mira
+
+      - name: Download frozen benchmark payload
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.DIAGNOSTIC_PAYLOAD_NAME }}
+          path: .artifacts/release-payload/windows-x64
+          github-token: ${{ github.token }}
+          run-id: ${{ env.DIAGNOSTIC_SOURCE_RUN_ID }}
+
+      - name: Package Electron and capture full diagnostics
+        id: package
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $diagRoot = Join-Path $PWD '.artifacts\release-diagnostics\electron'
+          New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
+          $logPath = Join-Path $diagRoot 'electron-package.log'
+          $summaryPath = Join-Path $diagRoot 'diagnostic-summary.txt'
+          $treePath = Join-Path $diagRoot 'electron-output-tree.txt'
+          $started = [System.Diagnostics.Stopwatch]::StartNew()
+          $exitCode = 1
+
+          try {
+            & pnpm.cmd release:package:electron:win *>&1 | Tee-Object -FilePath $logPath
+            $exitCode = $LASTEXITCODE
+          } catch {
+            $_ | Out-String | Tee-Object -FilePath $logPath -Append | Write-Host
+            if ($LASTEXITCODE -is [int]) {
+              $exitCode = $LASTEXITCODE
+            }
+          } finally {
+            $started.Stop()
+            @(
+              "source_commit=$env:DIAGNOSTIC_SOURCE_COMMIT"
+              "source_run_id=$env:DIAGNOSTIC_SOURCE_RUN_ID"
+              "payload_name=$env:DIAGNOSTIC_PAYLOAD_NAME"
+              "exit_code=$exitCode"
+              "elapsed_seconds=$([math]::Round($started.Elapsed.TotalSeconds))"
+              "node_version=$(node --version)"
+              "pnpm_version=$(pnpm --version)"
+            ) | Set-Content -LiteralPath $summaryPath -Encoding utf8
+
+            $outputRoot = Join-Path $PWD '.artifacts\release-packages\electron'
+            if (Test-Path -LiteralPath $outputRoot) {
+              Get-ChildItem -LiteralPath $outputRoot -Recurse -Force |
+                Select-Object FullName, Length, LastWriteTimeUtc |
+                Format-Table -AutoSize |
+                Out-String -Width 4096 |
+                Set-Content -LiteralPath $treePath -Encoding utf8
+
+              Get-ChildItem -LiteralPath $outputRoot -Recurse -Force -File |
+                Where-Object { $_.Extension -in @('.yml', '.yaml', '.json', '.txt', '.log') } |
+                ForEach-Object {
+                  $safeName = ($_.FullName.Substring($outputRoot.Length).TrimStart('\') -replace '[\\/:*?"<>|]', '_')
+                  Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $diagRoot $safeName) -Force
+                }
+            } else {
+              'Electron output root was not created.' | Set-Content -LiteralPath $treePath -Encoding utf8
+            }
+
+            "exit_code=$exitCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
+
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
+
+      - name: Upload Electron diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-benchmark-electron-diagnostics-${{ github.sha }}
+          path: .artifacts/release-diagnostics/electron
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 6
+
+      - name: Publish diagnostic final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          PACKAGE_OUTCOME: ${{ steps.package.outcome }}
+        with:
+          script: |
+            const succeeded = process.env.PACKAGE_OUTCOME === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? 'success' : 'failure',
+              context: 'release-factory-v2-electron-diagnostic',
+              description: succeeded ? 'Electron packaging succeeded' : 'Electron diagnostics captured',
+              target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
+      - name: Preserve Electron failure
+        if: steps.package.outcome != 'success'
+        shell: pwsh
+        run: throw 'Electron packaging failed; diagnostic artifact was uploaded.'
