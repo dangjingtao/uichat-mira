@@ -16,6 +16,9 @@ describe("dashboard service", () => {
       "recent-artifacts",
     ]);
     expect(overview.widgets.every((widget) => widget.updatedAt === now.toISOString())).toBe(true);
-    expect(overview.widgets.every((widget) => (widget.data as { demo: boolean }).demo)).toBe(true);
+    expect(overview.widgets.filter((widget) => !["clock-weather", "news"].includes(widget.type)).every((widget) => (widget.data as { demo: boolean }).demo)).toBe(true);
+    expect((overview.widgets[0].data as { demo: boolean }).demo).toBe(false);
+    expect((overview.widgets[0].data as { status: string }).status).toBe("loading");
+    expect((overview.widgets[1].data as { demo: boolean }).demo).toBe(false);
   });
 });
