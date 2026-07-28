@@ -75,9 +75,8 @@ jobs:
       - name: Package through formal Electron command
         id: package
         shell: pwsh
-        env:
-          GITHUB_SHA: ${{ env.DIAGNOSTIC_SOURCE_COMMIT }}
         run: |
+          $env:GITHUB_SHA = $env:DIAGNOSTIC_SOURCE_COMMIT
           $timer = [System.Diagnostics.Stopwatch]::StartNew()
           try {
             pnpm release:package:electron:win
