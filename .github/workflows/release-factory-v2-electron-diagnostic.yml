@@ -17,7 +17,7 @@ jobs:
   electron-diagnostic:
     name: Diagnose Electron packaging failure
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       MIRA_RELEASE_ALLOW_FAILED_TESTS: '1'
       DIAGNOSTIC_SOURCE_COMMIT: a3add7275d24d9beca45a1b293e971c0539a5272
@@ -73,64 +73,112 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ env.DIAGNOSTIC_SOURCE_RUN_ID }}
 
-      - name: Package Electron and capture full diagnostics
+      - name: Compare pnpm exec with direct Electron builder CLI
         id: package
-        continue-on-error: true
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Continue'
+          $ErrorActionPreference = 'Stop'
           $env:GITHUB_SHA = $env:DIAGNOSTIC_SOURCE_COMMIT
           $diagRoot = Join-Path $PWD '.artifacts\release-diagnostics\electron'
+          $outputRoot = Join-Path $PWD '.artifacts\release-packages\electron'
+          $electronRoot = Join-Path $PWD '.artifacts\release-consumers\electron-app'
           New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
-          $logPath = Join-Path $diagRoot 'electron-package.log'
+
+          $wrapperLog = Join-Path $diagRoot 'pnpm-exec-electron-builder.log'
+          $directLog = Join-Path $diagRoot 'direct-electron-builder.log'
           $summaryPath = Join-Path $diagRoot 'diagnostic-summary.txt'
-          $treePath = Join-Path $diagRoot 'electron-output-tree.txt'
-          $started = [System.Diagnostics.Stopwatch]::StartNew()
-          $exitCode = 1
+          $wrapperTreePath = Join-Path $diagRoot 'pnpm-exec-output-tree.txt'
+          $directTreePath = Join-Path $diagRoot 'direct-output-tree.txt'
 
-          try {
-            & pnpm.cmd release:package:electron:win *>&1 | Tee-Object -FilePath $logPath
-            $exitCode = $LASTEXITCODE
-          } catch {
-            $_ | Out-String | Tee-Object -FilePath $logPath -Append | Write-Host
-            if ($LASTEXITCODE -is [int]) {
-              $exitCode = $LASTEXITCODE
-            }
-          } finally {
-            $started.Stop()
-            @(
-              "source_commit=$env:DIAGNOSTIC_SOURCE_COMMIT"
-              "source_run_id=$env:DIAGNOSTIC_SOURCE_RUN_ID"
-              "payload_name=$env:DIAGNOSTIC_PAYLOAD_NAME"
-              "exit_code=$exitCode"
-              "elapsed_seconds=$([math]::Round($started.Elapsed.TotalSeconds))"
-              "node_version=$(node --version)"
-              "pnpm_version=$(pnpm --version)"
-            ) | Set-Content -LiteralPath $summaryPath -Encoding utf8
+          $wrapperTimer = [System.Diagnostics.Stopwatch]::StartNew()
+          $wrapperExit = 1
+          $previousErrorAction = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          & pnpm.cmd release:package:electron:win *>&1 | Tee-Object -FilePath $wrapperLog
+          $wrapperExit = $LASTEXITCODE
+          $ErrorActionPreference = $previousErrorAction
+          $wrapperTimer.Stop()
 
-            $outputRoot = Join-Path $PWD '.artifacts\release-packages\electron'
-            if (Test-Path -LiteralPath $outputRoot) {
-              Get-ChildItem -LiteralPath $outputRoot -Recurse -Force |
-                Select-Object FullName, Length, LastWriteTimeUtc |
-                Format-Table -AutoSize |
-                Out-String -Width 4096 |
-                Set-Content -LiteralPath $treePath -Encoding utf8
-
-              Get-ChildItem -LiteralPath $outputRoot -Recurse -Force -File |
-                Where-Object { $_.Extension -in @('.yml', '.yaml', '.json', '.txt', '.log') } |
-                ForEach-Object {
-                  $safeName = ($_.FullName.Substring($outputRoot.Length).TrimStart('\') -replace '[\\/:*?"<>|]', '_')
-                  Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $diagRoot $safeName) -Force
-                }
-            } else {
-              'Electron output root was not created.' | Set-Content -LiteralPath $treePath -Encoding utf8
-            }
-
-            "exit_code=$exitCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if (-not (Test-Path -LiteralPath $electronRoot)) {
+            throw "Expected staged Electron project was not created: $electronRoot"
           }
 
-          if ($exitCode -ne 0) {
-            exit $exitCode
+          if (Test-Path -LiteralPath $outputRoot) {
+            Get-ChildItem -LiteralPath $outputRoot -Recurse -Force |
+              Select-Object FullName, Length, LastWriteTimeUtc |
+              Format-Table -AutoSize |
+              Out-String -Width 4096 |
+              Set-Content -LiteralPath $wrapperTreePath -Encoding utf8
+          } else {
+            'pnpm exec output root was not created.' | Set-Content -LiteralPath $wrapperTreePath -Encoding utf8
+          }
+
+          $electronBuilderCli = (& node -e "process.stdout.write(require.resolve('electron-builder/out/cli/cli.js'))").Trim()
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($electronBuilderCli)) {
+            throw 'Unable to resolve electron-builder direct CLI.'
+          }
+          "electron_builder_cli=$electronBuilderCli" | Set-Content -LiteralPath (Join-Path $diagRoot 'resolved-cli.txt') -Encoding utf8
+
+          if (Test-Path -LiteralPath $outputRoot) {
+            Remove-Item -LiteralPath $outputRoot -Recurse -Force
+          }
+
+          $directTimer = [System.Diagnostics.Stopwatch]::StartNew()
+          $directExit = 1
+          $previousErrorAction = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          & node $electronBuilderCli `
+            --win `
+            --projectDir $electronRoot `
+            --config.directories.output '..\..\release-packages\electron' `
+            --publish never *>&1 | Tee-Object -FilePath $directLog
+          $directExit = $LASTEXITCODE
+          $ErrorActionPreference = $previousErrorAction
+          $directTimer.Stop()
+
+          if (Test-Path -LiteralPath $outputRoot) {
+            Get-ChildItem -LiteralPath $outputRoot -Recurse -Force |
+              Select-Object FullName, Length, LastWriteTimeUtc |
+              Format-Table -AutoSize |
+              Out-String -Width 4096 |
+              Set-Content -LiteralPath $directTreePath -Encoding utf8
+          } else {
+            'Direct CLI output root was not created.' | Set-Content -LiteralPath $directTreePath -Encoding utf8
+          }
+
+          $setups = @()
+          if (Test-Path -LiteralPath $outputRoot) {
+            $setups = @(Get-ChildItem -LiteralPath $outputRoot -Recurse -Force -File | Where-Object { $_.Name -match 'Setup.*\.exe$' })
+          }
+
+          @(
+            "source_commit=$env:DIAGNOSTIC_SOURCE_COMMIT"
+            "source_run_id=$env:DIAGNOSTIC_SOURCE_RUN_ID"
+            "payload_name=$env:DIAGNOSTIC_PAYLOAD_NAME"
+            "pnpm_exec_exit_code=$wrapperExit"
+            "pnpm_exec_elapsed_seconds=$([math]::Round($wrapperTimer.Elapsed.TotalSeconds))"
+            "direct_cli_exit_code=$directExit"
+            "direct_cli_elapsed_seconds=$([math]::Round($directTimer.Elapsed.TotalSeconds))"
+            "direct_setup_count=$($setups.Count)"
+            "node_version=$(node --version)"
+            "pnpm_version=$(pnpm --version)"
+            "electron_builder_cli=$electronBuilderCli"
+          ) | Set-Content -LiteralPath $summaryPath -Encoding utf8
+
+          if ($setups.Count -gt 0) {
+            $setups | ForEach-Object {
+              "setup=$($_.FullName)|bytes=$($_.Length)|sha256=$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
+            } | Add-Content -LiteralPath $summaryPath -Encoding utf8
+          }
+
+          "pnpm_exec_exit_code=$wrapperExit" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "direct_cli_exit_code=$directExit" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          if ($directExit -ne 0) {
+            throw "Direct electron-builder CLI failed with exit code $directExit"
+          }
+          if ($setups.Count -eq 0) {
+            throw 'Direct electron-builder CLI exited successfully but produced no Setup executable.'
           }
 
       - name: Upload Electron diagnostic evidence
@@ -148,20 +196,20 @@ jobs:
         uses: actions/github-script@v7
         env:
           PACKAGE_OUTCOME: ${{ steps.package.outcome }}
+          WRAPPER_EXIT: ${{ steps.package.outputs.pnpm_exec_exit_code }}
+          DIRECT_EXIT: ${{ steps.package.outputs.direct_cli_exit_code }}
         with:
           script: |
             const succeeded = process.env.PACKAGE_OUTCOME === 'success';
+            const description = succeeded
+              ? `Direct CLI succeeded; pnpm exec=${process.env.WRAPPER_EXIT || 'unknown'}`
+              : `Electron direct CLI failed=${process.env.DIRECT_EXIT || 'unknown'}`;
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
               state: succeeded ? 'success' : 'failure',
               context: 'release-factory-v2-electron-diagnostic',
-              description: succeeded ? 'Electron packaging succeeded' : 'Electron diagnostics captured',
+              description,
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
-
-      - name: Preserve Electron failure
-        if: steps.package.outcome != 'success'
-        shell: pwsh
-        run: throw 'Electron packaging failed; diagnostic artifact was uploaded.'
