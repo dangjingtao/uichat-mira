@@ -93,7 +93,7 @@ jobs:
             removePath,
             verifyPayload,
           } from "./payload-utils.mjs";
-          import { runPnpm } from "./process-utils.mjs";
+          import { runNode } from "./process-utils.mjs";
 
           if (process.platform !== "win32") {
             throw new Error(`Electron Windows staging requires Windows. Current platform: ${process.platform}`);
@@ -103,7 +103,7 @@ jobs:
             process.env.MIRA_RELEASE_ALLOW_FAILED_TESTS?.trim().toLowerCase() ?? "",
           );
 
-          runPnpm(["version:sync"], { cwd: projectRoot });
+          runNode(path.join(projectRoot, "scripts", "sync-version.js"), [], { cwd: projectRoot });
           const manifest = verifyPayload({
             allowFailedTests,
             requireReleaseEligible: !allowFailedTests,
