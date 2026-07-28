@@ -38,8 +38,9 @@ const readDelegatedResult = (state: {
 
 const buildNeedsInputQuestion = (
   requirements: Record<string, unknown>[],
-): string => {
+): string | undefined => {
   const questions = requirements
+    .filter((requirement) => requirement.kind === "user_input")
     .map((requirement) => {
       const userPrompt =
         typeof requirement.userPrompt === "string"
@@ -53,10 +54,7 @@ const buildNeedsInputQuestion = (
     })
     .filter(Boolean);
 
-  if (questions.length === 0) {
-    return "还需要一项必要信息才能继续完成这个任务。请补充缺失的信息。";
-  }
-  return questions.join("\n");
+  return questions.length > 0 ? questions.join("\n") : undefined;
 };
 
 const narrowParentRecoveryToolExposure = (input: {
@@ -326,11 +324,19 @@ export const prepareContextWithForkedSkillAgentNode = async (
     delegatedObservation.status === "partial" &&
     delegatedResult.status === "needs_input"
   ) {
+    const question = buildNeedsInputQuestion(delegatedResult.requirements);
+    if (!question) {
+      return {
+        ...committed,
+        errorMessage: "subAgent returned needs_input without a user_input requirement.",
+        errorSourceNodeId: "agent-forked-skill-agent",
+      };
+    }
     return {
       ...committed,
       nextAction: {
         type: "ask_user",
-        question: buildNeedsInputQuestion(delegatedResult.requirements),
+        question,
         reason:
           "subAgent reached a governed needs_input boundary; Parent must ask for the missing information before replaying delegated execution.",
       },
