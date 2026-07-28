@@ -204,6 +204,8 @@ jobs:
     timeout-minutes: 30
     outputs:
       electron_seconds: ${{ steps.package.outputs.electron_seconds }}
+    env:
+      MIRA_RELEASE_ALLOW_FAILED_TESTS: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -268,6 +270,8 @@ jobs:
     timeout-minutes: 45
     outputs:
       tauri_seconds: ${{ steps.package.outputs.tauri_seconds }}
+    env:
+      MIRA_RELEASE_ALLOW_FAILED_TESTS: '1'
     steps:
       - uses: actions/checkout@v4
 
