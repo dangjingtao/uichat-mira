@@ -136,7 +136,8 @@ export const Select: React.FC<SelectProps> = ({
     (option) => option.value === value,
   );
   const hasOptions = encodedOptions.length > 0;
-  const currentValue = selectedOption?.encodedValue;
+  // Keep the Radix root controlled while options are loading or the value is not present yet.
+  const currentValue = selectedOption?.encodedValue ?? "";
   const placeholder =
     options.find((option) => option.value === "")?.label ??
     t("ui.select.empty");

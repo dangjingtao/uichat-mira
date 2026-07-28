@@ -38,11 +38,11 @@
         {
           "version": "0.99.4",
           "commit": {
-            "hash": "9aed6092f9737918f446a71779d21bfc23736704",
-            "shortHash": "9aed609",
-            "message": "fix(chat): make execution trace non-linear and fade inner status",
+            "hash": "8da2012589f07ac517d234af94ae69d82c9a667f",
+            "shortHash": "8da2012",
+            "message": "fix(agent): make Planner prefer bounded SubAgent delegation",
             "author": "DangJingtao",
-            "date": "2026-07-27T06:13:20+08:00"
+            "date": "2026-07-27T16:22:38+08:00"
           }
         },
         {

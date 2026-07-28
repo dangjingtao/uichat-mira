@@ -4,6 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import Select from "../Select";
 
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 const options = [
   { value: "a", label: "Option A" },
   { value: "b", label: "Option B" },
@@ -117,5 +121,25 @@ describe("Select", () => {
       "max-w-[var(--radix-select-content-available-width)]",
     );
     expect(content).not.toHaveClass("max-w-[var(--radix-select-trigger-width)]");
+  });
+
+  it("stays controlled while async options catch up with the value", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { rerender } = render(
+      <Select value="kb-1" onChange={() => {}} options={[]} />,
+    );
+
+    rerender(
+      <Select
+        value="kb-1"
+        onChange={() => {}}
+        options={[{ value: "kb-1", label: "Knowledge base" }]}
+      />,
+    );
+
+    expect(consoleError).not.toHaveBeenCalledWith(
+      expect.stringContaining("uncontrolled"),
+    );
+    consoleError.mockRestore();
   });
 });

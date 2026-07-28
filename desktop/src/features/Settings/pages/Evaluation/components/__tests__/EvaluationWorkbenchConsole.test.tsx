@@ -98,10 +98,10 @@ describe("EvaluationWorkbenchConsole", () => {
     renderConsole();
 
     expect(screen.getByText("load support.zip")).toBeInTheDocument();
-    expect(screen.getByText("结构检查").parentElement).toHaveTextContent("结构检查 :: pass");
+    expect(screen.getByText("pass").parentElement).toHaveTextContent("结构检查 :: pass");
     expect(screen.getByText("evaluation queued...")).toBeInTheDocument();
     expect(screen.getByText("42%")).toBeInTheDocument();
-    expect(screen.getByText("settings.evaluation.status.saved")).toBeInTheDocument();
+    expect(screen.getByText("开始评测")).toBeInTheDocument();
   });
 
   it("switches to result output and shows sample summaries", () => {

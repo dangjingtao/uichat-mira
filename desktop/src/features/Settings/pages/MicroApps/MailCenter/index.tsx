@@ -803,72 +803,73 @@ export default function MailCenterPage() {
               {overview?.accounts.length ? (
                 <div className="stable-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                   {overview.accounts.map((account) => (
-                    <button
+                    <div
                       key={account.id}
-                      type="button"
-                      onClick={() => void handleSelectAccount(account.id)}
                       className={[
-                        "w-full rounded-ui-panel border px-3 py-3 text-left transition-colors",
+                        "w-full rounded-ui-panel border px-3 py-3 transition-colors",
                         editingAccountId === account.id
                           ? "border-primary/30 bg-primary/5"
-                          : "border-border bg-surface-primary hover:bg-surface-secondary/70",
+                          : "border-border bg-surface-primary",
                       ].join(" ")}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <div className="truncate text-sm font-medium text-text-primary">
-                              {account.name}
-                            </div>
-                            <Tooltip
-                              text={t("settings.microApps.mailCenter.actions.editAccount")}
-                              placement="top"
-                            >
-                              <button
-                                type="button"
-                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setEditingAccountId(account.id);
-                                  const nextForm = toForm(account);
-                                  setSelectedProviderId(
-                                    detectMailProvider(nextForm, providerProfiles),
-                                  );
-                                  setForm(nextForm);
-                                  setIsAccountModalOpen(true);
-                                }}
-                                aria-label={t(
-                                  "settings.microApps.mailCenter.actions.editAccount",
-                                )}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                            </Tooltip>
-                            <Tooltip
-                              text={t("settings.microApps.mailCenter.actions.deleteAccount")}
-                              placement="top"
-                            >
-                              <button
-                                type="button"
-                                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-danger-soft hover:text-danger"
-                                onClick={(event) =>
-                                  handleDeleteAccountFromList(event, account)
-                                }
-                                aria-label={t(
-                                  "settings.microApps.mailCenter.actions.deleteAccount",
-                                )}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </Tooltip>
+                        <button
+                          type="button"
+                          onClick={() => void handleSelectAccount(account.id)}
+                          aria-pressed={editingAccountId === account.id}
+                          className="min-w-0 flex-1 text-left hover:text-text-primary"
+                        >
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {account.name}
                           </div>
                           <div className="mt-1 truncate text-xs text-text-secondary">
                             {account.emailAddress}
                           </div>
-                          </div>
+                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Tooltip
+                            text={t("settings.microApps.mailCenter.actions.editAccount")}
+                            placement="top"
+                          >
+                            <button
+                              type="button"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-surface-secondary hover:text-text-primary"
+                              onClick={() => {
+                                setEditingAccountId(account.id);
+                                const nextForm = toForm(account);
+                                setSelectedProviderId(
+                                  detectMailProvider(nextForm, providerProfiles),
+                                );
+                                setForm(nextForm);
+                                setIsAccountModalOpen(true);
+                              }}
+                              aria-label={t(
+                                "settings.microApps.mailCenter.actions.editAccount",
+                              )}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip
+                            text={t("settings.microApps.mailCenter.actions.deleteAccount")}
+                            placement="top"
+                          >
+                            <button
+                              type="button"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-ui-control text-text-secondary transition-colors hover:bg-danger-soft hover:text-danger"
+                              onClick={(event) =>
+                                handleDeleteAccountFromList(event, account)
+                              }
+                              aria-label={t(
+                                "settings.microApps.mailCenter.actions.deleteAccount",
+                              )}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
                           <span
                             className={[
-                              "mt-1 inline-flex h-2.5 w-2.5 shrink-0 rounded-full",
+                              "mt-1 inline-flex h-2.5 w-2.5 rounded-full",
                               account.status === "connected"
                                 ? "bg-success"
                                 : account.status === "error"
@@ -891,6 +892,7 @@ export default function MailCenterPage() {
                             }
                           />
                         </div>
+                      </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-text-tertiary">
                         <span>
                           {account.isDefault
@@ -899,7 +901,7 @@ export default function MailCenterPage() {
                         </span>
                         <span>{formatDateTime(account.lastSyncedAt)}</span>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               ) : (

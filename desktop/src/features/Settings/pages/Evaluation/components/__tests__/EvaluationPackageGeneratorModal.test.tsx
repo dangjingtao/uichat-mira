@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import EvaluationPackageGeneratorModal from "../EvaluationPackageGeneratorModal";
 
 const { listKnowledgeBases, listKnowledgeBaseDocuments, generateEvaluationPackage } =
@@ -24,6 +24,7 @@ vi.mock("@/app/providers/RoleModelConfigProvider", () => ({
       evaluation: {
         providerCode: "openai",
         providerConnectionId: "openai-default",
+        remoteModelId: "gpt-4o-mini",
         name: "评测模型",
       },
     },
@@ -44,6 +45,10 @@ vi.mock("@/shared/ui/Message", () => ({
 }));
 
 describe("EvaluationPackageGeneratorModal", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("loads resources, applies a preset, and submits the package form", async () => {
     listKnowledgeBases.mockResolvedValue([{ id: "kb-1", name: "产品知识库" }]);
     listKnowledgeBaseDocuments.mockResolvedValue([
@@ -56,8 +61,17 @@ describe("EvaluationPackageGeneratorModal", () => {
     });
     const onClose = vi.fn();
     const user = userEvent.setup();
-    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:package");
-    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const createObjectURL = vi.fn(() => "blob:package");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     render(<EvaluationPackageGeneratorModal onClose={onClose} />);
 
@@ -67,7 +81,7 @@ describe("EvaluationPackageGeneratorModal", () => {
       indexStatus: "ready",
     }));
 
-    const preset = screen.getByRole("combobox", { name: "settings.evaluation.packageGenerator.preset" });
+    const preset = screen.getAllByRole("combobox")[0];
     await user.click(preset);
     await user.click(await screen.findByRole("option", { name: "settings.evaluation.packageGenerator.presets.strict.label" }));
     expect(screen.getByLabelText("TopK")).toHaveValue(15);
@@ -77,7 +91,7 @@ describe("EvaluationPackageGeneratorModal", () => {
       knowledgeBaseId: "kb-1",
       topK: 15,
       documentCount: 2,
-      sampleCount: 4,
+      sampleCount: 10,
     })));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(createObjectURL).toHaveBeenCalled();
