@@ -756,7 +756,7 @@ const setupRoutes = async () => {
   await app.register(agentRoute);
   await app.register(mcpRoutes);
   await app.register(webbridgeRoute);
-  await app.register(dashboardController);
+  await app.register(dashboardController, { newsHubService });
 };
 
 const setupDatabase = async () => {

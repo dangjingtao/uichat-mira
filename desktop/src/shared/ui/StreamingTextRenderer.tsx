@@ -13,6 +13,30 @@ export interface StreamingTextRendererProps {
   children: (visibleText: string) => ReactNode;
 }
 
+type StreamingTextVisibleListener = () => void;
+
+let streamingTextVisibleRevision = 0;
+const streamingTextVisibleListeners = new Set<StreamingTextVisibleListener>();
+
+export const getStreamingTextVisibleRevision = () =>
+  streamingTextVisibleRevision;
+
+export const subscribeStreamingTextVisible = (
+  listener: StreamingTextVisibleListener,
+) => {
+  streamingTextVisibleListeners.add(listener);
+  return () => {
+    streamingTextVisibleListeners.delete(listener);
+  };
+};
+
+const publishStreamingTextVisible = () => {
+  streamingTextVisibleRevision += 1;
+  for (const listener of streamingTextVisibleListeners) {
+    listener();
+  }
+};
+
 const INITIAL_VISIBLE_GRAPHEMES = 3;
 const MAX_GRAPHEMES_PER_FRAME = 24;
 const MAX_FRAME_DELTA_MS = 50;
@@ -72,6 +96,8 @@ export function StreamingTextRenderer({
   const visibleCountRef = useRef(initialVisibleCount);
   const previousTextRef = useRef(text);
   const previousStreamingRef = useRef(isStreaming);
+  const visibilityCycleActiveRef = useRef(isStreaming);
+  const visibleTextPublishedRef = useRef(false);
   const frameRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number | null>(null);
   const frameBudgetRef = useRef(0);
@@ -188,7 +214,34 @@ export function StreamingTextRenderer({
   );
 
   const safeVisibleCount = Math.min(visibleCount, graphemes.length);
-  return children(graphemes.slice(0, safeVisibleCount).join(""));
+  const visibleText = graphemes.slice(0, safeVisibleCount).join("");
+
+  useLayoutEffect(() => {
+    if (text.length === 0) {
+      visibilityCycleActiveRef.current = isStreaming;
+      visibleTextPublishedRef.current = false;
+      return;
+    }
+
+    if (isStreaming) {
+      visibilityCycleActiveRef.current = true;
+    }
+
+    if (
+      visibilityCycleActiveRef.current &&
+      visibleText.trim().length > 0 &&
+      !visibleTextPublishedRef.current
+    ) {
+      visibleTextPublishedRef.current = true;
+      publishStreamingTextVisible();
+    }
+
+    if (!isStreaming && visibleText.trim().length > 0) {
+      visibilityCycleActiveRef.current = false;
+    }
+  }, [isStreaming, text.length, visibleText]);
+
+  return children(visibleText);
 }
 
 export default StreamingTextRenderer;

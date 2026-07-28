@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import StreamingTextRenderer from "../StreamingTextRenderer";
+import StreamingTextRenderer, {
+  subscribeStreamingTextVisible,
+} from "../StreamingTextRenderer";
 
 let nextFrameId = 1;
 let frameCallbacks: Map<number, FrameRequestCallback>;
@@ -104,6 +106,36 @@ describe("StreamingTextRenderer", () => {
     expect(visibleText.startsWith("你")).toBe(true);
     expect(visibleText.length).toBeGreaterThan(1);
     expect(visibleText).not.toBe(completeText);
+  });
+
+  it("publishes one handoff when streaming text first becomes visible", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeStreamingTextVisible(listener);
+    const { rerender } = render(
+      <StreamingTextRenderer text="" isStreaming>
+        {renderText}
+      </StreamingTextRenderer>,
+    );
+
+    expect(listener).not.toHaveBeenCalled();
+
+    rerender(
+      <StreamingTextRenderer text="回答开始" isStreaming>
+        {renderText}
+      </StreamingTextRenderer>,
+    );
+
+    expect(screen.getByTestId("visible-text").textContent).not.toBe("");
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <StreamingTextRenderer text="回答开始继续增长" isStreaming>
+        {renderText}
+      </StreamingTextRenderer>,
+    );
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
   });
 
   it("paces a large first chunk after an immediate short prefix", () => {

@@ -7,6 +7,7 @@ export type DashboardWidgetType =
   | "recent-artifacts";
 
 export type DashboardWidgetSize = "small" | "medium" | "large";
+export type ClockWeatherStatus = "loading" | "ready" | "unavailable";
 
 export interface DashboardWidget<T = unknown> {
   id: string;
@@ -31,16 +32,24 @@ export interface DemoData {
   sourceLabel: "演示数据";
 }
 
-export interface ClockWeatherData extends DemoData {
+export interface ClockWeatherData {
+  demo: false;
+  sourceLabel: "IP 定位 + Open-Meteo";
+  status: ClockWeatherStatus;
   localTime: string;
   dateLabel: string;
+  locationLabel: string;
+  weatherAvailable: boolean;
   weather: string;
   temperature: string;
   forecast: string;
 }
 
-export interface NewsData extends DemoData {
-  items: Array<{ title: string; summary: string; category: string; publishedAt: string }>;
+export interface NewsData {
+  demo: false;
+  sourceLabel: "NewsHub";
+  status: "loading" | "empty" | "ready" | "unavailable";
+  items: Array<{ summary: string; category: string; sourceName: string; publishedAt: string; url: string }>;
 }
 
 export interface MailData extends DemoData {
