@@ -6,6 +6,7 @@ on:
       - feature/release-factory-v2
     paths:
       - '.github/workflows/release-factory-v2-full-benchmark.yml'
+  workflow_dispatch: {}
 
 permissions:
   actions: read
@@ -24,6 +25,8 @@ jobs:
     outputs:
       validation_run_id: ${{ steps.locate.outputs.validation_run_id }}
       validation_artifact_name: ${{ steps.locate.outputs.validation_artifact_name }}
+      wait_seconds: ${{ steps.locate.outputs.wait_seconds }}
+      benchmark_started_epoch: ${{ steps.locate.outputs.benchmark_started_epoch }}
     steps:
       - name: Wait for the V2 validation artifact from this commit
         id: locate
@@ -32,23 +35,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          started_epoch=$(date +%s)
           artifact_name="release-validation-windows-x64-${GITHUB_SHA}"
+          echo "benchmark_started_epoch=${started_epoch}" >> "$GITHUB_OUTPUT"
           echo "Waiting for ${artifact_name}..."
 
           for attempt in $(seq 1 120); do
             response=$(gh api \
               -H 'Accept: application/vnd.github+json' \
               "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=100")
-            run_id=$(jq -r '.artifacts | map(select(.expired == false)) | first | .workflow_run.id // empty' <<<"$response")
+            run_id=$(jq -r ".artifacts | map(select(.expired == false and .workflow_run.head_sha == \"${GITHUB_SHA}\")) | first | .workflow_run.id // empty" <<<"$response")
             if [[ -n "$run_id" ]]; then
+              finished_epoch=$(date +%s)
               echo "validation_run_id=$run_id" >> "$GITHUB_OUTPUT"
               echo "validation_artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+              echo "wait_seconds=$((finished_epoch - started_epoch))" >> "$GITHUB_OUTPUT"
               echo "Found validation artifact in run ${run_id}."
               exit 0
             fi
             sleep 10
           done
 
+          finished_epoch=$(date +%s)
+          echo "wait_seconds=$((finished_epoch - started_epoch))" >> "$GITHUB_OUTPUT"
           echo "Timed out waiting for ${artifact_name}." >&2
           exit 1
 
@@ -59,9 +68,10 @@ jobs:
     timeout-minutes: 65
     outputs:
       validation_release_eligible: ${{ steps.validation.outputs.release_eligible }}
+      payload_seconds: ${{ steps.payload.outputs.payload_seconds }}
     env:
-      MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
-      LOCAL_MODEL_RAW_ROOT: 'D:\Mira 构建验证\binary-cache\local-models'
+      MIRA_BENCHMARK_ROOT: 'D:\rfv2\workspace'
+      LOCAL_MODEL_RAW_ROOT: 'D:\rfv2-cache\local-models'
       LOCAL_MODEL_ALLOW_NETWORK: '1'
       CI: 'true'
     steps:
@@ -78,40 +88,40 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Stage repository into hostile Windows path
+      - name: Stage repository into stable Windows benchmark path
         shell: pwsh
         run: |
-          $validationParent = Split-Path -Parent $env:MIRA_VALIDATION_ROOT
-          if (Test-Path -LiteralPath $validationParent) {
-            Remove-Item -LiteralPath $validationParent -Recurse -Force
+          $benchmarkParent = Split-Path -Parent $env:MIRA_BENCHMARK_ROOT
+          if (Test-Path -LiteralPath $benchmarkParent) {
+            Remove-Item -LiteralPath $benchmarkParent -Recurse -Force
           }
-          New-Item -ItemType Directory -Force -Path $env:MIRA_VALIDATION_ROOT | Out-Null
+          New-Item -ItemType Directory -Force -Path $env:MIRA_BENCHMARK_ROOT | Out-Null
           $sourceArchive = Join-Path $env:RUNNER_TEMP 'mira-release-benchmark-source.zip'
           git archive --format=zip --output=$sourceArchive HEAD
-          Expand-Archive -LiteralPath $sourceArchive -DestinationPath $env:MIRA_VALIDATION_ROOT -Force
+          Expand-Archive -LiteralPath $sourceArchive -DestinationPath $env:MIRA_BENCHMARK_ROOT -Force
 
       - name: Cache Terminal Runtime
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\terminal-dev'
+          path: 'D:\rfv2\workspace\.local-runtimes\terminal-dev'
           key: windows-release-factory-terminal-${{ hashFiles('scripts/terminal-runtime.lock.json') }}
 
       - name: Cache Piper Runtime
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\piper'
+          path: 'D:\rfv2\workspace\.local-runtimes\piper'
           key: windows-release-factory-piper-${{ hashFiles('scripts/prepare-piper-runtime.mjs') }}
 
       - name: Cache Vivliostyle Runtime
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\vivliostyle'
+          path: 'D:\rfv2\workspace\.local-runtimes\vivliostyle'
           key: windows-release-factory-vivliostyle-${{ hashFiles('scripts/prepare-vivliostyle-runtime.mjs') }}
 
       - name: Cache local model sources
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\binary-cache\local-models'
+          path: 'D:\rfv2-cache\local-models'
           key: windows-release-factory-models-${{ hashFiles('scripts/prepare-local-model-packs.mjs') }}
           restore-keys: |
             windows-release-factory-models-
@@ -119,14 +129,14 @@ jobs:
       - name: Install build dependencies
         shell: pwsh
         run: |
-          pnpm --dir "$env:MIRA_VALIDATION_ROOT" install --frozen-lockfile --prefer-offline
-          npm ci --prefix "$env:MIRA_VALIDATION_ROOT\mira-clipper-ext" --ignore-scripts --prefer-offline
+          pnpm --dir "$env:MIRA_BENCHMARK_ROOT" install --frozen-lockfile --prefer-offline
+          npm ci --prefix "$env:MIRA_BENCHMARK_ROOT\mira-clipper-ext" --ignore-scripts --prefer-offline
 
       - name: Download fresh validation evidence
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.wait-for-validation.outputs.validation_artifact_name }}
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-validation\windows-x64'
+          path: 'D:\rfv2\workspace\.artifacts\release-validation\windows-x64'
           github-token: ${{ github.token }}
           run-id: ${{ needs.wait-for-validation.outputs.validation_run_id }}
 
@@ -134,7 +144,7 @@ jobs:
         id: validation
         shell: pwsh
         run: |
-          $manifestPath = Join-Path $env:MIRA_VALIDATION_ROOT '.artifacts\release-validation\windows-x64\validation.json'
+          $manifestPath = Join-Path $env:MIRA_BENCHMARK_ROOT '.artifacts\release-validation\windows-x64\validation.json'
           $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
           $eligible = [bool]$manifest.releaseEligible
           "release_eligible=$($eligible.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -148,7 +158,7 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:MIRA_CLIPPER_CRX_PROD_PEM)) {
             throw 'Missing MIRA_CLIPPER_CRX_PROD_PEM required for the full packaging benchmark.'
           }
-          $keyRoot = Join-Path $env:MIRA_VALIDATION_ROOT 'mira-clipper-ext\.keys'
+          $keyRoot = Join-Path $env:MIRA_BENCHMARK_ROOT 'mira-clipper-ext\.keys'
           New-Item -ItemType Directory -Force -Path $keyRoot | Out-Null
           [System.IO.File]::WriteAllText(
             (Join-Path $keyRoot 'mira-clipper-prod.pem'),
@@ -157,22 +167,32 @@ jobs:
           )
 
       - name: Build shared payload without repeating tests
+        id: payload
         shell: pwsh
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          if ('${{ steps.validation.outputs.release_eligible }}' -eq 'true') {
-            pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:validated
-          } else {
-            Write-Warning 'Validation contains real test failures. Continuing only for full-build timing; publishing remains blocked.'
-            pnpm --dir "$env:MIRA_VALIDATION_ROOT" release:payload:win:diagnostic
+          $started = [System.Diagnostics.Stopwatch]::StartNew()
+          try {
+            if ('${{ steps.validation.outputs.release_eligible }}' -eq 'true') {
+              pnpm --dir "$env:MIRA_BENCHMARK_ROOT" release:payload:win:validated
+            } else {
+              Write-Warning 'Validation contains real test failures. Continuing only for full-build timing; publishing remains blocked.'
+              pnpm --dir "$env:MIRA_BENCHMARK_ROOT" release:payload:win:diagnostic
+            }
+            if ($LASTEXITCODE -ne 0) {
+              throw "Payload command failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            $started.Stop()
+            "payload_seconds=$([math]::Round($started.Elapsed.TotalSeconds))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           }
 
       - name: Upload benchmark shared payload
         uses: actions/upload-artifact@v4
         with:
           name: release-benchmark-payload-windows-x64-${{ github.sha }}
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-payload\windows-x64'
+          path: 'D:\rfv2\workspace\.artifacts\release-payload\windows-x64'
           if-no-files-found: error
           retention-days: 2
           compression-level: 0
@@ -182,6 +202,8 @@ jobs:
     needs: build-windows-payload
     runs-on: windows-2022
     timeout-minutes: 30
+    outputs:
+      electron_seconds: ${{ steps.package.outputs.electron_seconds }}
     steps:
       - uses: actions/checkout@v4
 
@@ -213,7 +235,19 @@ jobs:
           path: .artifacts/release-payload/windows-x64
 
       - name: Package Electron from benchmark payload
-        run: pnpm release:package:electron:win
+        id: package
+        shell: pwsh
+        run: |
+          $started = [System.Diagnostics.Stopwatch]::StartNew()
+          try {
+            pnpm release:package:electron:win
+            if ($LASTEXITCODE -ne 0) {
+              throw "Electron packaging failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            $started.Stop()
+            "electron_seconds=$([math]::Round($started.Elapsed.TotalSeconds))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
 
       - name: Upload Electron benchmark package
         uses: actions/upload-artifact@v4
@@ -232,6 +266,8 @@ jobs:
     needs: build-windows-payload
     runs-on: windows-2022
     timeout-minutes: 45
+    outputs:
+      tauri_seconds: ${{ steps.package.outputs.tauri_seconds }}
     steps:
       - uses: actions/checkout@v4
 
@@ -261,7 +297,19 @@ jobs:
           path: .artifacts/release-payload/windows-x64
 
       - name: Package Tauri from benchmark payload
-        run: pnpm release:package:tauri:win
+        id: package
+        shell: pwsh
+        run: |
+          $started = [System.Diagnostics.Stopwatch]::StartNew()
+          try {
+            pnpm release:package:tauri:win
+            if ($LASTEXITCODE -ne 0) {
+              throw "Tauri packaging failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            $started.Stop()
+            "tauri_seconds=$([math]::Round($started.Elapsed.TotalSeconds))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
 
       - name: Upload Tauri benchmark package
         uses: actions/upload-artifact@v4
@@ -278,6 +326,7 @@ jobs:
   benchmark-summary:
     name: Full benchmark summary
     needs:
+      - wait-for-validation
       - build-windows-payload
       - package-electron
       - package-tauri
@@ -291,8 +340,14 @@ jobs:
           ELECTRON_RESULT: ${{ needs.package-electron.result }}
           TAURI_RESULT: ${{ needs.package-tauri.result }}
           VALIDATION_ELIGIBLE: ${{ needs.build-windows-payload.outputs.validation_release_eligible }}
+          WAIT_SECONDS: ${{ needs.wait-for-validation.outputs.wait_seconds }}
+          PAYLOAD_SECONDS: ${{ needs.build-windows-payload.outputs.payload_seconds }}
+          ELECTRON_SECONDS: ${{ needs.package-electron.outputs.electron_seconds }}
+          TAURI_SECONDS: ${{ needs.package-tauri.outputs.tauri_seconds }}
+          BENCHMARK_STARTED_EPOCH: ${{ needs.wait-for-validation.outputs.benchmark_started_epoch }}
         shell: bash
         run: |
+          set -euo pipefail
           state='success'
           description='Full V2 benchmark completed; publishing disabled'
           for result in "$PAYLOAD_RESULT" "$ELECTRON_RESULT" "$TAURI_RESULT"; do
@@ -302,6 +357,12 @@ jobs:
               break
             fi
           done
+
+          now_epoch=$(date +%s)
+          total_seconds=''
+          if [[ -n "${BENCHMARK_STARTED_EPOCH:-}" ]]; then
+            total_seconds=$((now_epoch - BENCHMARK_STARTED_EPOCH))
+          fi
 
           gh api \
             --method POST \
@@ -315,10 +376,12 @@ jobs:
           {
             echo '### Release Factory V2 Full Benchmark'
             echo
-            echo "- Validation release eligible: ${VALIDATION_ELIGIBLE}"
-            echo "- Payload: ${PAYLOAD_RESULT}"
-            echo "- Electron: ${ELECTRON_RESULT}"
-            echo "- Tauri: ${TAURI_RESULT}"
+            echo "- Validation release eligible: ${VALIDATION_ELIGIBLE:-unknown}"
+            echo "- Validation wait: ${WAIT_SECONDS:-unknown}s"
+            echo "- Payload: ${PAYLOAD_RESULT} (${PAYLOAD_SECONDS:-unknown}s)"
+            echo "- Electron: ${ELECTRON_RESULT} (${ELECTRON_SECONDS:-unknown}s)"
+            echo "- Tauri: ${TAURI_RESULT} (${TAURI_SECONDS:-unknown}s)"
+            echo "- Total benchmark wall clock: ${total_seconds:-unknown}s"
             echo '- Tests and coverage: reused fresh artifacts from this exact commit'
             echo '- GitHub Release: blocked'
             echo '- R2 publishing: blocked'
