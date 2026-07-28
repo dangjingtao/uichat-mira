@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   electron-diagnostic:
-    name: Diagnose Electron packaging failure
+    name: Verify formal Electron packaging entry
     runs-on: windows-2022
     timeout-minutes: 30
     env:
@@ -34,13 +34,12 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'release-factory-v2-electron-diagnostic',
-              description: 'Direct Electron builder diagnosis is running',
+              description: 'Formal Electron packaging verification is running',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.DIAGNOSTIC_SOURCE_COMMIT }}
           fetch-depth: 1
 
       - uses: pnpm/action-setup@v3
@@ -73,234 +72,85 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ env.DIAGNOSTIC_SOURCE_RUN_ID }}
 
-      - name: Stage Electron project without pnpm exec
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $env:GITHUB_SHA = $env:DIAGNOSTIC_SOURCE_COMMIT
-          $diagRoot = Join-Path $PWD '.artifacts\release-diagnostics\electron'
-          New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
-          $stagePath = Join-Path $PWD 'scripts\release\package-electron-stage-diagnostic.mjs'
-          $stageLog = Join-Path $diagRoot 'electron-stage.log'
-          @'
-          import path from "node:path";
-          import {
-            artifactsRoot,
-            copyOptional,
-            copyRequired,
-            payloadRoot,
-            projectRoot,
-            removePath,
-            verifyPayload,
-          } from "./payload-utils.mjs";
-          import { runNode } from "./process-utils.mjs";
-
-          if (process.platform !== "win32") {
-            throw new Error(`Electron Windows staging requires Windows. Current platform: ${process.platform}`);
-          }
-
-          const allowFailedTests = ["1", "true"].includes(
-            process.env.MIRA_RELEASE_ALLOW_FAILED_TESTS?.trim().toLowerCase() ?? "",
-          );
-
-          runNode(path.join(projectRoot, "scripts", "sync-version.js"), [], { cwd: projectRoot });
-          const manifest = verifyPayload({
-            allowFailedTests,
-            requireReleaseEligible: !allowFailedTests,
-          });
-
-          const electronRoot = path.join(
-            artifactsRoot,
-            "release-consumers",
-            "electron-app",
-          );
-          const outputRoot = path.join(artifactsRoot, "release-packages", "electron");
-
-          removePath(electronRoot);
-          removePath(outputRoot);
-          await import("node:fs").then(({ default: fs }) => {
-            fs.mkdirSync(electronRoot, { recursive: true });
-            fs.mkdirSync(outputRoot, { recursive: true });
-          });
-
-          for (const filename of ["main.cjs", "preload.cjs", "package.json"]) {
-            copyRequired(
-              path.join(projectRoot, "electron", filename),
-              path.join(electronRoot, filename),
-              `Electron ${filename}`,
-            );
-          }
-          copyRequired(
-            path.join(projectRoot, "electron-builder.yml"),
-            path.join(electronRoot, "electron-builder.yml"),
-            "Electron builder configuration",
-          );
-          copyRequired(
-            path.join(payloadRoot, "app"),
-            path.join(electronRoot, "desktop", "dist"),
-            "payload application",
-          );
-          copyRequired(
-            path.join(payloadRoot, "server"),
-            path.join(electronRoot, "backend"),
-            "payload server",
-          );
-
-          for (const name of [
-            "runtime.config.cjs",
-            "icons",
-            "browser-extension",
-            "node-runtime",
-            "terminal-runtime",
-            "micro-apps",
-          ]) {
-            copyRequired(
-              path.join(payloadRoot, name),
-              path.join(electronRoot, name),
-              `payload ${name}`,
-            );
-          }
-          copyOptional(
-            path.join(payloadRoot, "model-packs"),
-            path.join(electronRoot, "model-packs"),
-            "payload model packs",
-          );
-          copyOptional(
-            path.join(payloadRoot, "model-runtime"),
-            path.join(electronRoot, "model-runtime"),
-            "payload model runtime",
-          );
-
-          console.log(
-            `Electron staging ready: ${electronRoot}; releaseEligible=${manifest.releaseEligible}`,
-          );
-          '@ | Set-Content -LiteralPath $stagePath -Encoding utf8
-
-          $previousErrorAction = $ErrorActionPreference
-          $ErrorActionPreference = 'Continue'
-          & node $stagePath *>&1 | Tee-Object -FilePath $stageLog
-          $stageExit = $LASTEXITCODE
-          $ErrorActionPreference = $previousErrorAction
-          Remove-Item -LiteralPath $stagePath -Force -ErrorAction SilentlyContinue
-          if ($stageExit -ne 0) {
-            throw "Electron staging failed with exit code $stageExit"
-          }
-
-      - name: Run Electron builder directly through Node
+      - name: Package through formal Electron command
         id: package
         shell: pwsh
+        env:
+          GITHUB_SHA: ${{ env.DIAGNOSTIC_SOURCE_COMMIT }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          $diagRoot = Join-Path $PWD '.artifacts\release-diagnostics\electron'
-          $outputRoot = Join-Path $PWD '.artifacts\release-packages\electron'
-          $electronRoot = Join-Path $PWD '.artifacts\release-consumers\electron-app'
-          $electronBuilderCli = Join-Path $PWD 'node_modules\electron-builder\cli.js'
-          $logPath = Join-Path $diagRoot 'direct-electron-builder.log'
-          $summaryPath = Join-Path $diagRoot 'diagnostic-summary.txt'
-          $treePath = Join-Path $diagRoot 'direct-output-tree.txt'
-
-          if (-not (Test-Path -LiteralPath $electronRoot)) {
-            throw "Staged Electron project is missing: $electronRoot"
-          }
-          if (-not (Test-Path -LiteralPath $electronBuilderCli)) {
-            $packageDir = Get-ChildItem -LiteralPath (Join-Path $PWD 'node_modules\.pnpm') -Directory |
-              Where-Object { $_.Name -like 'electron-builder@24.13.3*' } |
-              Select-Object -First 1
-            if ($null -ne $packageDir) {
-              $candidate = Join-Path $packageDir.FullName 'node_modules\electron-builder\cli.js'
-              if (Test-Path -LiteralPath $candidate) {
-                $electronBuilderCli = $candidate
-              }
-            }
-          }
-          if (-not (Test-Path -LiteralPath $electronBuilderCli)) {
-            Get-ChildItem -LiteralPath (Join-Path $PWD 'node_modules') -Force |
-              Select-Object FullName, LinkType, Target |
-              Format-Table -AutoSize |
-              Out-String -Width 4096 |
-              Set-Content -LiteralPath (Join-Path $diagRoot 'node-modules-root.txt') -Encoding utf8
-            throw "Electron builder CLI is missing: $electronBuilderCli"
-          }
-          "electron_builder_cli=$electronBuilderCli" | Set-Content -LiteralPath (Join-Path $diagRoot 'resolved-cli.txt') -Encoding utf8
-
-          if (Test-Path -LiteralPath $outputRoot) {
-            Remove-Item -LiteralPath $outputRoot -Recurse -Force
-          }
-
           $timer = [System.Diagnostics.Stopwatch]::StartNew()
-          $previousErrorAction = $ErrorActionPreference
-          $ErrorActionPreference = 'Continue'
-          & node $electronBuilderCli `
-            --win `
-            --projectDir $electronRoot `
-            --config.directories.output '..\..\release-packages\electron' `
-            --publish never *>&1 | Tee-Object -FilePath $logPath
-          $exitCode = $LASTEXITCODE
-          $ErrorActionPreference = $previousErrorAction
-          $timer.Stop()
-
-          if (Test-Path -LiteralPath $outputRoot) {
-            Get-ChildItem -LiteralPath $outputRoot -Recurse -Force |
-              Select-Object FullName, Length, LastWriteTimeUtc |
-              Format-Table -AutoSize |
-              Out-String -Width 4096 |
-              Set-Content -LiteralPath $treePath -Encoding utf8
-          } else {
-            'Direct CLI output root was not created.' | Set-Content -LiteralPath $treePath -Encoding utf8
+          try {
+            pnpm release:package:electron:win
+            if ($LASTEXITCODE -ne 0) {
+              throw "Formal Electron packaging failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            $timer.Stop()
+            "elapsed_seconds=$([math]::Round($timer.Elapsed.TotalSeconds))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           }
 
-          $setups = @()
-          if (Test-Path -LiteralPath $outputRoot) {
-            $setups = @(Get-ChildItem -LiteralPath $outputRoot -Recurse -Force -File | Where-Object { $_.Name -match 'Setup.*\.exe$' })
+      - name: Verify Electron package outputs
+        id: verify
+        shell: pwsh
+        run: |
+          $outputRoot = Join-Path $PWD '.artifacts\release-packages\electron'
+          $manifestPath = Join-Path $outputRoot 'package-manifest.json'
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            throw "Missing package manifest: $manifestPath"
           }
 
-          @(
-            "source_commit=$env:DIAGNOSTIC_SOURCE_COMMIT"
-            "source_run_id=$env:DIAGNOSTIC_SOURCE_RUN_ID"
-            "payload_name=$env:DIAGNOSTIC_PAYLOAD_NAME"
-            'original_pnpm_exec_exit_code=1'
-            'original_pnpm_exec_elapsed_seconds=180'
-            "direct_cli_exit_code=$exitCode"
-            "direct_cli_elapsed_seconds=$([math]::Round($timer.Elapsed.TotalSeconds))"
-            "direct_setup_count=$($setups.Count)"
-            "node_version=$(node --version)"
-            "pnpm_version=$(pnpm --version)"
-            "electron_builder_cli=$electronBuilderCli"
-          ) | Set-Content -LiteralPath $summaryPath -Encoding utf8
-
-          if ($setups.Count -gt 0) {
-            $setups | ForEach-Object {
-              "setup=$($_.FullName)|bytes=$($_.Length)|sha256=$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash)"
-            } | Add-Content -LiteralPath $summaryPath -Encoding utf8
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.consumer -ne 'electron') {
+            throw "Unexpected package consumer: $($manifest.consumer)"
+          }
+          if ($manifest.payloadCommit -ne $env:DIAGNOSTIC_SOURCE_COMMIT) {
+            throw "Payload commit mismatch: $($manifest.payloadCommit)"
           }
 
-          "direct_cli_exit_code=$exitCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          if ($exitCode -ne 0) {
-            throw "Direct electron-builder CLI failed with exit code $exitCode"
+          $setups = @(Get-ChildItem -LiteralPath $outputRoot -Recurse -File | Where-Object { $_.Name -match 'Setup.*\.exe$' })
+          $blockmaps = @(Get-ChildItem -LiteralPath $outputRoot -Recurse -File | Where-Object { $_.Name -match 'Setup.*\.exe\.blockmap$' })
+          if ($setups.Count -ne 1) {
+            throw "Expected one Setup executable, found $($setups.Count)"
           }
-          if ($setups.Count -eq 0) {
-            throw 'Direct electron-builder CLI exited successfully but produced no Setup executable.'
+          if ($blockmaps.Count -ne 1) {
+            throw "Expected one Setup blockmap, found $($blockmaps.Count)"
+          }
+          if ($setups[0].Length -lt 100MB) {
+            throw "Setup executable is unexpectedly small: $($setups[0].Length) bytes"
           }
 
-      - name: Upload Electron diagnostic evidence
-        if: always()
+          $hash = (Get-FileHash -LiteralPath $setups[0].FullName -Algorithm SHA256).Hash
+          Write-Host "Electron Setup: $($setups[0].Name)"
+          Write-Host "Bytes: $($setups[0].Length)"
+          Write-Host "SHA256: $hash"
+          Write-Host "releaseEligible: $($manifest.releaseEligible)"
+          "setup_name=$($setups[0].Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "setup_bytes=$($setups[0].Length)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "setup_sha256=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload verified Electron diagnostic package
         uses: actions/upload-artifact@v4
         with:
-          name: release-benchmark-electron-diagnostics-${{ github.sha }}
-          path: .artifacts/release-diagnostics/electron
+          name: release-benchmark-electron-formal-${{ github.sha }}
+          path: |
+            .artifacts/release-packages/electron/**/*Setup*.exe
+            .artifacts/release-packages/electron/**/*Setup*.exe.blockmap
+            .artifacts/release-packages/electron/package-manifest.json
           if-no-files-found: error
           retention-days: 2
-          compression-level: 6
+          compression-level: 0
 
       - name: Publish diagnostic final status
         if: always()
         uses: actions/github-script@v7
         env:
           PACKAGE_OUTCOME: ${{ steps.package.outcome }}
-          DIRECT_EXIT: ${{ steps.package.outputs.direct_cli_exit_code }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          SETUP_NAME: ${{ steps.verify.outputs.setup_name }}
         with:
           script: |
-            const succeeded = process.env.PACKAGE_OUTCOME === 'success';
+            const succeeded = process.env.PACKAGE_OUTCOME === 'success'
+              && process.env.VERIFY_OUTCOME === 'success';
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -308,7 +158,7 @@ jobs:
               state: succeeded ? 'success' : 'failure',
               context: 'release-factory-v2-electron-diagnostic',
               description: succeeded
-                ? 'Direct Electron builder CLI succeeded'
-                : `Direct Electron builder failed=${process.env.DIRECT_EXIT || 'unknown'}`,
+                ? `Formal Electron package verified: ${process.env.SETUP_NAME}`
+                : 'Formal Electron package verification failed',
               target_url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
             });
