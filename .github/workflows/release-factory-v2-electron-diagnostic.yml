@@ -113,7 +113,7 @@ jobs:
             'pnpm exec output root was not created.' | Set-Content -LiteralPath $wrapperTreePath -Encoding utf8
           }
 
-          $electronBuilderCli = (& node -e "process.stdout.write(require.resolve('electron-builder/out/cli/cli.js'))").Trim()
+          $electronBuilderCli = (& node -e "process.stdout.write(require.resolve('electron-builder/cli.js'))").Trim()
           if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($electronBuilderCli)) {
             throw 'Unable to resolve electron-builder direct CLI.'
           }
