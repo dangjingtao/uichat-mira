@@ -79,6 +79,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
+          $env:GITHUB_SHA = $env:DIAGNOSTIC_SOURCE_COMMIT
           $diagRoot = Join-Path $PWD '.artifacts\release-diagnostics\electron'
           New-Item -ItemType Directory -Force -Path $diagRoot | Out-Null
           $logPath = Join-Path $diagRoot 'electron-package.log'
