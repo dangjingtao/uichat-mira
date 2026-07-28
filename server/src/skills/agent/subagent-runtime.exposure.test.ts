@@ -14,6 +14,7 @@ import {
   prepareSubAgent,
   resolveSubAgentHarnessToolIds,
 } from "./subagent-runtime.js";
+import { projectProviderVisibleToolSchema as projectPiProviderVisibleToolSchema } from "./pi-core.js";
 
 const githubTools = [
   "github_repository",
@@ -130,5 +131,50 @@ describe("prepareSubAgent GitHub exposure", () => {
     expect(prepared.tools.map((tool) => tool.id)).toEqual(["skill_read_resource"]);
     expect(prepared.availableCapabilityCount).toBe(0);
     expect(prepared.missingCapabilities).toHaveLength(4);
+  });
+});
+
+describe("Ark Plan provider-visible schemas", () => {
+  const composedSchema = {
+    oneOf: [
+      {
+        type: "object",
+        required: ["operation", "repository"],
+        properties: { operation: { const: "get" }, repository: { type: "string" } },
+      },
+      {
+        type: "object",
+        required: ["operation", "repository"],
+        properties: {
+          operation: { const: "list_commits" },
+          repository: { type: "string" },
+          limit: { type: "integer" },
+        },
+      },
+    ],
+  };
+
+  it("projects composition only for Ark Plan while preserving the runtime schema", () => {
+    expect(
+      projectPiProviderVisibleToolSchema({
+        schema: composedSchema,
+        projectComplexToolSchemas: true,
+      }),
+    ).toEqual({
+      type: "object",
+      additionalProperties: true,
+      required: ["operation", "repository"],
+      properties: {
+        operation: { type: "string", enum: ["get", "list_commits"] },
+        repository: { type: "string" },
+      },
+    });
+    expect(composedSchema).toHaveProperty("oneOf");
+    expect(
+      projectPiProviderVisibleToolSchema({
+        schema: composedSchema,
+        projectComplexToolSchemas: false,
+      }),
+    ).toBe(composedSchema);
   });
 });

@@ -1,4 +1,9 @@
-export type BuiltInSkillPackageId = "docx" | "pdf" | "xlsx" | "pptx";
+export type BuiltInSkillPackageId =
+  | "docx"
+  | "pdf"
+  | "xlsx"
+  | "pptx"
+  | "github-collaboration";
 
 export const MIRA_LAB_SKILL_SOURCE = "Mira Lab";
 
@@ -70,6 +75,27 @@ const deferredStatefulRuntime = () => ({
  * contract for workflows that truly need lifecycle/state/reducers.
  */
 const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
+  {
+    id: "github-collaboration",
+    version: "0.1.0",
+    name: "GitHub 协作",
+    source: MIRA_LAB_SKILL_SOURCE,
+    category: "开发协作",
+    description:
+      "读取已授权 GitHub 项目的状态、Issue、Pull Request 和 Actions，并在 Harness 审批边界内推进远程协作。",
+    bundled: true,
+    runtimeCapabilities: [],
+    packageFiles: [
+      "SKILL.md",
+      "references/project-pulse.md",
+      "references/issue-stewardship.md",
+      "references/pr-review.md",
+      "references/actions-triage.md",
+      "references/delivery-flow.md",
+    ],
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
+  },
   {
     id: "docx",
     version: "1.0.0",

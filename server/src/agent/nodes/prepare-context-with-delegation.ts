@@ -48,9 +48,16 @@ const buildNeedsInputQuestion = (requirements: Record<string, unknown>[]) => {
     .filter(Boolean)
     .slice(0, 3);
 
-  return questions.length > 0
-    ? questions.join("\n")
-    : "还需要一项必要信息才能继续完成这个任务。请补充缺失的信息。";
+  return questions.length > 0 ? questions.join("\n") : undefined;
+};
+
+const hasForkedSkillContext = (state: AgentNodeState) => {
+  const frame = state.currentTaskFrame as
+    | (NonNullable<AgentNodeState["currentTaskFrame"]> & {
+        skillContext?: { primary?: { execution?: { context?: string } } };
+      })
+    | undefined;
+  return frame?.skillContext?.primary?.execution?.context === "fork";
 };
 
 const addPlannerDelegationSurface = (
@@ -106,11 +113,20 @@ const resumeGenericTaskSubAgent = async (
   }
 
   if (observation.status === "partial" && result.status === "needs_input") {
+    const question = buildNeedsInputQuestion(result.requirements);
+    if (!question) {
+      return {
+        ...committed,
+        errorMessage: "subAgent returned needs_input without a user_input requirement.",
+        errorSourceNodeId: "agent-generic-task-subagent",
+        finalizationPacket: undefined,
+      };
+    }
     return {
       ...committed,
       nextAction: {
         type: "ask_user",
-        question: buildNeedsInputQuestion(result.requirements),
+        question,
         reason:
           "The resumed delegated task reached a structured needs_input boundary; Parent must collect the missing information before continuing.",
       },
@@ -156,5 +172,6 @@ export const prepareContextWithDelegationNode = async (
   }
 
   const prepared = await prepareContextWithForkedSkillAgentNode(state, emit);
+  if (hasForkedSkillContext({ ...state, ...prepared })) return prepared;
   return addPlannerDelegationSurface(prepared, state.toolExposure);
 };

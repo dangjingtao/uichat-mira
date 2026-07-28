@@ -20,6 +20,18 @@ describe("GitHub collaboration Skill package", () => {
       version: "0.1.0",
       category: "工程研发",
       source: "Mira Lab",
+      origin: "built-in",
+      execution: {
+        context: "fork",
+        agent: "subAgent",
+        allowedTools: [
+          "github_repository",
+          "github_issue",
+          "github_pull_request",
+          "github_actions",
+        ],
+        workspaceBound: false,
+      },
     });
 
     const resources = await new SkillLoader().listResources(manifest!);
