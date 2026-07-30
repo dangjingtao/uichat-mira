@@ -5,16 +5,23 @@ last_verified: 2026-07-30
 layer: schema
 module: Docs
 feature: ArchivePolicy
-doc_type: current-contract
+Doc Type: current-contract
 canonical: true
 related:
   - ../README.md
+  - agent/README.md
+  - tool/README.md
   - ../knowledge-system/DOCUMENTATION_STANDARDS.md
 ---
 
 # 文档归档规则
 
 归档的目的不是删除历史，而是阻止旧结论继续冒充当前事实。
+
+## 当前归档索引
+
+- [[archive/agent/README]]：Agent 历史路线、阶段清单与旧多 Agent / Pilot 口径；
+- [[archive/tool/README]]：Tool / Harness 旧矩阵、整改台账与 CodeGraph 实现前方案。
 
 ## 自动进入历史归档的情况
 
@@ -46,6 +53,12 @@ related:
 - 原路径不再承担兼容入口。
 
 移动后应同步修复相关链接。
+
+当原路径仍被大量历史任务、评审和搜索结果引用时，可以：
+
+1. 把原正文复制到模块归档；
+2. 原路径替换为兼容退役页；
+3. 兼容页只指向当前真相与历史索引。
 
 ## 不能归档的内容
 

@@ -1,149 +1,144 @@
+---
+status: current
+owner: runtime
+last_verified: 2026-07-30
+layer: wiki
+module: Tool
+feature: Overview
+Doc Type: overview
+canonical: true
+related:
+  - ../TOOL_CURRENT_TRUTH.md
+  - ../harness/README.md
+  - ../harness/agentgraph-harness-protocol.md
+  - tools-protocol.md
+  - ../AGENT_CURRENT_TRUTH.md
+---
+
 # Tool 运行时总览
 
-Status: Current
-Owner: runtime
-Last verified: 2026-07-09
-Layer: wiki
-Module: Tool
-Feature: Overview
-Doc Type: overview
-Canonical: true
-Related:
-  - harness-runtime-design.md
-  - harness-assessment-2026-06-28.md
-  - core-tool-matrix-review.md
-  - core-tool-rectification-ledger.md
-  - agent-runtime-t29-t33-ledger.md
-  - project-map-design.md
-  - context-builder-design.md
-  - ../chat/agent-workspace-context-system.md
-  - read-skill-design.md
-  - tools-protocol.md
-  - tools-ecosystem-research.md
-  - tool-runtime-retrospective-2026-06-27.md
-  - codegraph-managed-mcp-spike.md
-  - codebase-understanding-consensus.md
-  - codebase-engine-benchmark.md
-  - codebase-engine-abstraction.md
-  - codegraph-wrapper-contract.md
-  - codegraph-managed-mcp-runtime-implementation-plan.md
+> 这页是 Tool 模块的阅读入口。当前工具面、暴露、审批和 CodeGraph 状态以 [[TOOL_CURRENT_TRUTH]] 为准。
 
-## 单点真相范围
+## 推荐阅读顺序
 
-这页是当前 `Tool` 模块的总入口。
+1. [[TOOL_CURRENT_TRUTH]]：当前公共工具面、动态能力、暴露规则、审批与已知漂移；
+2. [[harness/README]]：Harness 控制平面；
+3. [[harness/agentgraph-harness-protocol]]：Main Agent concrete invocation 与 Evidence；
+4. `tools-protocol.md`：工具 definition、exposure、invocation、event、artifact 技术协议；
+5. [[AGENT_CURRENT_TRUTH]]：工具如何进入 Agent / SubAgent 主线；
+6. [[skill/README]]：SkillContext、ExecutionProfile 与 private Runtime 边界。
 
-它主要回答：
+## 当前 Tool 结构
 
-- 当前项目里的 `Tool` 到底指什么
-- `Harness Runtime`、`Read`、工具协议、工具调研各自承担什么角色
-- 读工具运行时相关文档时，先从哪几篇开始最省脑子
+```text
+Registry
+  -> public surface / explicit availability
+  -> Tool Exposure
+  -> Planner or governed Child chooses concrete tool
+  -> Normalize
+  -> Policy / Approval
+  -> Harness Invocation
+  -> Result / Artifact / Trace
+  -> Evidence
+```
 
-它不替代细页本身，而是负责把当前有效阅读路径讲清楚。
+必须分开：
 
-## 推荐入口
+- **Registry**：运行时知道哪些 implementation；
+- **Public Surface**：哪些 implementation 可以成为 Planner 工具；
+- **Availability**：连接、用户、Runtime 或配置是否真实成立；
+- **Tool Exposure**：本轮 Planner 看到什么；
+- **Invocation**：本次 frozen args 是否可以执行；
+- **Evidence**：执行结果是否进入累计事实。
 
-1. `tools-protocol.md`
-2. `harness-runtime-design.md`
-3. `read-skill-design.md`
-4. `terminal-capability-checklist.md`
-5. `tools-ecosystem-research.md`
-6. `codebase-understanding-consensus.md`
-7. `codebase-engine-benchmark.md`
-8. `codegraph-managed-mcp-spike.md`
-9. `codebase-engine-abstraction.md`
-10. `codegraph-wrapper-contract.md`
-11. `codegraph-managed-mcp-runtime-implementation-plan.md`
-12. `core-tool-matrix-review.md`
-13. `core-tool-rectification-ledger.md`
-14. `agent-runtime-t29-t33-ledger.md`
-15. `project-map-design.md`
-16. `context-builder-design.md`
-17. `../chat/agent-workspace-context-system.md`
+注册存在不等于 Planner 可见，Skill match 也不等于工具可用。
 
-## 当前结构
+## 当前核心公共面
 
-### 总协议
+### Read
 
-- `tools-protocol.md`
+- `read_discover`
+- `grep`
+- `read_open`
+- `codebase_explore`
 
-这页负责定义当前有效的工具协议总览。
+旧 `read_list / read_locate / read_extract / read_slice / read` 是内部 primitive 或兼容面，不进入当前 Agent exposure。
 
-### 运行时控制平面
+### Edit
 
-- `harness-runtime-design.md`
-- `harness-assessment-2026-06-28.md`
-- `project-map-design.md`
-- `context-builder-design.md`
-- `../chat/agent-workspace-context-system.md`
+- `write_file`
+- `replace_block`
+- `delete_path`
+- `move_path`
 
-这页负责定义工具运行时的中心控制平面。
+四个公开写工具都要求审批。旧 `edit_file / workspace_mutation` 只保留兼容。
 
-### 已落地的一等能力
+### Search
 
-- `read-skill-design.md`
+- `web_search`：公共互联网，Tavily / SearXNG 由受信任配置选择；
+- `news_search`：本地 News Hub 缓存，不是实时公网搜索。
 
-当前最明确落地的一等能力是 `Read`。
+### Terminal
 
-### 工作中清单
+- `terminal_session`
 
-- `terminal-capability-checklist.md`
+这是完整 host shell / PTY runtime，不是 command sandbox，也不是第三方集成容器。
 
-这页承接当前仍在推进中的工具能力实施清单。
+## 当前扩展能力
 
-### 研究与复盘
+当前 registry / dynamic registration 还包括：
 
-- `tools-ecosystem-research.md`
-- `tool-runtime-retrospective-2026-06-27.md`
-- `core-tool-matrix-review.md`
-- `core-tool-rectification-ledger.md`
-- `agent-runtime-t29-t33-ledger.md`
-- `codebase-understanding-consensus.md`
-- `codebase-engine-benchmark.md`
-- `codegraph-managed-mcp-spike.md`
-- `codebase-engine-abstraction.md`
-- `codegraph-wrapper-contract.md`
-- `codegraph-managed-mcp-runtime-implementation-plan.md`
+- Managed Computer Use：`browser_observe / browser_act / browser_assert`；
+- Attached Browser：`browser_attached_look / browse / act / transfer`；
+- Mail：`mail_query`；
+- GitHub：`github_repository / issue / pull_request / actions`；
+- External Expert：`ask_external_expert`，仅连接真实可用时暴露；
+- External MCP：`mcp:<serverId>:tool:<toolName>`，需要连接、discovery 和 Agent Access；
+- WenShu / Office private runtime：只进入 Skill-owned execution，不进入普通 Main Tool Exposure。
 
-前者回答外部成熟方案与行业风向，后者回答这一轮工具运行时改造里踩过的坑与已经确认的边界，`core-tool-matrix-review.md` 负责从矩阵视角统一 `Read / Edit / Web Search / Terminal` 的语义、治理和 action profile 颗粒度，`core-tool-rectification-ledger.md` 负责按整改优先级推进执行项，`agent-runtime-t29-t33-ledger.md` 负责登记新一轮 `T29-T33` 任务包的标准命名、依赖和状态，`codebase-understanding-consensus.md` 负责记录代码库理解能力的阶段性共识和暂不实现边界，`codebase-engine-benchmark.md` 负责定义 CodeGraph、`codebase-memory-mcp`、Serena 进入实现前的真实仓库评测问题集和评分规则，`codegraph-managed-mcp-spike.md` 负责定义 CodeGraph 第一阶段推荐的 Managed MCP server 形态、Windows 部署边界、生命周期、telemetry 关闭和原文核验约束，`codebase-engine-abstraction.md` 负责收敛 provider 抽象、统一结果合同、第一阶段暴露面与降级策略，`codegraph-wrapper-contract.md` 负责把 CodeGraph 进入 runtime 前必须经过受控 `codebase_explore` wrapper 的合同、scope、裁剪、核验和降级链固定下来，`codegraph-managed-mcp-runtime-implementation-plan.md` 负责把 CodeGraph 真正进入 runtime 前的托管进程、wrapper 挂接、Trace、Evidence 和失败降级计划固定下来，但当前仍是 docs-only implementation plan。
+## Tool Exposure
 
-## 当前结论
+```text
+public eligible tools <= 20
+  -> expose all
+  -> skip ranking
 
-当前 `Tool` 模块已经有一条清晰主线：
+public eligible tools > 20
+  -> embedding / rerank
+  -> expose top 20
+```
 
-- `tools-protocol.md` 是协议总纲
-- `harness-runtime-design.md` 是运行时中枢
-- `read-skill-design.md` 是第一批稳定落地能力
-- `codebase-understanding-consensus.md` 是代码库理解能力进入实现前的共识边界
-- `codebase-engine-benchmark.md` 是代码库理解候选引擎进入实现前的评测方案
-- `codegraph-managed-mcp-spike.md` 是 CodeGraph 第一阶段接入前的托管形态与运行边界设计
-- `codebase-engine-abstraction.md` 是多 provider 代码库理解层进入实现前的统一抽象与结果合同设计
-- `codegraph-wrapper-contract.md` 是 CodeGraph 第一阶段只能经由 `codebase_explore` wrapper 暴露给 Planner 的受控合同
-- `codegraph-managed-mcp-runtime-implementation-plan.md` 是 CodeGraph 进入 runtime 前的 implementation plan，固定托管进程、Trace、Evidence 和失败降级边界
-- 其他工具域继续围绕这条主线扩展
+- caller `topK / maxTools / minScore` 不能缩小小工具集；
+- 没有 score threshold 淘汰；
+- ranking 失败使用确定性前 20；
+- 用户选择的工具包只提供 ranking preference，不改变 canonical exposure；
+- capability match、selectedToolId、UI 选中状态都不是 invocation。
 
-## 可维护性判断
+## Approval
 
-当前工具层已经进入**可维护但仍有少量遗留问题**的状态。
+公开 Edit、Terminal、Browser act/transfer 与 External MCP 具有明确审批要求。
 
-这意味着：
+GitHub 远程写、Mail force sync 等还会按具体 operation 动态要求审批。
 
-- 协议边界已经比早期清晰很多，`source`、`domain`、`McpExecutionEnvironment`、`McpStreamEvent` 都已经成为稳定约束
-- 注册、执行、环境、UI surface 基本分层，新增能力不再需要从零拼一套链路
-- 但仍有少量历史术语、文档口径和个别决策逻辑分散在不同层，后续还需要继续清理
+当前 core matcher 实际使用 `toolId + inputHash`，而 settled exact-invocation 目标还包含 `toolCallId`。这是已知实现漂移，详见 [[TOOL_CURRENT_TRUTH]]。
 
-现在可以继续稳定加能力，但前提是：
+## CodeGraph 当前状态
 
-- 新工具必须先走协议和测试
-- 不再把能力域、产品归属、审批策略混成一个字段
-- 文档和实现必须同步更新，否则维护成本会再次回升
+`codebase_explore` 已经是当前公共 Read 工具，不再是 docs-only plan：
 
-## 相关文档
+- 常驻稳定工具 id；
+- provider / runtime 由 CodeGraph Studio 配置；
+- Agent workspace 拥有实际 runtime context；
+- 原生结果必须经过 workspace source verification；
+- 不可用时返回 structured degraded / fallback signal。
 
-- `../architecture/external-mcp-marketplace.md`
-- `../prompt-manager-rules/README.md`
-- `../role/tool-integration-checklist.md`
-- `codebase-understanding-consensus.md`
-- `codebase-engine-benchmark.md`
-- `codebase-engine-abstraction.md`
-- `codegraph-wrapper-contract.md`
-- `codegraph-managed-mcp-runtime-implementation-plan.md`
+旧的 benchmark、spike、wrapper 与 implementation plan 已转入历史归档，保留它们用于解释演进。
+
+## 历史与施工资料
+
+- `project-control/tasks/`：施工卡；
+- `project-control/reviews/`：评审；
+- `project-control/testEvidence/`：测试证据；
+- `archive/tool/`：旧矩阵、整改台账、六月设计和 CodeGraph 实现前方案。
+
+施工记录可以解释为什么这样做，但不能覆盖当前代码和 [[TOOL_CURRENT_TRUTH]]。

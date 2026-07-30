@@ -1,0 +1,542 @@
+---
+status: current
+owner: runtime
+last_verified: 2026-07-30
+layer: wiki
+module: Tool
+feature: ToolRuntime
+Doc Type: current-snapshot
+canonical: true
+related:
+  - AGENT_CURRENT_TRUTH.md
+  - harness/README.md
+  - harness/agentgraph-harness-protocol.md
+  - tooling-runtime/README.md
+  - tooling-runtime/tools-protocol.md
+  - skill/README.md
+---
+
+# UIChat Mira Tool 当前真相
+
+> 这页记录 `dev` 分支当前真实存在的 Tool / Harness 工具面、暴露规则、审批、执行、结果与降级语义。它不重新设计 Agent Graph，也不把历史整改计划包装成现状。
+
+## 1. 先说结论
+
+Mira 当前的 Tool 系统不是一张固定的“四类工具清单”，也不是由 Harness 猜测任务阶段后只给 Planner 几个工具。
+
+更准确的运行关系是：
+
+```text
+built-in registry + dynamic capability registration
+  -> public-surface classification
+  -> explicit availability gates
+  -> Tool Exposure
+       <= 20：全部暴露
+       > 20：embedding / rerank 后暴露前 20
+  -> Main Planner 或受控 Child 选择 concrete tool
+  -> Normalize 冻结 pendingToolCall
+  -> Policy / Approval
+  -> Harness Invocation
+  -> pending tool result / retrieval result
+  -> Evidence
+```
+
+Harness 是 concrete tool 的控制平面，不是 Planner、SubAgent 编排器或最终回答器。
+
+## 2. Registry 与 Public Surface 必须分开
+
+`server/src/harness/runtime.ts` 注册内置能力，也保留部分历史兼容实现。
+
+**注册存在不等于 Planner 可见。**
+
+当前 exposure policy 会隐藏：
+
+- `read`
+- `read_list`
+- `read_locate`
+- `read_extract`
+- `read_slice`
+- `edit_file`
+- `workspace_mutation`
+
+这些对象可以继续服务持久化旧调用、内部 primitive 或兼容逻辑，但不是当前 `agent_intent` 的公共 Planner 工具。
+
+动态注册还包括：
+
+- Managed Computer Use browser tools；
+- Attached Browser tools；
+- `codebase_explore`；
+- 已连接且符合条件的 external MCP projected tools；
+- 其他运行时按真实服务状态注册或过滤的能力。
+
+因此，任何工具文档都必须同时回答：
+
+1. registry 中是否存在；
+2. 是否属于公共 surface；
+3. 当前环境是否可用；
+4. 是否进入本轮 Tool Exposure；
+5. 本次 exact invocation 是否获准执行。
+
+## 3. 当前公共 Read 面
+
+Planner 当前看到的 Read 认知动作是：
+
+```text
+Read
+├─ read_discover
+├─ grep
+├─ read_open
+└─ codebase_explore
+```
+
+### `read_discover`
+
+只负责 workspace 的目录、路径、文件名和候选目标发现：
+
+- `mode: list`：列出目录对象；
+- `mode: locate`：按路径或名称定位候选；
+- 返回有限 preview；
+- 不进行内容 grep；
+- 不打开正文。
+
+### `grep`
+
+负责 deterministic workspace 内容搜索：
+
+- 字面文本；
+- 代码符号；
+- 引用；
+- 配置键；
+- 文档正文；
+- 可选 root、扩展名和结果上限。
+
+`grep` 是当前公开工具，不是 `read_locate` 的隐藏实现。
+
+### `read_open`
+
+打开已知目标：
+
+- workspace 文件；
+- 已披露的 `skill://` Resource；
+- 可选正数闭区间 line/range selection；
+- 结果可形成 text / code artifact。
+
+### `codebase_explore`
+
+用于代码架构、关系、调用链和影响面探索：
+
+- Planner 只看见 `codebase_explore`；
+- 原生 CodeGraph 命令留在 wrapper 内；
+- 候选会回到当前 workspace 做 source verification；
+- 已核验 excerpt 可以进入 retrieval Evidence；
+- provider 不可用时工具仍存在，并返回结构化 degraded / fallback signal。
+
+它不是第二个 Planner，也不是“只要 Studio ready 就算 E2E 成功”。
+
+## 4. 当前公共 Edit 面
+
+Planner 当前直接看到四个动作：
+
+```text
+Edit
+├─ write_file
+├─ replace_block
+├─ delete_path
+└─ move_path
+```
+
+### `write_file`
+
+- 新建文件；
+- 明确 `overwrite=true` 时整文件覆盖；
+- `content` 是完整目标内容；
+- 不承担局部 patch。
+
+### `replace_block`
+
+- 使用 exact `expectedOldText -> newText`；
+- 只允许唯一匹配；
+- 0 次或多次匹配都失败；
+- 不负责创建新文件。
+
+### `delete_path`
+
+- 删除文件或目录；
+- 目录删除需要显式 `recursive=true`；
+- 不把失败伪装成成功。
+
+### `move_path`
+
+- 移动或重命名文件 / 目录；
+- 默认不覆盖目标；
+- 不创建目标父目录。
+
+四个公开 Edit 工具都声明：
+
+- `sideEffect = local-write`；
+- `requiresApproval = true`；
+- `workspaceBound = true`。
+
+旧 `edit_file(operation=...)` 与 `workspace_mutation(operation=...)` 只保留兼容，不再是公共 Planner 合同。
+
+## 5. Search 不是一个含糊入口
+
+当前至少有两个不同的数据源合同：
+
+### `web_search`
+
+- 搜索当前公共互联网；
+- provider 在受信任 runtime config 中选择；
+- 当前支持 Tavily / SearXNG；
+- 模型只提供 `query` 与 `maxResults`；
+- 默认 4 条，限幅 1–10；
+- provider 失败按计划尝试下一可用 provider；
+- 所有 provider 失败才返回结构化错误；
+- `sideEffect = network`，但 definition 当前 `requiresApproval = false`。
+
+`apiKey`、`baseUrl` 和 provider 不是 LLM 参数。
+
+### `news_search`
+
+- 查询本地 News Hub 已收集缓存；
+- 使用关键词、向量、融合与 rerank；
+- 不等于实时公网搜索；
+- 默认 4 条，限幅 1–10；
+- `sideEffect = none`，不需要审批。
+
+不得再根据用户措辞把 `web_search` 偷换成 `news_search`，反之亦然。
+
+## 6. Terminal 是完整 Host Runtime
+
+当前唯一 Terminal 工具是：
+
+```text
+terminal_session
+```
+
+它支持：
+
+- shell / process 执行；
+- Node、Python、Git、包管理器与脚本；
+- ephemeral / persistent session；
+- PTY；
+- stdout / stderr 或 merged stream；
+- timeout / cancel / abort；
+- attach 已有 session；
+- 长任务、watcher、dev server 与 REPL；
+- Windows Job Object / taskkill fallback；
+- POSIX process group。
+
+它不是 generic integration container，但也不是已经退役的 command sandbox。
+
+### Terminal 与 workspace 的真实边界
+
+`terminal_session` 仍声明：
+
+- `requiresApproval = true`；
+- `workspaceBound = true`；
+- `sideEffect = process`；
+- `longRunning = true`。
+
+但当前 `cwd` 合同允许：
+
+- workspace 相对路径；
+- 父级路径；
+- 绝对路径；
+
+前提是经过本次 invocation 的审批与运行时校验。Terminal 的 host-process `cwd` 不会像普通文件工具一样被强制改写成 workspace-relative。
+
+所以不能再写成“Terminal 只能在 workspace 内执行”或“当前已具备强隔离 sandbox”。
+
+## 7. Browser 有两套不同能力面
+
+### Managed Computer Use Browser
+
+由服务启动时动态注册：
+
+```text
+browser_observe
+browser_act
+browser_assert
+```
+
+- `browser_observe`：创建或复用托管会话，读取页面 snapshot / text / screenshot；不需要审批；
+- `browser_act`：基于最新 `pageUrl + snapshotHash` 执行一次结构化动作；需要审批；
+- `browser_assert`：验证 title / url / text / visible / value；不需要审批；
+- Agent exposure schema 隐藏 `sessionId`，运行时按 thread 管理会话。
+
+### Attached Browser
+
+通过当前用户已连接的 WebBridge / 触界浏览器：
+
+```text
+browser_attached_look
+browser_attached_browse
+browser_attached_act
+browser_attached_transfer
+```
+
+- `look`：观察当前页、tabs、文本与 refs；不需要审批；
+- `browse`：导航、切换、滚动、等待等；当前不需要审批；
+- `act`：点击、填充、选择、按键等；需要审批；
+- `transfer`：上传显式内存文件或下载；需要审批；
+- 需要可信 authenticated user context。
+
+Managed Browser 和 Attached Browser 不能混写成同一个 session contract。
+
+## 8. Mail、GitHub 与问策
+
+### `mail_query`
+
+- 查询当前 authenticated user 的邮件缓存、过滤条件、正文与分页；
+- definition 当前 `requiresApproval = false`；
+- `sync=none` 只查缓存；
+- `sync=if-stale` 按条件同步；
+- `sync=force` 会在工具执行内部要求 explicit approval；
+- 返回内容会限幅并排除敏感字段。
+
+这说明 **静态 metadata 不是所有动态审批条件的完整表达**。工具内部仍可针对具体 operation 抛出 approval requirement。
+
+### GitHub
+
+当前只暴露四个领域工具：
+
+```text
+github_repository
+github_issue
+github_pull_request
+github_actions
+```
+
+每个工具用 `operation` 表达领域内动作。definition 通常保持网络工具可调用，远程写操作由 operation 级 `requireRemoteWriteApproval(...)` 要求审批，并执行 read-back 验证。
+
+不得重新拆成几十个 GitHub 原子工具，也不得绕过 installation repository scope。
+
+### `ask_external_expert`
+
+- 只有当前用户已经建立问策连接时才进入 exposure；
+- provider、conversation 和连接由内部服务管理；
+- 外部专家返回的是 Evidence；
+- 外部专家不能执行 Mira 工具；
+- 当前 definition 不需要审批。
+
+## 9. External MCP
+
+External MCP 支持：
+
+- `streamable-http`；
+- `stdio`；
+- discovery；
+- session；
+- persisted config；
+- one recovery attempt for stale sessions；
+- secret redaction。
+
+投影工具 canonical id：
+
+```text
+mcp:<serverId>:tool:<toolName>
+```
+
+进入 Agent exposure 必须同时满足：
+
+- server enabled；
+- connected；
+- disclaimer accepted；
+- transport 配置有效；
+- 已发现工具；
+- 用户显式开启 Agent Access；
+- canonical projected implementation 仍在 registry。
+
+External MCP projected tool：
+
+- `source = external`；
+- `domain = external_mcp`；
+- `sideEffect = network`；
+- `requiresApproval = true`；
+- 不允许 provider 私有命令或旧 id 穿透。
+
+## 10. WenShu / Skill-private Runtime 不属于普通 Tool Exposure
+
+Office document / PDF / presentation / spreadsheet runtime 当前可以由 WenShu / Skill execution profile 使用，但：
+
+- 不恢复成 Main Planner 的普通全局工具；
+- 不参与 Main Tool Exposure ranking；
+- readiness 由 managed binding / runtime pack 真实解析；
+- approval 与 workspace 仍必须由 Parent 治理；
+- Skill 声明不等于 Runtime ready。
+
+SkillContext 也不会扩大 Main Planner 的 canonical Tool Exposure。
+
+## 11. Tool Exposure 当前规则
+
+先做 public-surface classification 与 explicit availability gate，再做上下文预算。
+
+```text
+public eligible tools <= 20
+  -> 全部暴露
+  -> 不运行 embedding / rerank
+  -> caller topK / maxTools / minScore 不得缩小
+
+public eligible tools > 20
+  -> embedding recall
+  -> rerank
+  -> toolId 去重
+  -> 暴露前 20
+```
+
+当前没有：
+
+- `minScore` 淘汰；
+- 核心工具固定名额；
+- Browser-only exposure；
+- Terminal-needed heuristic；
+- task phase semantic censorship。
+
+ranking infrastructure 失败时，按 registry 顺序确定性暴露前 20。
+
+### 用户选择的工具包
+
+`requestedToolGroupIds` 当前只：
+
+- 为 ranking query 增加偏好；
+- 投影 available / unavailable 状态；
+- 写入 trace。
+
+它不会直接扩大、缩小或替换 Tool Exposure，也不会成为 invocation。
+
+## 12. Concrete Invocation 合同
+
+普通 Main Agent concrete tool 必须经过：
+
+1. Planner 输出已暴露的 `toolId + args`；
+2. Normalize 归一化 workspace 参数；
+3. schema validation；
+4. 冻结 `pendingToolCall`；
+5. 计算 SHA-256 `inputHash`；
+6. Policy 读取 frozen definition 与 frozen call；
+7. Harness 再次 schema validation；
+8. Tool 只执行与 Policy 一致的 invocation；
+9. invocation 事件、artifact、result 与 trace 被持久化；
+10. ToolNode 产生 pending execution / retrieval；
+11. Evidence 统一累计。
+
+以下对象都不能直接执行：
+
+- capability match；
+- ranking result；
+- preferredToolId；
+- selectedToolId；
+- UI 选中状态；
+- tool group；
+- Skill match。
+
+`delegate_task` 也不是普通 Harness Tool；它属于 Agent Runtime 的委派协议。
+
+## 13. Approval 当前真相与已知漂移
+
+### Settled exact-invocation 目标
+
+Agent 当前合同要求审批与 frozen invocation / checkpoint 对齐，文档长期口径使用：
+
+```text
+toolId + toolCallId + inputHash
+```
+
+参数、命令、cwd、env、timeout 或目标资源变化后必须重新审批。
+
+### 当前代码实际匹配
+
+截至 2026-07-30，核心 `ApprovedInvocation` 实际只包含并匹配：
+
+```text
+toolId + inputHash
+```
+
+当前实现同时具备：
+
+- pending approval request 保存 `toolCallId`；
+- frozen `pendingToolCall` 保存 `toolCallId`；
+- `inputHash` 覆盖完整归一化 args；
+- ToolNode 在执行尝试后一次性消费匹配批准。
+
+但 `toolCallId` 还没有进入 core approval grant match。
+
+判断：这是 **settled contract 与当前实现之间的审批身份漂移**。本轮只记录，不修改 Runtime，也不得把二元匹配悄悄包装成新合同。
+
+### 动态审批
+
+`requiresApproval` metadata 不是唯一来源：
+
+- GitHub 远程写操作；
+- `mail_query sync=force`；
+- 其他 operation-specific runtime requirement；
+
+可以在具体 invocation 中提出额外审批。
+
+因此不能简单写成“network 一律审批”或“metadata false 就永远不审批”。
+
+## 14. Result、Artifact、Trace 与 Evidence
+
+Harness invocation 统一产生：
+
+- start / progress / artifact / result / error / finish event；
+- invocation status；
+- input hash；
+- structured result；
+- bounded `llmContent`；
+- truncation metadata；
+- trace spans；
+- artifacts。
+
+`executeHarnessInvocation(...)` 只在 completed invocation 上生成 LLM projection。
+
+Tool result 不是自动的用户答案：
+
+```text
+Harness result
+  -> ToolNode pending execution / retrieval
+  -> Evidence
+  -> Planner acceptance / completion decision
+  -> Generate
+```
+
+CodeGraph verified retrieval 会走 retrieval Evidence；普通工具、Mail、GitHub、Browser、External MCP 等走 tool execution Evidence。
+
+## 15. 当前明确没有
+
+当前不能这样描述 Tool 系统：
+
+- Planner 公共 Read 面仍是六个 `read_*` primitive；
+- grep 只是隐藏在 `read_locate` 里的实现；
+- 公共 Edit 只有一个 `edit_file` wrapper；
+- 删除、移动仍未实现；
+- Harness 会按任务语义隐藏“看起来用不到”的公开工具；
+- Tool Group 可以直接改变 invocation；
+- 所有 network 调用都静态要求审批；
+- Terminal 被严格限制在 workspace 内；
+- 当前已经有强隔离 sandbox；
+- CodeGraph 仍停留在 docs-only plan；
+- External MCP 安装后自动获得 Agent Access；
+- `delegate_task` 是 Harness Tool；
+- Skill-private Runtime 是第二个 Harness。
+
+## 16. 文档引用顺序
+
+Tool 相关说明按以下优先级判断：
+
+1. 当前代码与可重复测试；
+2. 本页；
+3. `harness/README.md`；
+4. `harness/agentgraph-harness-protocol.md`；
+5. `tooling-runtime/tools-protocol.md`；
+6. 当前能力细节或 runbook；
+7. `project-control` 任务、评审和测试证据；
+8. design、plan、ledger 与历史归档。
+
+发现文档和代码不一致时，必须同时写明：
+
+- settled contract；
+- 当前实现；
+- 影响；
+- 是否已经修复与验证。
