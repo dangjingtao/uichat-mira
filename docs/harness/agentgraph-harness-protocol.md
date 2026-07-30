@@ -1,84 +1,47 @@
-# AgentGraph 与 Harness 当前协议
-
-Status: Current
-Owner: agent-runtime
-Last verified: 2026-07-22
-Layer: wiki
-Module: Agent Runtime / Harness
-Feature: AgentGraphProtocol
-Doc Type: current-contract
-Canonical: true
-Related:
+---
+status: current
+owner: agent-runtime
+last_verified: 2026-07-30
+layer: wiki
+module: Agent
+feature: AgentGraphProtocol
+doc_type: current-contract
+canonical: true
+related:
+  - ../AGENT_CURRENT_TRUTH.md
   - ../ENGINEERING_MEMORY.md
-  - ../chat/agent-runtime-design.md
+  - README.md
+  - ../skill/README.md
+  - ../skill/pi-skill-agent-execution.md
   - ../development/agent-observability.md
   - ../tooling-runtime/tools-protocol.md
+---
 
-## 这页回答什么
+# AgentGraph 与 Harness 当前协议
 
-这页记录当前代码中 AgentRun、AgentGraph 门面、Pi Loop、LangGraph 兼容运行时与 Harness 的真实协作关系。
+> 这页定义 AgentGraph 稳定门面、Main Planner、Harness、Evidence、Approval 与 SubAgent 之间的技术合同。整体事实先读 [[AGENT_CURRENT_TRUTH]]。
 
-它不是未来设计草图，也不是任务卡汇总。
+## 1. Runtime 关系
 
-## 当前结论
-
-`AgentGraph` 当前是稳定运行时门面，不等同于 LangGraph 本身。
-
-应用默认运行时是 `pi_loop`：
+`AgentGraph` 是稳定运行时门面，不等于 LangGraph 本身。
 
 ```text
 AgentRun
-  -> agentGraph.run
-  -> Pi Loop（默认）
-  -> Planner
-  -> Normalize
-  -> Policy
-  -> Tool / Retrieve
-  -> Evidence
-  -> Planner
-  -> Generate
-  -> Finalize
-  -> AgentRun
-```
-
-LangGraph 只保留为显式兼容运行时、测试对照与回归比较。
-
-## 运行时选择
-
-统一入口：
-
-```ts
-agentGraph.run(input: AgentGraphInput): Promise<AgentGraphOutput>
+  -> agentGraph.run(...)
+  -> Pi Loop（应用默认）
+     或 LangGraph（显式兼容 / 测试对照）
 ```
 
 | 条件 | 实际运行时 |
 | --- | --- |
-| 正常应用启动，未设置环境变量 | `pi_loop` |
+| 正常应用未设置环境变量 | `pi_loop` |
 | `MIRA_AGENT_RUNTIME=pi_loop` | `pi_loop` |
 | `MIRA_AGENT_RUNTIME=langgraph` | LangGraph 兼容运行时 |
-| 测试环境且未显式指定 | LangGraph，保留历史测试行为 |
+| 测试环境未显式指定 | LangGraph，保留历史测试行为 |
 
-必须区分：
+两种运行时共用 AgentRun、input / output、checkpoint、语义步骤、execution node、Planner、Harness、Evidence 与 Generate。
 
-- Agent Runtime / AgentGraph 门面：稳定对外合同
-- Pi Loop：应用默认编排器
-- LangGraph：兼容与对照运行时
-
-## 主线不变量
-
-1. Planner 只输出 `nextAction`。
-2. Normalize 只校验并冻结 `nextAction.use_tool`，生成 frozen `pendingToolCall`。
-3. Policy 只审批 frozen `pendingToolCall`。
-4. Tool 只执行与 Policy 决策一致的 frozen `pendingToolCall`。
-5. Tool / Retrieve 只写 pending 事实，不直接改写累计 Evidence。
-6. Evidence 是累计证据的单一写入者。
-7. Tool / Retrieve 完成后必须先进入 Evidence，再回 Planner。
-8. `capabilityIntent.selectedToolIds` 不得进入真实执行链。
-9. `selectedToolId` 只保留 UI、trace、diagnostics 与兼容语义。
-10. waiting approval、terminal error、recovery exhausted 状态不得继续执行工具。
-11. Generate 必须依据已经进入 Evidence 的真实结果回答。
-
-核心闭环：
+## 2. Main Agent 普通闭环
 
 ```text
 Planner
@@ -89,8 +52,6 @@ Planner
   -> Planner
 ```
 
-检索闭环：
-
 ```text
 Planner
   -> Retrieve
@@ -98,17 +59,68 @@ Planner
   -> Planner
 ```
 
-收口路径：
-
 ```text
 Planner(answer / ask_user)
   -> Generate
   -> Finalize
 ```
 
-## Planner 当前合同
+## 3. 当前两类委派路径
 
-Planner 是 task model 驱动的下一步决策器，不是静态计划表推进器。
+### Generic Task SubAgent
+
+Main Planner 可以输出：
+
+```text
+use_tool(delegate_task)
+```
+
+`delegate_task` 是 Planner-only runtime protocol，不是普通 Harness invocation。
+
+```text
+Main Planner
+  -> delegate_task(goal, acceptanceCriteria)
+  -> Generic SubAgent
+  -> child-local plan / act / observe / recover
+  -> structured observation
+  -> Evidence
+  -> Main Planner acceptance
+```
+
+合同：
+
+- 只委派一个边界清楚、可独立验收的工作包；
+- Child 只拥有 task-local execution；
+- Main Planner 保留 global goal、依赖、验收与最终回答；
+- Child 只看见当前实际可用且允许的 concrete tools；
+- `delegate_task` 不进入 Child 工具面，V1 禁止递归委派；
+- completed / insufficient / recoverable 返回 Main Planner；
+- needs_input 由 Parent 提问；
+- approval 由 Parent 保存 exact invocation 与 checkpoint；
+- terminal child failure 进入 error path。
+
+### Skill-owned SubAgent
+
+任务型 primary Skill 可以声明 `execution.context = fork`，把领域施工交给 forked SubAgent。
+
+```text
+SkillContext + ExecutionProfile
+  -> Skill-owned SubAgent
+  -> Skill-scoped tools / private runtime
+  -> Evidence / Artifact / Requirement
+  -> Parent governance
+```
+
+- Generic Child completed：回 Main Planner 判断全局目标；
+- Skill-owned Child completed：冻结 Parent finalization packet，直接 Generate；
+- Stateful Skill Flow 可以作为该 Skill 的确定性 SubAgent controller；
+- needs_input 由 Parent 确定性交付；
+- recoverable 返回受限恢复面；
+- terminal failure 不进入 Generate。
+
+## 4. Planner 合同
+
+Planner 是 task-model 驱动的下一步决策器。
 
 允许动作：
 
@@ -120,326 +132,172 @@ Planner 是 task model 驱动的下一步决策器，不是静态计划表推进
 
 Planner 读取：
 
-- 用户目标
-- `currentTaskFrame`
-- exposed tools
-- observations
-- Evidence 历史与最新摘要
-- 最近 Tool / Retrieve 结果
-- schema replan 上下文
-- recoverable failure 上下文
-- pending approval 状态
+- 用户目标；
+- `currentTaskFrame`；
+- bounded conversation history；
+- `state.toolExposure`；
+- observations 与 Evidence；
+- semantic action ledger；
+- recovery context；
+- pending approval；
+- active Skill directive。
 
-Planner 必须区分：
+Planner 必须区分 evidence answerable 与 task completable。
 
-- evidence answerable
-- task completable
+`answer` 必须提供 `completionProof`，并冻结为 `finalizationPacket`。
 
-局部证据可解释，不代表整个任务已完成。
+`planList` 只有 `{ id, text, done }`，不能保存工具结果、Evidence、推理或回答。
 
-### Pi-style runtime plan 与连续上下文
+Pi Loop 没有全局 iteration cap；schema replan 与 recoverable failure 有局部预算。
 
-Planner 可以通过顶层 `planPatch` 维护一个轻量运行时计划：
+## 5. Tool Exposure 与 delegate_task
 
-```json
-{
-  "planPatch": {
-    "addItems": [{ "id": "P1", "text": "完成一个语义子目标" }],
-    "completeIds": ["P1"]
-  }
-}
-```
-
-计划项只有 `{ id, text, done }`。它只表达方向和完成状态，不承载工具结果、事实、Evidence、推理、活动项状态或结果元数据。计划项的身份、顺序和已存在文本由 runtime 维护；Planner 只能追加新语义项或标记已有项完成，不能重写、删除或重排已有项。
-
-Pi Loop 的动作/结果记忆来自 runtime-owned 的连续上下文，而不是只保留最近一轮消息：
-
-- 最近若干条已进入 Evidence 的 canonical tool / retrieval 结果可以进入 Planner，上限为 `36_000` 字符；
-- 全量累计 observations 会构造成有界的语义动作账本，重复目标合并为一项，账本上限为 `24_000` 字符；
-- 原始工具输出只有在已经进入 Evidence、并由 Harness 投影为 `llmContent` 后，才允许进入 Planner 上下文；
-- `planList` 只是导航，不能替代连续上下文，也不存在通过打开 `ENGINEERING_MEMORY.md` 或其他记忆文件恢复 Agent 状态的隐式能力。
-
-Planner 的 `answer` 仍是整个循环的终止动作。它必须给出 `completionProof`；只要 `currentTaskFrame.completionCriteria` 仍有未被累计执行证据覆盖的要求，就必须继续执行、询问用户或报告明确错误。
-
-Pi Loop 没有全局 iteration cap。`maxIterations = 0` 只保留兼容与诊断语义。
-
-局部恢复仍有预算：
-
-- schema replan
-- recoverable tool failure
-
-## 可见 Planner OS
-
-前端展示的“思考下一步”只来自 Planner JSON 中公开的 `reason` 字段。
-
-它不是：
-
-- 隐藏 chain of thought
-- 原始完整模型输出
-- 未脱敏 prompt
-
-产品合同：
-
-- Planner 决策期间展示公开 reason
-- 回答组织完成后 OS 消失
-- 执行轨迹按真实语义顺序展示
-- 重复语义节点使用 `attemptKey` 保留每次执行
-
-## Tool Exposure 与真实执行入口
-
-Harness Tool Exposure 只回答：
-
-> 本轮 Planner 可以看见哪些工具及其 schema？
-
-它不决定最终执行哪个工具。
-
-职责边界：
-
-- Harness 的 `PrepareContext -> candidate resolver` 负责生成本轮 `toolExposure`。
-- `toolExposure` 是 Planner 当前可见工具集合和工具元数据的唯一运行时真相源。
-- Planner 不暴露工具、不计算候选排名；Planner 只从 `toolExposure` 中选择下一步是否使用某个具体 tool id。
-- capability profile、embedding 与 rerank 都是 Harness 内部的上下文压缩机制，不得直接生成 `pendingToolCall`。
-
-### 当前暴露流程
+`state.toolExposure` 是 Main Planner 可见 concrete tools 的运行时真相。
 
 ```text
-Harness Registry
-  -> eligibility / public exposure
-  -> eligible concrete tool definitions
+eligible concrete tools
   -> <= 20：全部暴露
-  -> > 20：capability profiles
-           -> embedding 全量召回
-           -> reranker 最终排序
-           -> embedding 仅用于 rerank 同分排序
-           -> 展开为 concrete tools
-           -> toolId 去重
-           -> 取前 20
-  -> state.toolExposure
-  -> Planner
+  -> > 20：capability profile / embedding / rerank
+  -> concrete tool expansion
+  -> 去重
+  -> 前 20
 ```
 
-当前查询文本由 `prepareContextNode` 确定：
+当前没有 `minScore` 淘汰和核心工具固定名额。Recall 与 rerank 只服务上下文压缩，不直接决定 invocation。
 
-```ts
-getLatestUserQuestion(state.messages) || state.goal.text
-```
+`delegate_task` 由 Agent Runtime 额外加入 Planner surface：
 
-这意味着排序使用本轮最新用户问题；它不会自动把更早消息重新拼成一个完整任务描述。
+- 不来自 Harness ranking；
+- 不对应外部 invocation；
+- 不进入 Main Agent 普通 Normalize / Policy / ToolNode；
+- 只启动受控 Child execution；
+- Child concrete tool 仍受 binding、Policy、approval 与环境约束。
 
-### 不超过 20 个工具
+## 6. Concrete Tool 不变量
 
-当 eligible concrete tools 数量不超过 `20`：
+1. Planner 只提出 concrete `nextAction.use_tool`；
+2. Normalize 校验 schema 并冻结 `pendingToolCall`；
+3. Policy 只判断 frozen invocation；
+4. Tool 只执行与 Policy 一致的 invocation；
+5. Tool / Retrieve 不直接写累计 Evidence；
+6. Evidence 是累计证据的单一写入者；
+7. Tool / Retrieve 后必须先进入 Evidence；
+8. `selectedToolId` 只服务 UI、trace、diagnostics 与兼容读取；
+9. capability match、ranking、UI 状态不得成为执行入口；
+10. Generate 只消费 finalization packet 引用的 Evidence。
 
-- Harness 全部暴露，不运行 embedding 或 rerank。
-- 用户措辞、`topK`、`maxTools`、`minScore` 不会缩小 Planner 可见工具面。
-- 工具顺序不构成 Planner 的执行决定。
+## 7. frozen pendingToolCall
 
-### 超过 20 个工具
+普通 concrete call 至少冻结：
 
-当 eligible concrete tools 数量超过 `20`：
+- tool call id；
+- `toolId`；
+- `args`；
+- `inputHash`；
+- `reason`；
+- source / status；
+- tool metadata。
 
-1. Harness 先把 concrete tools 归入 capability profiles；没有预定义 profile 的工具使用一工具一 profile 的 fallback profile。
-2. capability 文档与查询文本一起进入本地 embedding，余弦相似度写入 `embeddingScore`。
-3. 当前实现把全部 capability matches 交给本地 reranker，不在 rerank 前按 `topK` 截断。
-4. `rerankScore` 决定最终顺序；不再使用 `0.8 * embeddingScore + 0.2 * rerankScore`。
-5. `rerankScore` 相同时，使用 `embeddingScore` 降序作为稳定排序依据。
-6. 排序后的 capability 展开为其 `supportingToolIds`，具体工具继承 capability 的 rerank 与 embedding 分数。
-7. 具体工具再次按 rerank、embedding 排序，按 `toolId` 去重，最后取前 `20` 写入 `toolExposure`。
+Normalize 后不得再根据用户文字、capability intent 或旧 `selectedToolId` 重建参数。
 
-当前没有：
+SubAgent approval 的 frozen call 还保存：
 
-- `ruleScore` 加分；该字段当前为 `0`。
-- `minScore` 阈值淘汰。
-- 给 `terminal_session` 或其他核心工具保留固定名额。
-- Planner 二次补选或改写 Harness 排名。
+- `origin: skill_agent` 兼容标记；
+- `skillId`；
+- transcript checkpoint；
+- checkpoint pending invocation。
 
-`topK` 当前只限制诊断结果中的 `topCandidates` 数量，不改变 Planner 最终可见的 `20` 个工具。
+## 8. Policy、Approval 与 Resume
 
-### 退化路径
-
-- 查询为空或没有 capability profile：按 eligible tool definition 的稳定顺序取前 `20`。
-- embedding 调用失败：按 eligible tool definition 的稳定顺序取前 `20`，并返回 retrieval error 诊断。
-- reranker 调用失败：保留 embedding 排序。
-- reranker 没有返回某个 capability 的分数：该 capability 的 `rerankScore` 记为 `0`，再由 embedding 处理同分顺序。
-- 展开后如果出现未排名的 public tool：按稳定顺序补入，再统一截取前 `20`。
-
-这些退化路径只保证工具面可构造，不保证任何指定工具必然进入前 `20`。关键工具是否需要固定暴露资格属于 Tool Exposure Policy，不属于分数校准。
-
-不得恢复为执行入口的对象：
-
-- capability id
-- capability match
-- preferredToolId
-- `capabilityIntent.selectedToolIds`
-- `selectedToolId`
-- query keyword rule
-- UI 选中状态
-
-真实执行永远从 frozen `pendingToolCall` 开始。
-
-### Code Anchors
-
-- `server/src/agent/nodes/prepare-context.ts`
-- `server/src/agent/intent/embedding-capability-matcher.ts`
-- `server/src/harness/exposure-core/resolver.ts`
-- `server/src/harness/candidates-core/resolver.ts`
-- `server/src/harness/candidates-core/rerank.ts`
-- `server/src/harness/candidates-core/expand-tool-candidates.ts`
-- `server/src/harness/profiles/resolver.ts`
-- `server/src/agent/intent/capability-documents.ts`
-
-## frozen `pendingToolCall`
-
-至少包含：
-
-- tool call id
-- `toolId`
-- `args`
-- `inputHash`
-- `reason`
-- `source: planner`
-- `status: frozen`
-- 当前工具 metadata
-
-Normalize 完成后，后续节点不得根据用户文本、capability intent 或旧 selectedToolId 重建参数。
-
-`inputHash` 用于：
-
-- Policy 对齐
-- Approval 对齐
-- Resume 对齐
-- Harness invocation 对齐
-- 防止审批后参数漂移
-
-## Policy、Approval 与 Resume
-
-审批绑定 exact invocation：
+审批绑定：
 
 - `toolId`
 - `toolCallId`
 - `inputHash`
 
-命令、参数、cwd、env、timeout 变化后必须重新判断。
+命令、参数、cwd、env、timeout 或目标资源变化后必须重新判断。
 
-等待审批时保存 checkpoint：
+等待审批时持久化 task frame、observations、Evidence、retrievals、last execution、iteration、frozen call，以及适用的 SubAgent transcript checkpoint。
 
-- `currentTaskFrame`
-- observations
-- Evidence
-- retrieved chunks
-- last tool execution
-- iteration count
-- frozen `pendingToolCall`
+恢复入口先校验 exact invocation，再执行 Policy 或恢复同一 Child。旧批准不能变成可复用权限。
 
-Approve 路由快速返回 `running`，后续在异步任务中恢复执行；恢复入口先重新执行 Policy，并在 `toolId / toolCallId / inputHash` 一致时消费原 frozen 调用，工具完成并进入 Evidence 后才回到 Planner。
-
-恢复时优先消费原 frozen 调用，不重新根据自然语言猜参数。
-
-## Harness 当前职责
-
-Harness 是 Agent 的工具控制平面，不是 Agent 的大脑。
+## 9. Harness 职责
 
 Harness 负责：
 
-- capability / tool registry
-- tool exposure
-- schema 与 metadata
-- risk / approval boundary
-- workspace boundary
-- invocation
-- external MCP projection
-- trace / audit
-- 结果到 `llmContent` 的统一投影
+- capability / tool registry；
+- eligible concrete tool surface；
+- schema 与 metadata；
+- risk / approval；
+- workspace boundary；
+- invocation；
+- external MCP projection；
+- trace / audit；
+- result 到 `llmContent` 的投影。
 
 Harness 不负责：
 
-- 多步任务下一步决策
-- 工具参数生成
-- 任务完成判断
-- 最终自然语言回答
+- global task planning；
+- SubAgent local planning；
+- 工具参数生成；
+- 用户目标完成判断；
+- 最终回答。
 
-## Evidence 与 Generate
+Skill-private Runtime 不是第二个 Harness。它由 execution profile 与 managed adapter 提供，但仍受 Parent 治理、可用性、审批、workspace 与审计约束。
 
-Tool / Retrieve 先写 pending facts，再由 Evidence 统一写入累计对象。
+## 10. Evidence 与 Generate
 
-成功 Harness 调用会生成模型可消费的 `llmContent`。
+Tool / Retrieve / SubAgent 先产生 pending execution 或 structured observation，再由 Evidence 统一写入。
 
-Generate 当前：
+Generate：
 
-- 只消费 completed executions
-- 优先使用真实 `llmContent`
-- 总字符预算为 `48_000`
-- 明确标记 truncated
-- 超预算只截断上下文，不终止工具进程
-- 要求回答只依据已展示事实
+- 只接受 `ask_user`，或 `answer + finalizationPacket`；
+- `ask_user` 确定性交付，不调用回答模型；
+- `answer` 只物化 packet 引用的 Evidence；
+- 不重新判断完成；
+- 不发起工具调用；
+- 无法解析 Evidence ref 或发现内部协议泄漏时失败。
 
-External MCP 结果同样需要进入 Evidence，并经过 Generate context 适配。
+Evaluate 只检查终止决定是否成功交付。
 
-## 失败合同
+## 11. 失败与终止合同
 
-### Recoverable failure
+### Recoverable
 
-- Tool execution 记录 failed
-- 失败事实进入 Evidence
-- 回 Planner 尝试恢复
-- 恢复耗尽后 Generate guarded answer
-- Graph status 为 completed
-- Chat finish reason 为 stop
+```text
+failed fact
+  -> Evidence
+  -> Planner recovery
+  -> recovery exhausted
+  -> guarded answer
+  -> Graph completed
+```
 
-### Terminal failure
+### Terminal
 
-- Graph status 为 failed
-- finish reason 为 error
-- Generate 不执行
+```text
+terminal fact / runtime error
+  -> Graph failed
+  -> Generate does not run
+```
 
-工具自身拒绝输入属于工具层能力边界。是否恢复由 Evidence 与 Planner 决定，不能被误判成审批仍在等待。
+### 当前 dev 偏差
 
-## Workspace 与 Terminal cwd
+截至 2026-07-30，Planner 在 recovery exhausted 时直接返回 `error`，导致 Graph failed 且 Generate 不运行。
 
-Read / Edit 工作区工具继续遵守工作区边界。
+该行为已被测试锁定，但与 settled recoverable C contract 不一致。它是高优先级实现漂移，不是新的目标合同。详见 [[AGENT_CURRENT_TRUTH]] 的“dev 已知实现漂移”章节。
 
-`terminal_session.cwd` 使用 Host Runtime 特例：
+## 12. Workspace、Terminal 与 External MCP
 
-- 默认 `cwd = workspace`
-- 相对路径从 workspace 解析
-- 绝对路径与 `..` 可以进入正常审批
-- 审批通过后 Runtime 不再二次按旧 sandbox 规则拒绝
-- 越界关系记录为 `outside`
+Read / Edit 继续遵守 workspace boundary。
 
-Terminal 的能力释放不等于全局放开 Read / Edit 边界。
+`terminal_session` 使用 Host Runtime：full shell、Python / Node / Git、persistent PTY、watcher / dev server / REPL、Windows Job Object / taskkill fallback 与 POSIX process group。旧 command sandbox 已退出主执行链，`requiresApproval` 仍保留。
 
-## Terminal Runtime
+External MCP 必须成为 eligible capability、投影为 concrete tool、进入受治理 surface、形成 exact invocation、经过 Policy / Approval，并把结果写入 Evidence。
 
-`terminal_session` 是稳定能力合同，不拆成 Python、Node、Git、PowerShell 等多个工具。
-
-当前默认 Runtime：
-
-- `host_spawn`
-- 完整 Shell
-- Python / Node / Git / package manager
-- pipeline 与 shell-native syntax
-- persistent PTY
-- `attachSessionId`
-- watcher / dev server / REPL / 长进程
-- Windows Job Object
-- Job Object 不可用时 `taskkill /t /f`
-- POSIX process group
-
-旧 command sandbox 已退出 `terminal_session` 主执行链。
-
-`sandbox_runtime` 只保留未来可选 Provider 名称，当前未实现，也不会偷偷退回旧 sandbox executor。
-
-## CodeGraph 受控合同
+## 13. CodeGraph
 
 Planner 只看见 `codebase_explore`。
-
-原生 `query / explore / affected` 留在 wrapper 内部。
-
-CodeGraph 返回候选，不直接构成最终 Evidence。
-
-进入 Evidence 前必须经过 `read_file_slice` 或等价原文验证。
-
-降级链：
 
 ```text
 CodeGraph
@@ -448,74 +306,25 @@ CodeGraph
   -> read_file_slice
 ```
 
-必须保护：
+CodeGraph 是受控代码理解入口，不是第二个 Planner；候选和 verified excerpts 不能穿透成 capability invocation。
 
-- CodeGraph 失败不能直接回答“没有”
-- broad explore 结果不能裸传 Planner
-- telemetry 默认关闭
-- 索引不能默认污染仓库
-- capability id 不能穿透为 invocation tool id
+## 14. Trace 与 UI
 
-CodeGraph 是代码理解加速器，不是第二个 Planner。
+产品 trace 展示：
 
-## Trace 与 UI 状态
+- Planner public reason；
+- direct tool / retrieval / Evidence；
+- Generic SubAgent；
+- Skill-owned SubAgent；
+- Child working state / task-local trace；
+- approval / resume；
+- Generate / Finalize；
+- waiting / failed / completed。
 
-产品 execution node 用于：
+Observability 失败不能改变执行语义。最终 UI 状态必须服从 AgentRun 当前状态。
 
-- Planner 公开 reason
-- tool / retrieval / evidence / generate 状态
-- approval / resume
-- failure / blocked / completed
+## 15. 当前明确没有
 
-重复语义节点通过 `attemptKey` 保留每次执行。
+当前主线不是 Agent V2、开放式多 Agent、nested SubAgent、DAG scheduler、并发工具 fan-out、通用 durable workflow、长期记忆系统或自动 sandbox snapshot / rollback。
 
-approval / resume 通过 `toolCallId` 对齐。
-
-最终页面状态必须服从 AgentRun 的 running / waiting / completed / failed 状态，不能被历史审批节点覆盖。
-
-Phoenix / OpenTelemetry 用于开发诊断，默认关闭，不改变业务路由。
-
-Planner 使用原生结构化输出时，runtime 可以消费 JSON delta 中尚未完成的 `reason`，通过 `plannerThoughtStreaming` 更新公开工作说明；不完整 JSON 绝不能执行。若已经收到部分原生结构化输出，后续不能再拼接第二条独立 JSON 流；只有在原生流尚未产生任何 delta 时，才允许使用 fallback。结构化参数在进入 Normalize 前按工具 schema 归一化，严格 schema 产生的可选参数 `null` 会恢复为省略字段。
-
-## 当前明确没有的能力
-
-当前主线不是：
-
-- Agent V2
-- 多 Agent 系统
-- DAG scheduler
-- 并发工具执行器
-- 多工具并行 fan-out
-- 通用 durable workflow engine
-- 长期记忆系统
-- 自动 sandbox 快照与回滚
-
-Pi Loop 是有状态、可审批、可恢复、Evidence 驱动的顺序决策循环。
-
-## 已过期说法
-
-不得继续传播：
-
-- AgentGraph 应用主链就是 LangGraph
-- Pi Loop 只是未来计划
-- selectedToolId 可以驱动工具执行
-- Tool / Retrieve 完成后可以直接 Generate
-- 审批恢复只保存 pendingApproval
-- Generate 仍无边界拼接全部工具结果
-- terminal_session 必须经过旧 command sandbox
-- Agent 有固定全局 maxIterations 上限
-
-## 最终判断
-
-```text
-AgentRun（产品真相）
-  -> AgentGraph 稳定门面
-  -> Pi Loop 默认顺序编排
-  -> Harness 执行与审批控制
-  -> Evidence 统一证据
-  -> Planner 决定下一步
-  -> Grounded Generate
-  -> AgentRun 持久化与 UI trace
-```
-
-这是 Agent V1.5 稳定化架构，不应在没有明确授权时扩成 Agent V2、DAG 或多 Agent 系统。
+当前是有状态、可审批、可恢复、Evidence 驱动的顺序决策系统，并增加受控的 task-local execution delegation。
