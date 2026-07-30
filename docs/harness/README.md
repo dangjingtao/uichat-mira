@@ -20,8 +20,8 @@ related:
 
 Agent 整体主线先读：
 
-- [[../AGENT_CURRENT_TRUTH]]
-- [[agentgraph-harness-protocol]]
+- [[AGENT_CURRENT_TRUTH]]
+- [[harness/agentgraph-harness-protocol]]
 
 ## 1. Harness 负责什么
 
@@ -52,15 +52,7 @@ Harness 不负责：
 
 ### Capability
 
-用于描述能力与治理信息，例如：
-
-- read；
-- search；
-- terminal；
-- external MCP；
-- codebase understanding。
-
-Capability 可以参与 eligibility、诊断和排名，不能直接执行。
+用于描述能力、eligibility 与治理信息。Capability 可以参与诊断和排名，不能直接执行。
 
 ### Tool Exposure
 
@@ -104,8 +96,6 @@ Main Planner
   -> Main Planner
 ```
 
-Harness 在各阶段的角色：
-
 | Agent 步骤 | Harness 角色 |
 | --- | --- |
 | Prepare Context | 解析 eligible tools 和 exposure |
@@ -125,10 +115,10 @@ Harness 在各阶段的角色：
 - 不来自 Harness capability ranking；
 - 不对应外部 provider invocation；
 - 不进入 Main Agent 普通 Normalize / Policy / ToolNode；
-- 用于启动一个受控 generic SubAgent；
+- 用于启动一个受控 Generic SubAgent；
 - 不允许 Child 再次委派。
 
-但 Child 内真正调用 concrete tools 时，仍然受：
+Child 内真正调用 concrete tools 时，仍然受：
 
 - actual tool binding；
 - profile allowed tools；
@@ -138,7 +128,7 @@ Harness 在各阶段的角色：
 - runtime environment；
 - Evidence contract。
 
-因此不能说 `delegate_task` 绕过 Harness；更准确的说法是：**委派本身属于 Agent Runtime，Child 的真实工具执行仍由受治理能力面完成。**
+因此更准确的说法是：**委派属于 Agent Runtime，Child 的真实工具执行仍由受治理能力面完成。**
 
 ## 5. Skill-private Runtime 不是第二个 Harness
 
@@ -151,7 +141,7 @@ Private Runtime：
 - 不参与 Main ToolExposure ranking；
 - 由 Skill execution profile 与 managed adapter 解析；
 - readiness、workspace、approval 和审计必须真实成立；
-- pending binding 不得伪装成 ready。
+- pending binding 不得伪装为 ready。
 
 它不是绕过治理的秘密工具，也不是 Harness 全局 Tool Registry 的复制品。
 
@@ -171,12 +161,10 @@ eligible concrete tools
 当前事实：
 
 - 不超过 20 个时不运行语义排名；
-- 超过 20 个时 rerank 决定主要顺序，embedding 处理召回与同分；
+- 超过 20 个时 rerank 决定主要顺序；
 - 当前没有 `minScore` 淘汰；
 - 当前没有核心工具固定名额；
-- `topK` 主要限制诊断输出，不改变最终 20 个 exposure；
-- embedding 失败时回退稳定顺序；
-- reranker 失败时保留 embedding 顺序；
+- embedding / reranker 失败有稳定回退；
 - Main Planner 不二次改写 Harness ranking。
 
 Recall 与 rerank 只服务上下文压缩，不能建立独立执行决定。
@@ -205,11 +193,9 @@ Recall 与 rerank 只服务上下文压缩，不能建立独立执行决定。
 
 命令、参数、cwd、env、timeout 或目标资源变化后必须重新判断。
 
-审批不是工具级永久授权。
+SubAgent concrete invocation 还必须保存 transcript checkpoint，保证恢复同一 Child execution，而不是从目标重新猜一遍。
 
-SubAgent 的 concrete invocation 还必须保存 transcript checkpoint，保证恢复的是同一 Child execution，而不是从目标重新猜一遍。
-
-## 9. Harness Result 与 Evidence
+## 9. Result、Evidence 与 Generate
 
 成功 Invocation 会投影为：
 
@@ -222,10 +208,6 @@ SubAgent 的 concrete invocation 还必须保存 transcript checkpoint，保证�
 
 ToolNode 产生 pending execution，Evidence 统一累计。
 
-Planner 和 Generate 只应消费已经进入 Evidence 的结果。
-
-## 10. Generate 边界
-
 Generate：
 
 - 不调用 Harness；
@@ -233,15 +215,13 @@ Generate：
 - 不重新判断完成；
 - 只消费 finalization packet 引用的 Evidence；
 - 使用 context budget；
-- 对内部 tool-call protocol leak 进行阻断。
+- 阻断内部 tool-call protocol leak。
 
-“Generate 无边界拼接所有工具结果”已经过期。
-
-## 11. Terminal Runtime
+## 10. Terminal Runtime
 
 `terminal_session` 仍通过 Harness registry、exposure、Policy 与 Invocation。
 
-当前 Runtime：
+当前 Runtime 包括：
 
 - `host_spawn`；
 - persistent PTY；
@@ -251,25 +231,23 @@ Generate：
 - Windows Job Object / taskkill fallback；
 - POSIX process group。
 
-旧 command sandbox 已退出主执行链。
+旧 command sandbox 已退出主执行链。Host Runtime 释放执行能力，不等于绕过 `requiresApproval`。
 
-Host Runtime 释放执行能力，不等于绕过 `requiresApproval`。
-
-## 12. External MCP
+## 11. External MCP
 
 External MCP 必须：
 
 - 成为 eligible capability；
 - 进入显式 allowlist；
-- 投影为 concrete tool definition；
-- 进入 Main 或 Child 的受治理 tool surface；
-- 生成 exact concrete invocation；
+- 投影为 concrete tool；
+- 进入 Main 或 Child 的受治理 surface；
+- 形成 exact invocation；
 - 经过 Policy / Approval；
 - 结果进入 Evidence。
 
 Capability id 不能穿透成 provider 私有命令。
 
-## 13. 当前判断
+## 12. 当前判断
 
 Harness 当前是：
 
