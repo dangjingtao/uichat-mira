@@ -1,40 +1,54 @@
-# GitHub 能力包设计
-
-Status: Planned
-Owner: integrations / harness
-Last verified: 2026-07-26
-Layer: raw-source
-Module: MicroAPP
-Feature: GitHubCapabilityPack
-Doc Type: current-contract
-Canonical: true
-Related:
+---
+status: current
+owner: integrations / harness
+last_verified: 2026-07-30
+layer: wiki
+module: MicroAPP / Tool
+feature: GitHubCapabilityPack
+doc_type: current-contract
+canonical: true
+related:
+  - ../MICROAPP_CURRENT_TRUTH.md
   - README.md
-  - ../harness/agentgraph-harness-protocol.md
-  - ../tooling-runtime/tools-protocol.md
+  - ../TOOL_CURRENT_TRUTH.md
+  - ../harness/README.md
+  - ../skill/README.md
+  - ../archive/microapp/github-capability-design-pre-implementation.md
+---
 
-## 单点真相范围
+# GitHub 微应用与四领域工具当前合同
 
-这份文档定义 Mira 的 GitHub 能力包最终形态。
+> 这页定义当前已经落地的 GitHub 连接入口、仓库授权边界、四个 Harness 领域工具、operation 语义和审批规则。
 
-它只回答四件事：
+## 1. 当前结论
 
-- GitHub 微应用和 GitHub 工具分别负责什么
-- Planner / Harness 最多看到多少个 GitHub 工具
-- 每个工具允许哪些 operation，以及参数怎样表达
-- 读取、写入和高风险操作怎样进入权限与审批链路
+GitHub 在 Mira 中分成两层：
 
-它不重新设计：
+```text
+GitHub 微应用
+  -> Device Flow
+  -> GitHub App installation
+  -> 授权仓库范围
+  -> 连接验证 / 断开
 
-- GitHub Device Flow
-- GitHub App installation 授权协议
-- Agent Graph
-- Planner 主合同
-- MCP 协议
+GitHub Tool Pack
+  -> github_repository
+  -> github_issue
+  -> github_pull_request
+  -> github_actions
+```
 
-## 结论
+微应用负责连接和范围；Tool Pack 负责实际仓库协作。
 
-GitHub 能力包最多只暴露四个领域工具：
+```text
+GitHub page
+!= GitHub tool
+!= Integration MicroAPP
+```
+
+## 2. 当前公共工具面
+
+Planner 当前只使用四个稳定领域工具：
 
 ```text
 github_repository
@@ -43,65 +57,44 @@ github_pull_request
 github_actions
 ```
 
-不继续扩展成十几个 GitHub 原子工具，也不做一个无边界的 `github(action=...)` 万能工具。
+不重新拆成十几个 GitHub 原子工具，也不恢复一个无边界的 `github(action=...)` 万能工具。
 
-四个工具分别承担一个稳定领域。每个工具内部使用有限的 `operation` 枚举，并通过 `oneOf` 或等价的判别联合为不同 operation 提供独立参数结构。
-
-因此：
-
-- 工具数量稳定
-- 参数仍然明确
-- Planner 不需要理解几十个 GitHub API 名称
-- Harness 可以按 operation 精确判断权限、审批和副作用
-- 底层可在 GitHub REST API、GraphQL 或 MCP Adapter 之间替换，不影响上层合同
-
-## 系统边界
+旧的只读别名：
 
 ```text
-GitHub 微应用
-  └─ 登录、Device Flow、installation、仓库授权范围、连接验证、断开
-
-GitHub Auth Context
-  └─ 当前用户令牌、登录身份、installation、已授权仓库
-
-GitHub 能力包
-  ├─ github_repository
-  ├─ github_issue
-  ├─ github_pull_request
-  └─ github_actions
-
-Harness
-  └─ Schema 校验、仓库边界、审批、Evidence、Trace、结果归一化
-
-Planner
-  └─ 只接收当前任务需要的 GitHub 工具和 operation 说明
+github_repo_read
+github_issue_read
+github_pr_read
+github_actions_status
 ```
 
-GitHub 微应用仍然只是授权与仓库范围入口，不承载 Issue、PR、Actions 等业务操作界面，也不直接等同于一个工具。
+不再属于当前公共 Planner 合同；必要的兼容读取不能恢复它们的当前解释权。
 
-## 共同参数合同
+## 3. 连接与可用性
 
-四个工具共享以下基础参数语义：
+GitHub 工具进入 eligible public surface 前，至少需要：
 
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `operation` | enum | 当前工具内的有限操作类型 |
-| `repository` | string | `owner/repository`，除少数无需仓库的操作外必填 |
-| `installationId` | number，可选 | 通常由服务端解析，不要求模型主动填写 |
+- GitHub Device Flow 已完成；
+- 当前用户身份可验证；
+- GitHub App installation 可用；
+- 仓库出现在 installation 授权范围；
+- GitHub 网络出口可用；
+- canonical tool implementation 已注册。
 
-共同约束：
+连接成功不等于任意仓库可用。公开仓库也不能绕过 installation scope。
 
-1. `repository` 必须先通过 GitHub installation 的真实授权仓库列表校验。
-2. 不能因为仓库是 public 就绕过 installation 边界。
-3. 用户令牌、refresh token、installation token 不进入模型参数，也不进入 Evidence 明文。
-4. 每个 operation 使用独立 Schema；不允许把其他 operation 的字段静默带入。
-5. 返回值必须归一化并有界，原始 GitHub 响应只进入受控调试信息。
+Token、refresh token、installation token 和私钥：
 
-## 工具一：`github_repository`
+- 不进入模型参数；
+- 不进入 Tool result 正文；
+- 不进入 Evidence 明文；
+- 不写入普通 trace。
 
-负责仓库、分支、提交和文件层操作。
+## 4. `github_repository`
 
-### operations
+负责仓库、分支、提交和文件操作。
+
+当前 operation：
 
 ```text
 get
@@ -114,113 +107,19 @@ delete_file
 compare_commits
 ```
 
-### 参数形态
+核心参数：
 
-#### `get`
+- `repository: owner/repository`；
+- operation 对应的独立参数；
+- 写文件使用目标分支、路径、完整内容和必要的并发保护字段；
+- 删除文件需要当前 SHA；
+- compare 使用明确 base / head。
 
-```json
-{
-  "operation": "get",
-  "repository": "owner/repository",
-  "includeReadme": true,
-  "includeLanguages": true
-}
-```
+## 5. `github_issue`
 
-#### `list_branches`
+负责 Issue 查询、创建、更新、评论和状态变更。
 
-```json
-{
-  "operation": "list_branches",
-  "repository": "owner/repository",
-  "limit": 20,
-  "page": 1
-}
-```
-
-#### `list_commits`
-
-```json
-{
-  "operation": "list_commits",
-  "repository": "owner/repository",
-  "ref": "main",
-  "path": "server/src",
-  "author": "optional-login",
-  "since": "2026-07-01T00:00:00Z",
-  "until": "2026-07-26T00:00:00Z",
-  "limit": 20,
-  "page": 1
-}
-```
-
-#### `read_file`
-
-```json
-{
-  "operation": "read_file",
-  "repository": "owner/repository",
-  "path": "docs/README.md",
-  "ref": "dev"
-}
-```
-
-#### `create_branch`
-
-```json
-{
-  "operation": "create_branch",
-  "repository": "owner/repository",
-  "branch": "feature/example",
-  "fromRef": "dev"
-}
-```
-
-#### `write_file`
-
-```json
-{
-  "operation": "write_file",
-  "repository": "owner/repository",
-  "branch": "feature/example",
-  "path": "docs/example.md",
-  "content": "# Example",
-  "commitMessage": "docs: add example",
-  "expectedSha": null
-}
-```
-
-`expectedSha` 用于更新现有文件时做乐观并发保护；创建新文件时为 `null` 或省略。
-
-#### `delete_file`
-
-```json
-{
-  "operation": "delete_file",
-  "repository": "owner/repository",
-  "branch": "feature/example",
-  "path": "docs/example.md",
-  "expectedSha": "current-blob-sha",
-  "commitMessage": "docs: remove example"
-}
-```
-
-#### `compare_commits`
-
-```json
-{
-  "operation": "compare_commits",
-  "repository": "owner/repository",
-  "base": "dev",
-  "head": "feature/example"
-}
-```
-
-## 工具二：`github_issue`
-
-负责 Issue 的查询、创建、修改、评论与状态流转。
-
-### operations
+当前 operation：
 
 ```text
 list
@@ -233,94 +132,13 @@ close
 reopen
 ```
 
-### 参数形态
+Issue number、正文、标签、assignee、milestone 和状态字段只在对应 operation 中出现，不把所有字段平铺成一个模糊 schema。
 
-#### `list` / `search`
+## 6. `github_pull_request`
 
-```json
-{
-  "operation": "search",
-  "repository": "owner/repository",
-  "query": "GitHub integration",
-  "state": "all",
-  "labels": ["bug"],
-  "assignee": "optional-login",
-  "creator": "optional-login",
-  "sort": "updated",
-  "direction": "desc",
-  "limit": 20,
-  "page": 1
-}
-```
+负责 Pull Request 查询、创建、修改、评论、Review 和合并。
 
-自由文本搜索只能作用于当前已校验仓库，不允许注入额外 `repo:` 等跨仓库限定符。
-
-#### `get`
-
-```json
-{
-  "operation": "get",
-  "repository": "owner/repository",
-  "number": 123,
-  "includeComments": true,
-  "commentLimit": 50
-}
-```
-
-#### `create`
-
-```json
-{
-  "operation": "create",
-  "repository": "owner/repository",
-  "title": "Issue title",
-  "body": "Issue body",
-  "labels": ["bug"],
-  "assignees": ["login"]
-}
-```
-
-#### `update`
-
-```json
-{
-  "operation": "update",
-  "repository": "owner/repository",
-  "number": 123,
-  "title": "Updated title",
-  "body": "Updated body",
-  "labels": ["bug", "priority-high"],
-  "assignees": ["login"]
-}
-```
-
-#### `comment`
-
-```json
-{
-  "operation": "comment",
-  "repository": "owner/repository",
-  "number": 123,
-  "body": "Comment body"
-}
-```
-
-#### `close` / `reopen`
-
-```json
-{
-  "operation": "close",
-  "repository": "owner/repository",
-  "number": 123,
-  "reason": "completed"
-}
-```
-
-## 工具三：`github_pull_request`
-
-负责 Pull Request 的查询、创建、修改、评论、Review 和合并。
-
-### operations
+当前 operation：
 
 ```text
 list
@@ -332,126 +150,18 @@ review
 merge
 ```
 
-### 参数形态
+约束：
 
-#### `list`
+- Review event 只使用有限枚举；
+- inline comment 必须绑定路径和有效 diff 位置 / line 语义；
+- merge 应带 `expectedHeadSha`，避免用旧审查结果合并已经发生变化的 PR；
+- Main Agent 或 SubAgent 不得把“PR 可合并”当成“已经完成用户要求”。
 
-```json
-{
-  "operation": "list",
-  "repository": "owner/repository",
-  "state": "all",
-  "base": "dev",
-  "head": "owner:feature/example",
-  "sort": "updated",
-  "direction": "desc",
-  "limit": 20,
-  "page": 1
-}
-```
+## 7. `github_actions`
 
-#### `get`
+负责 workflow run、job 和日志。
 
-```json
-{
-  "operation": "get",
-  "repository": "owner/repository",
-  "number": 27,
-  "includeFiles": true,
-  "includeComments": true,
-  "includeReviews": true,
-  "detailLimit": 100
-}
-```
-
-#### `create`
-
-```json
-{
-  "operation": "create",
-  "repository": "owner/repository",
-  "title": "Feature title",
-  "body": "Pull request body",
-  "head": "feature/example",
-  "base": "dev",
-  "draft": true
-}
-```
-
-#### `update`
-
-```json
-{
-  "operation": "update",
-  "repository": "owner/repository",
-  "number": 27,
-  "title": "Updated title",
-  "body": "Updated body",
-  "state": "open",
-  "base": "dev"
-}
-```
-
-#### `comment`
-
-```json
-{
-  "operation": "comment",
-  "repository": "owner/repository",
-  "number": 27,
-  "body": "Review discussion comment"
-}
-```
-
-#### `review`
-
-```json
-{
-  "operation": "review",
-  "repository": "owner/repository",
-  "number": 27,
-  "event": "request_changes",
-  "body": "Please address the blocking findings.",
-  "comments": [
-    {
-      "path": "server/src/example.ts",
-      "line": 42,
-      "side": "RIGHT",
-      "body": "Inline review comment"
-    }
-  ]
-}
-```
-
-`event` 只允许：
-
-```text
-comment
-approve
-request_changes
-```
-
-#### `merge`
-
-```json
-{
-  "operation": "merge",
-  "repository": "owner/repository",
-  "number": 27,
-  "method": "squash",
-  "commitTitle": "feat: merge example",
-  "commitMessage": "Optional merge message",
-  "expectedHeadSha": "current-head-sha"
-}
-```
-
-`expectedHeadSha` 用于避免在 PR 已发生新提交后误合并旧审查结果。
-
-## 工具四：`github_actions`
-
-负责 workflow run 查询、日志读取、手动触发、重跑与取消。
-
-### operations
+当前 operation：
 
 ```text
 list_runs
@@ -462,247 +172,134 @@ rerun
 cancel
 ```
 
-### 参数形态
+日志必须有大小边界，并标记分页、截断和失败。手动触发、重跑和取消必须展示目标 workflow、ref、run 或 job。
 
-#### `list_runs`
+## 8. 审批规则
 
-```json
-{
-  "operation": "list_runs",
-  "repository": "owner/repository",
-  "workflow": "ci.yml",
-  "branch": "dev",
-  "event": "pull_request",
-  "status": "completed",
-  "actor": "optional-login",
-  "limit": 20,
-  "page": 1
-}
-```
-
-#### `get_run`
-
-```json
-{
-  "operation": "get_run",
-  "repository": "owner/repository",
-  "runId": 123456789,
-  "includeJobs": true,
-  "jobLimit": 100
-}
-```
-
-#### `get_logs`
-
-```json
-{
-  "operation": "get_logs",
-  "repository": "owner/repository",
-  "runId": 123456789,
-  "jobId": 987654321,
-  "maxBytes": 1048576
-}
-```
-
-日志必须限制大小，并在结果中标记是否截断。
-
-#### `dispatch`
-
-```json
-{
-  "operation": "dispatch",
-  "repository": "owner/repository",
-  "workflow": "release.yml",
-  "ref": "dev",
-  "inputs": {
-    "environment": "staging"
-  }
-}
-```
-
-#### `rerun`
-
-```json
-{
-  "operation": "rerun",
-  "repository": "owner/repository",
-  "runId": 123456789,
-  "failedJobsOnly": true
-}
-```
-
-#### `cancel`
-
-```json
-{
-  "operation": "cancel",
-  "repository": "owner/repository",
-  "runId": 123456789
-}
-```
-
-## 权限与审批
-
-当前 Harness capability 合同中，GitHub 读写都属于网络操作：
-
-```text
-sideEffect = network
-networkAccess = true
-```
-
-审批按 operation 判断，而不是按整个工具粗暴判断。
+GitHub 所有操作都访问网络，但不是所有网络读取都要求审批。
 
 ### 默认无需审批
 
 ```text
-github_repository: get / list_branches / list_commits / read_file / compare_commits
-github_issue: list / get / search
-github_pull_request: list / get
-github_actions: list_runs / get_run / get_logs
-```
+github_repository:
+  get / list_branches / list_commits / read_file / compare_commits
 
-这些 operation：
+github_issue:
+  list / get / search
 
-```text
-requiresApproval = false
+github_pull_request:
+  list / get
+
+github_actions:
+  list_runs / get_run / get_logs
 ```
 
 ### 必须审批
 
 ```text
-github_repository: create_branch / write_file / delete_file
-github_issue: create / update / comment / close / reopen
-github_pull_request: create / update / comment / review / merge
-github_actions: dispatch / rerun / cancel
+github_repository:
+  create_branch / write_file / delete_file
+
+github_issue:
+  create / update / comment / close / reopen
+
+github_pull_request:
+  create / update / comment / review / merge
+
+github_actions:
+  dispatch / rerun / cancel
 ```
 
-这些 operation：
+审批是 operation-specific runtime requirement，不是简单读取 tool definition 上的一个静态布尔值。
+
+审批信息至少展示：
+
+- GitHub 身份；
+- 目标仓库；
+- operation；
+- 分支、路径、Issue、PR、workflow 或 run；
+- 将提交的正文、评论、Review、commit message 或 inputs 摘要。
+
+高风险动作还要有并发保护或更强确认：
+
+- 文件删除：当前 SHA；
+- PR 合并：`expectedHeadSha`；
+- Request Changes Review：event 与正文；
+- Workflow cancel：run、workflow、branch 和当前状态。
+
+## 9. Tool Exposure
+
+GitHub 不使用关键词硬编码决定“只给哪个领域工具”。
+
+它遵守统一 Tool Exposure：
 
 ```text
-requiresApproval = true
+public eligible tools <= 20
+  -> 全部暴露
+
+public eligible tools > 20
+  -> embedding / rerank
+  -> 暴露前 20
 ```
 
-审批信息必须展示：
+GitHub 连接与仓库授权决定 availability；ranking 只服务上下文预算，不直接形成 invocation。
 
-- GitHub 账号
-- 目标仓库
-- operation
-- 目标分支、Issue、PR、workflow run 或文件路径
-- 将要提交的正文、评论、Review、commit message 或 workflow inputs 摘要
-
-### 高风险确认
-
-下面操作需要比普通远端写入更明确的确认语义：
+Planner 仍然只决定：
 
 ```text
-github_repository.delete_file
-github_pull_request.merge
-github_pull_request.review(event=request_changes)
-github_actions.cancel
+toolId + operation + args
 ```
 
-其中：
+仓库范围、Token 注入、Policy、审批、网络调用、结果归一化和 trace 由 GitHub adapter / Harness 负责。
 
-- 删除文件必须包含 `expectedSha`
-- 合并 PR 必须包含 `expectedHeadSha`
-- 取消 workflow 必须显示 run、branch、workflow 和当前状态
-- Review 必须显示 event 与正文摘要
+## 10. 结果与 Evidence
 
-## Planner 与动态暴露
+每次调用至少保留：
 
-Planner 不应在每轮同时看到四个工具的全部 operation 说明。
+- `toolId`；
+- operation；
+- repository；
+- installation scope 校验结果；
+- 请求耗时与重试；
+- 分页 / 截断状态；
+- 写操作审批结果；
+- 稳定远端标识，例如 commit SHA、Issue number、PR number、runId。
 
-推荐暴露方式：
+Tool success 只证明一次远端调用完成。
 
-- 任务涉及仓库、代码、分支、提交时，暴露 `github_repository`
-- 任务涉及 Issue 时，暴露 `github_issue`
-- 任务涉及 PR、Review、Merge 时，暴露 `github_pull_request`
-- 任务涉及 CI、workflow、run、job、logs 时，暴露 `github_actions`
+例如：
 
-当一个任务跨多个领域时，可以同时暴露多个 GitHub 工具，但总工具数仍固定为四个，不新增临时原子工具。
+- 创建分支不等于代码已经提交；
+- 创建 PR 不等于审查通过；
+- workflow completed 不等于测试成功；
+- PR mergeable 不等于应该合并；
+- 评论发送成功不等于对方已经处理。
 
-Planner 只决定：
+这些结果必须进入 Evidence，再由 Planner 判断用户全局目标。
 
-```text
-tool + operation + args
-```
+## 11. 与 Skill 的关系
 
-仓库授权校验、审批、令牌注入、API 调用、Evidence 与错误归一化仍由 Harness 和 GitHub Adapter 负责。
+GitHub 协作 Skill 可以提供工作方法、读前写后验证和交付约束，但：
 
-## Evidence 与 Trace
+- 不扩大 ToolExposure；
+- 不绕过 installation scope；
+- 不绕过 operation-specific approval；
+- 不把 Skill 文字变成远程权限；
+- 写操作后必须回读远端状态验证。
 
-每次调用至少记录：
+## 12. 当前非目标
 
-- `toolId`
-- `operation`
-- `repository`
-- installation 校验结果
-- GitHub request 类型和耗时
-- 结果数量或目标对象编号
-- 是否发生分页、截断或重试
-- 写操作审批结果
-- 远端返回的稳定标识，例如 commit SHA、Issue number、PR number、runId
+- 不把 GitHub REST / GraphQL 全量 API 暴露给模型；
+- 不在 GitHub 微应用里复制完整 Issue / PR 管理后台；
+- 不允许 public repository 绕过用户授权；
+- 不把 GitHub Tool Pack 改造成 Integration MicroAPP；
+- 不把连接成功包装成所有 operation 已验证；
+- 不恢复旧四个 read aliases 的公共入口。
 
-不得记录：
+## 13. 历史
 
-- access token
-- refresh token
-- authorization header
-- 私钥或 secret
-- 未裁剪的大体积日志和文件全文
+四领域工具形成前的完整设计和迁移口径保存在：
 
-## 当前实现与迁移
+- [[archive/microapp/github-capability-design-pre-implementation]]
 
-当前过渡实现已经存在四个只读工具：
-
-```text
-github_repo_read
-github_issue_read
-github_pr_read
-github_actions_status
-```
-
-它们证明了以下底座：
-
-- Device Flow 用户授权
-- installation 仓库范围校验
-- GitHub 网络代理出口
-- Harness 注册、Artifact 与 Trace
-- 仓库、Issue、PR、Actions 的只读调用
-
-但它们不是最终工具合同。
-
-迁移原则：
-
-1. 不在现有四个 Read 旁边继续增加十几个写工具。
-2. 将现有实现分别迁入四个领域工具的读取 operation。
-3. 新增写入 operation 时复用同一 GitHub Auth Context 和 installation 校验。
-4. 迁移完成后移除旧工具公开暴露；必要时可保留内部兼容别名，但 Planner 和工作台只显示四个领域工具。
-5. 参数工作台根据 `operation` 展示对应字段，不把所有字段平铺在同一张表中。
-
-## 验收标准
-
-### 结构
-
-- 工作台最多显示四个 GitHub 工具
-- 每个工具的 `operation` 是有限枚举
-- 每个 operation 有独立参数 Schema
-- 旧四个 Read 不再作为最终公开工具并列存在
-
-### 安全
-
-- 所有 operation 都强制校验 installation 仓库范围
-- 公开仓库不能绕过授权
-- 写操作必须审批
-- 删除、合并、取消等高风险操作带并发保护或强确认
-- token 和 secret 不进入参数、Evidence 或日志
-
-### 产品
-
-用户只需要：
-
-1. 在 GitHub 微应用连接账号
-2. 在 GitHub 官方页面选择仓库
-3. 在聊天或工具工作台调用 GitHub 能力
-
-用户不需要配置 Client ID、App Slug、PAT、Client Secret 或 GitHub App 私钥。
+需要判断当前工具面时，以本页、[[TOOL_CURRENT_TRUTH]] 和代码为准。

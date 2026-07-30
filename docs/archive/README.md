@@ -5,12 +5,13 @@ last_verified: 2026-07-30
 layer: schema
 module: Docs
 feature: ArchivePolicy
-Doc Type: current-contract
+doc_type: current-contract
 canonical: true
 related:
   - ../README.md
   - agent/README.md
   - tool/README.md
+  - microapp/README.md
   - ../knowledge-system/DOCUMENTATION_STANDARDS.md
 ---
 
@@ -21,7 +22,8 @@ related:
 ## 当前归档索引
 
 - [[archive/agent/README]]：Agent 历史路线、阶段清单与旧多 Agent / Pilot 口径；
-- [[archive/tool/README]]：Tool / Harness 旧矩阵、整改台账与 CodeGraph 实现前方案。
+- [[archive/tool/README]]：Tool / Harness 旧矩阵、整改台账与 CodeGraph 实现前方案；
+- [[archive/microapp/README]]：MicroApp 旧总纲、实现前 POC、早期 Studio 设计与迁移前合同。
 
 ## 自动进入历史归档的情况
 
