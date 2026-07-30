@@ -1,119 +1,178 @@
-# Chat 总览
-
-Status: Current
-Owner: chat
-Last verified: 2026-07-18
-Layer: wiki
-Module: Chat
-Feature: Overview
-Doc Type: overview
-Canonical: true
-Related:
+---
+status: current
+owner: chat
+last_verified: 2026-07-30
+layer: wiki
+module: Chat
+feature: Overview
+doc_type: overview
+canonical: true
+related:
+  - ../AGENT_CURRENT_TRUTH.md
   - ../uchat.md
   - ../uchat-internal-maintenance.md
-  - ../maps/AREA_MAP_CHAT.md
   - ../harness/agentgraph-harness-protocol.md
   - ../development/agent-observability.md
+---
 
-## 单点真相范围
+# Chat 模块总览
 
-这页是 Chat 模块的目录入口。
-
-它统一回答：
-
-- chat 主线当前有哪些稳定阅读点
-- 哪些是当前契约，哪些是实施清单、历史设计或规划
-- `UChat`、tool integration、execution trace、Agent Runtime 各自应该从哪篇进入
+> 这页是 Chat 与 Agent 在产品界面的阅读入口，不重新定义 Agent Runtime。
 
 ## 推荐阅读顺序
 
-1. `../uchat.md`
-2. `../uchat-internal-maintenance.md`
-3. `../harness/agentgraph-harness-protocol.md`
-4. `../development/agent-observability.md`
-5. `chat-system-practices.md`
-6. `chat-tool-integration-research.md`
-7. `chat-execution-trace-design.md`
+1. [[../AGENT_CURRENT_TRUTH]]：Agent 当前产品与运行时总真相；
+2. [[../harness/agentgraph-harness-protocol]]：Main Planner、Harness、Evidence 与 SubAgent 技术协议；
+3. [[../development/agent-observability]]：execution node 与开发诊断；
+4. [[../skill/README]]：Skill 与 SubAgent 执行边界；
+5. [[../uchat]]：UChat 当前合同；
+6. [[../uchat-internal-maintenance]]：UChat 内部维护边界；
+7. `chat-system-practices.md`：Chat 工程实践。
 
-## 当前入口
+## Agent 当前口径
 
-### 当前契约
+以下术语必须分开：
 
-- `../uchat.md`
-- `../uchat-internal-maintenance.md`
-- `chat-system-practices.md`
+- `AgentRun`：产品运行真相与持久化状态；
+- `AgentGraph`：稳定运行时门面；
+- `Pi Loop`：应用默认 Main Agent 编排器；
+- `LangGraph`：显式兼容与测试对照运行时；
+- `Main Planner`：用户 global goal、下一步与最终完成判断；
+- `Harness`：concrete tool 的候选、边界、审批、执行、结果和审计控制平面；
+- `Generic SubAgent`：由 `delegate_task` 启动的通用 task-local executor；
+- `Skill-owned SubAgent`：由 primary Skill execution profile 启动的领域 executor；
+- `Evidence`：真实工具、检索与 Child observation 的累计真相；
+- `Generate`：只依据 frozen finalization packet 组织用户回答。
 
-### Agent Runtime 当前合同
+不得再说：
 
-- `../harness/agentgraph-harness-protocol.md`
-  - AgentRun、AgentGraph 门面、Pi Loop、LangGraph 兼容运行时和 Harness 的当前单点真相
-  - 当前应用默认是 Pi Loop，不是 LangGraph-first
-- `../development/agent-observability.md`
-  - Pi Loop / LangGraph 共用的运行时 span、execution node 和 Phoenix 排查方法
-- `agent-frontend-workspace-smoke-method.md`
-  - 前台 workspace 绑定与真实 Agent smoke 方法
+- AgentGraph 就等于 LangGraph；
+- Agent 只有 Planner→Tool 一条路径；
+- `delegate_task` 是普通 Harness Tool；
+- SubAgent completed 就等于用户 global goal completed；
+- Skill 仍然只能把说明书注入 Main Planner；
+- 当前已经是开放式多 Agent 系统。
 
-### Agent 历史与施工资料
+## 当前执行路径
 
-以下页面用于理解演进或回看任务，不得覆盖当前合同：
-
-- `agent-runtime-design.md`（已退役的历史设计输入）
-- `agent-loop-v1.7-construction-plan.md`（施工期计划）
-- `agent-swot-plan.md`
-- `agent-phase-1-checklist.md`
-- `agent-phase-2-checklist.md`
-- `agent-phase-3-checklist.md`
-- `agent-workspace-context-system.md`
-- `agent-workspace-context-checklist.md`
-
-评审和施工引用优先级：
+### 普通回答或简单动作
 
 ```text
-current-contract
-  > current overview / runbook
-  > implementation plan / task card
-  > historical design
+Main Planner
+  -> answer / retrieve / concrete tool
+  -> Evidence
+  -> Main Planner
+  -> Generate
 ```
 
-### Tool Integration
+### 通用工作包
 
-- `chat-tool-integration-research.md`
-- `chat-tool-integration-poc.md`
-- `chat-tool-integration-checklist.md`
+```text
+Main Planner
+  -> delegate_task
+  -> Generic SubAgent
+  -> Evidence
+  -> Main Planner acceptance
+```
 
-### Execution Trace
+### 领域 Skill
 
-- `chat-execution-trace-design.md`
-- `chat-execution-trace-checklist.md`
+```text
+Skill match / continuation
+  -> Skill-owned SubAgent or deterministic Skill Flow
+  -> Evidence / Artifact / Requirement
+  -> Parent governance
+  -> Generate or ask_user
+```
 
-### UI Assessment
+## UI 当前责任
 
-- `uchat-agent-ui-assessment.md`
+Chat UI 负责：
 
-### UChat UI 规划
+- 发起和停止 Agent run；
+- 显示 execution nodes；
+- 展示 Planner 公开 reason；
+- 展示 Main / SubAgent 工作状态；
+- 展示 concrete tool、Evidence、approval 与 resume；
+- 交付 waiting_user / waiting_approval / completed / failed 状态；
+- 持久化并恢复真实 trace。
 
-- `uchat-ui-slot-design.md`（筹划中；尚未批准实施）
+Chat UI 不负责：
 
-### UChat 应用状态
+- 自己决定下一步；
+- 用前端选中状态驱动工具执行；
+- 重建 pending tool args；
+- 在 Child 与 Parent 之间做隐藏路由；
+- 把旧 approval node 覆盖为当前状态；
+- 展示隐藏 chain of thought。
 
-- `uchat-application-state-lifecycle-design.md`（当前合同与实施记录）
+## 观测节点
 
-### UChat Governance
+当前稳定观测语义包括：
 
-- `uchat-governance/README.md`
-- `uchat-governance/governance-assessment.md`
-- `uchat-governance/boundary-contract.md`
-- `uchat-governance/phase-1-plan.md`
-- `uchat-governance/ambiguity-log.md`
+- prepare context；
+- next action planner；
+- generic task SubAgent；
+- Skill-owned SubAgent；
+- tool call normalize；
+- policy；
+- approval / resume；
+- retrieve / tool；
+- Evidence；
+- Generate；
+- Finalize / error。
 
-## 当前 Agent 口径
+SubAgent 还会投影：
 
-在 Chat 文档里，以下术语必须分开使用：
+- task-local trace；
+- working state；
+- tool calls；
+- requirements；
+- artifacts；
+- resumed approval state。
 
-- `AgentGraph`：稳定运行时门面和输入输出合同
-- `Pi Loop`：当前应用默认编排器
-- `LangGraph`：兼容与测试对照运行时
-- `Harness`：工具暴露、Policy 边界、Invocation 与结果投影控制平面
-- `AgentRun`：产品运行真相
+## 当前 Agent 已知偏差
 
-不得再把 `AgentGraph` 直接解释成“当前应用一定由 LangGraph StateGraph 编排”。
+Recoverable failure 恢复耗尽的 settled contract 是 guarded answer + completed。
+
+截至 2026-07-30，`dev` Planner 当前会直接返回 `error`，使 Graph failed 且跳过 Generate。
+
+Chat UI 应显示真实失败状态，但文档和产品判断不能把该实现偏差写成新合同。
+
+详见 [[../AGENT_CURRENT_TRUTH#dev-已知实现漂移恢复耗尽被升级为-terminal-error]]。
+
+## 历史与施工资料
+
+以下页面只能用于理解演进或施工背景：
+
+- `agent-runtime-design.md`：superseded LangGraph-first 设计；
+- `agent-loop-v1.7-construction-plan.md`；
+- `agent-swot-plan.md`；
+- `agent-phase-1-checklist.md`；
+- `agent-phase-2-checklist.md`；
+- `agent-phase-3-checklist.md`；
+- `agent-workspace-context-system.md`；
+- `agent-workspace-context-checklist.md`；
+- `chat-tool-integration-research.md`；
+- `chat-tool-integration-poc.md`；
+- `chat-tool-integration-checklist.md`。
+
+引用优先级：
+
+```text
+AGENT_CURRENT_TRUTH
+  > current technical contract / runbook
+  > current module overview
+  > implementation checklist / workboard
+  > design / plan / historical
+```
+
+## UChat 与其他入口
+
+- `../uchat.md`：UChat 组件与消息渲染合同；
+- `../uchat-internal-maintenance.md`：内部维护；
+- `chat-execution-trace-design.md`：trace 产品设计背景；
+- `chat-execution-trace-checklist.md`：实施与验收记录；
+- `uchat-governance/README.md`：UChat governance；
+- `uchat-ui-slot-design.md`：规划材料，不是当前实现；
+- `uchat-application-state-lifecycle-design.md`：应用状态合同与记录。
