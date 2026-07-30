@@ -19,8 +19,7 @@ import type {
 
 const data = docsIndex as GeneratedDocsIndex;
 const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type DocumentRecord = GeneratedDocument;
+type Doc = GeneratedDocument;
 
 const lifecycleOrder: Record<DocumentLifecycle, number> = {
   current: 0,
@@ -136,57 +135,49 @@ const coreEntryPaths = [
 ];
 
 const withBase = (value: string) => {
-  if (!appBase) {
-    return value;
-  }
+  if (!appBase) return value;
   return value === "/" ? `${appBase}/` : `${appBase}${value}`;
 };
 
 marked.setOptions({ breaks: true, gfm: true });
 
-const findDocument = (docId: string) =>
-  data.documents.find((document) => document.id.toLowerCase() === docId.toLowerCase()) ?? null;
+const findDocument = (id: string) =>
+  data.documents.find((document) => document.id.toLowerCase() === id.toLowerCase()) ?? null;
 
-const formatMetaValue = (value: string | null) => {
-  if (!value) {
-    return null;
-  }
-  return labelMap[value] ?? value;
-};
+const formatMetaValue = (value: string | null) => (value ? labelMap[value] ?? value : null);
+const getModuleLabel = (value: string | null) =>
+  value ? moduleLabelMap[value] ?? value : "未标注";
 
-const getModuleLabel = (moduleName: string | null) =>
-  moduleName ? moduleLabelMap[moduleName] ?? moduleName : "未标注";
-
-const sortDocuments = (items: DocumentRecord[]) =>
+const sortDocuments = (items: Doc[]) =>
   [...items].sort((left, right) => {
     const lifecycleDelta = lifecycleOrder[left.lifecycle] - lifecycleOrder[right.lifecycle];
-    if (lifecycleDelta !== 0) {
-      return lifecycleDelta;
-    }
-    if (left.isPrimary !== right.isPrimary) {
-      return left.isPrimary ? -1 : 1;
-    }
+    if (lifecycleDelta) return lifecycleDelta;
+    if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
     if (left.metadata.canonical !== right.metadata.canonical) {
       return left.metadata.canonical ? -1 : 1;
     }
     return left.title.localeCompare(right.title, "zh-CN");
   });
 
-const documentsByLifecycle = (lifecycle: DocumentLifecycle) =>
+const byLifecycle = (lifecycle: DocumentLifecycle) =>
   sortDocuments(data.documents.filter((document) => document.lifecycle === lifecycle));
 
-const currentDocuments = documentsByLifecycle("current");
+const currentDocuments = byLifecycle("current");
 const currentPrimaryDocuments = currentDocuments.filter((document) => document.isPrimary);
-const activeDocuments = documentsByLifecycle("active");
-const planningDocuments = documentsByLifecycle("planning");
-const historicalDocuments = documentsByLifecycle("historical");
-const unverifiedDocuments = documentsByLifecycle("unverified");
+const activeDocuments = byLifecycle("active");
+const planningDocuments = byLifecycle("planning");
+const historicalDocuments = byLifecycle("historical");
+const unverifiedDocuments = byLifecycle("unverified");
 
 const currentModuleGroups = Array.from(
-  new Set(currentDocuments.map((document) => document.metadata.module).filter(Boolean)),
+  new Set(
+    currentDocuments
+      .map((document) => document.metadata.module)
+      .filter((moduleName): moduleName is string => Boolean(moduleName)),
+  ),
 )
   .map((moduleName) => ({
-    moduleName: moduleName as string,
+    moduleName,
     documents: currentDocuments.filter((document) => document.metadata.module === moduleName),
   }))
   .sort((left, right) =>
@@ -204,43 +195,28 @@ const stats = {
   missingVerification: data.stats?.byVerification.missing ?? 0,
 };
 
-const toNavigationChildren = (documents: DocumentRecord[], limit = 12): NavigationItem[] =>
+const navChildren = (documents: Doc[], limit = 12): NavigationItem[] =>
   documents.slice(0, limit).map((document) => ({ title: document.title, path: document.id }));
 
 const leftRailNavigation: NavigationItem[] = [
   { title: "首页", path: "README" },
   { title: "当前产品真相", path: "CURRENT_PRODUCT_TRUTH" },
   { title: "工程共同记忆", path: "ENGINEERING_MEMORY" },
-  {
-    title: `当前真相 ${stats.current}`,
-    children: toNavigationChildren(currentPrimaryDocuments, 16),
-  },
+  { title: `当前真相 ${stats.current}`, children: navChildren(currentPrimaryDocuments, 16) },
   {
     title: "按模块",
     children: currentModuleGroups.slice(0, 16).map((group) => ({
       title: `${getModuleLabel(group.moduleName)} ${group.documents.length}`,
-      children: toNavigationChildren(group.documents, 8),
+      children: navChildren(group.documents, 8),
     })),
   },
-  {
-    title: `施工与验证 ${stats.active}`,
-    children: toNavigationChildren(activeDocuments, 12),
-  },
-  {
-    title: `方案与实验 ${stats.planning}`,
-    children: toNavigationChildren(planningDocuments, 12),
-  },
+  { title: `施工与验证 ${stats.active}`, children: navChildren(activeDocuments) },
+  { title: `方案与实验 ${stats.planning}`, children: navChildren(planningDocuments) },
   {
     title: `历史归档 ${stats.historical}`,
-    children: [
-      { title: "归档说明", path: "archive/README" },
-      ...toNavigationChildren(historicalDocuments, 11),
-    ],
+    children: [{ title: "归档说明", path: "archive/README" }, ...navChildren(historicalDocuments, 11)],
   },
-  {
-    title: `待核验 ${stats.unverified}`,
-    children: toNavigationChildren(unverifiedDocuments, 12),
-  },
+  { title: `待核验 ${stats.unverified}`, children: navChildren(unverifiedDocuments) },
 ];
 
 const renderNavigation = (items: NavigationItem[]) => (
@@ -263,7 +239,7 @@ const renderNavigation = (items: NavigationItem[]) => (
   </ul>
 );
 
-const LifecycleMeta = ({ document }: { document: DocumentRecord }) => (
+const LifecycleMeta = ({ document }: { document: Doc }) => (
   <div className={`meta-row${document.lifecycle === "historical" ? " meta-row-historical" : ""}`}>
     <span>{lifecycleLabels[document.lifecycle]}</span>
     {document.metadata.canonical ? <span>Canonical</span> : null}
@@ -274,7 +250,7 @@ const LifecycleMeta = ({ document }: { document: DocumentRecord }) => (
   </div>
 );
 
-const lifecycleNotice = (document: DocumentRecord) => {
+const lifecycleNotice = (document: Doc) => {
   if (document.lifecycle === "historical") {
     return "这页已经归档，不应作为当前实现或产品能力的依据。";
   }
@@ -300,10 +276,7 @@ const SearchIndex = () => {
   const location = useLocation();
   const query = new URLSearchParams(location.search).get("q")?.trim().toLowerCase() ?? "";
   const results = useMemo(() => {
-    if (!query) {
-      return [];
-    }
-
+    if (!query) return [];
     return sortDocuments(
       data.documents.filter((document) =>
         `${document.title}\n${document.excerpt}\n${document.content}`.toLowerCase().includes(query),
@@ -341,40 +314,28 @@ const SearchIndex = () => {
   );
 };
 
-const DocumentPage = ({
-  isTocOpen,
-  onCloseToc,
-}: {
-  isTocOpen: boolean;
-  onCloseToc: () => void;
-}) => {
+const DocumentPage = ({ isTocOpen, onCloseToc }: { isTocOpen: boolean; onCloseToc: () => void }) => {
   const params = useParams<{ "*": string }>();
-  const docId = params["*"] ?? "README";
-  const document = findDocument(docId);
+  const document = findDocument(params["*"] ?? "README");
+  if (!document) return <Navigate to="/doc/README" replace />;
 
-  if (!document) {
-    return <Navigate to="/doc/README" replace />;
-  }
-
-  const html = (marked.parse(document.content) as string).replace(
+  const displayContent = document.content.startsWith("---")
+    ? document.content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    : document.content;
+  const html = (marked.parse(displayContent) as string).replace(
     /href="DOC_ROUTE:([^"]+)"/g,
     (_match, route: string) => `href="${withBase(route)}"`,
   );
   const usedAnchors = new Set<string>();
-  const withHeadingIds = html.replace(
-    /<h([1-6])>(.*?)<\/h\1>/g,
-    (_match, level: string, inner: string) => {
-      const text = inner.replace(/<[^>]+>/g, "").trim();
-      const heading = document.headings.find(
-        (item) => !usedAnchors.has(item.anchor) && item.text === text,
-      );
-      if (!heading) {
-        return `<h${level}>${inner}</h${level}>`;
-      }
-      usedAnchors.add(heading.anchor);
-      return `<h${level} id="${heading.anchor}">${inner}</h${level}>`;
-    },
-  );
+  const withHeadingIds = html.replace(/<h([1-6])>(.*?)<\/h\1>/g, (_match, level, inner) => {
+    const text = String(inner).replace(/<[^>]+>/g, "").trim();
+    const heading = document.headings.find(
+      (item) => !usedAnchors.has(item.anchor) && item.text === text,
+    );
+    if (!heading) return `<h${level}>${inner}</h${level}>`;
+    usedAnchors.add(heading.anchor);
+    return `<h${level} id="${heading.anchor}">${inner}</h${level}>`;
+  });
   const notice = lifecycleNotice(document);
 
   return (
@@ -398,16 +359,12 @@ const DocumentPage = ({
           <div className="toc-panel">
             <div className="toc-panel-header">
               <h2>本页导航</h2>
-              <button type="button" className="toc-close-btn" onClick={onCloseToc}>
-                关闭
-              </button>
+              <button type="button" className="toc-close-btn" onClick={onCloseToc}>关闭</button>
             </div>
             <ul>
               {document.headings.map((heading) => (
                 <li key={`${heading.anchor}-${heading.text}`} className={`toc-level-${heading.level}`}>
-                  <a href={`#${heading.anchor}`} onClick={onCloseToc}>
-                    {heading.text}
-                  </a>
+                  <a href={`#${heading.anchor}`} onClick={onCloseToc}>{heading.text}</a>
                 </li>
               ))}
             </ul>
@@ -426,15 +383,12 @@ const DocumentList = ({
 }: {
   title: string;
   description: string;
-  documents: DocumentRecord[];
+  documents: Doc[];
   limit?: number;
 }) => (
   <section className="index-section">
     <header className="index-section-header">
-      <div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-      </div>
+      <div><h2>{title}</h2><p>{description}</p></div>
     </header>
     <ol className="index-list index-list-dense">
       {documents.slice(0, limit).map((document) => (
@@ -452,8 +406,8 @@ const DocumentList = ({
 
 const HomePage = () => {
   const coreEntries = coreEntryPaths
-    .map((docPath) => findDocument(docPath))
-    .filter((document): document is DocumentRecord => Boolean(document));
+    .map(findDocument)
+    .filter((document): document is Doc => Boolean(document) && document?.lifecycle === "current");
 
   return (
     <section className="content-surface">
@@ -476,26 +430,12 @@ const HomePage = () => {
 
       <div className="home-grid">
         <div className="home-main">
-          <DocumentList
-            title="从这里开始"
-            description="先建立当前产品与工程事实，再进入具体模块。"
-            documents={coreEntries}
-            limit={coreEntries.length}
-          />
-
-          <DocumentList
-            title="当前真相"
-            description="Canonical、current-contract、current-snapshot、overview 和稳定参考优先。"
-            documents={currentPrimaryDocuments}
-            limit={16}
-          />
+          <DocumentList title="从这里开始" description="先建立当前产品与工程事实，再进入具体模块。" documents={coreEntries} limit={coreEntries.length} />
+          <DocumentList title="当前真相" description="Canonical、current-contract、current-snapshot、overview 和稳定参考优先。" documents={currentPrimaryDocuments} limit={16} />
 
           <section className="index-section">
             <header className="index-section-header">
-              <div>
-                <h2>当前模块</h2>
-                <p>这里只展示已经归入当前真相的模块文档。</p>
-              </div>
+              <div><h2>当前模块</h2><p>这里只展示已经归入当前真相的模块文档。</p></div>
             </header>
             <div className="module-feature-groups">
               {currentModuleGroups.map((group) => {
@@ -503,8 +443,7 @@ const HomePage = () => {
                 return (
                   <section key={group.moduleName} className="module-feature-group">
                     <header className="module-feature-group-header">
-                      <h3>{getModuleLabel(group.moduleName)}</h3>
-                      <span>{group.documents.length} 篇</span>
+                      <h3>{getModuleLabel(group.moduleName)}</h3><span>{group.documents.length} 篇</span>
                     </header>
                     <ul className="module-feature-list">
                       <li className="module-feature-item">
@@ -520,18 +459,8 @@ const HomePage = () => {
             </div>
           </section>
 
-          <DocumentList
-            title="正在施工"
-            description={lifecycleDescriptions.active}
-            documents={activeDocuments}
-            limit={12}
-          />
-          <DocumentList
-            title="方案与实验"
-            description={lifecycleDescriptions.planning}
-            documents={planningDocuments}
-            limit={12}
-          />
+          <DocumentList title="正在施工" description={lifecycleDescriptions.active} documents={activeDocuments} />
+          <DocumentList title="方案与实验" description={lifecycleDescriptions.planning} documents={planningDocuments} />
         </div>
 
         <aside className="home-aside">
@@ -559,9 +488,7 @@ const HomePage = () => {
           <section className="aside-section">
             <h2>归档入口</h2>
             <ul>
-              <li>
-                <Link to="/doc/archive/README">查看归档规则</Link>
-              </li>
+              <li><Link to="/doc/archive/README">查看归档规则</Link></li>
               <li>历史材料 {stats.historical} 篇</li>
               <li>方案与实验 {stats.planning} 篇</li>
             </ul>
@@ -573,35 +500,26 @@ const HomePage = () => {
 };
 
 const useEmbeddedSidebarState = () => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia("(max-width: 960px)").matches,
-  );
-  const [isMobileLayout, setIsMobileLayout] = useState(() =>
-    typeof window === "undefined" ? false : window.matchMedia("(max-width: 960px)").matches,
-  );
+  const mediaMatches = () =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 960px)").matches;
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(mediaMatches);
+  const [isMobileLayout, setIsMobileLayout] = useState(mediaMatches);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
+    if (typeof window === "undefined") return;
     const mediaQuery = window.matchMedia("(max-width: 960px)");
-    const applyMediaState = (matches: boolean) => {
+    const apply = (matches: boolean) => {
       setIsMobileLayout(matches);
       setIsSidebarCollapsed(matches);
     };
-    applyMediaState(mediaQuery.matches);
-
-    const handleMediaChange = (event: MediaQueryListEvent) => applyMediaState(event.matches);
-    mediaQuery.addEventListener("change", handleMediaChange);
-    return () => mediaQuery.removeEventListener("change", handleMediaChange);
+    apply(mediaQuery.matches);
+    const handleChange = (event: MediaQueryListEvent) => apply(event.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
+    if (typeof window === "undefined") return;
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "docs-site:set-sidebar-collapsed") {
         setIsSidebarCollapsed(Boolean(event.data.value));
@@ -622,15 +540,11 @@ export const App = () => {
 
   useEffect(() => {
     setIsTocOpen(false);
-    if (typeof window !== "undefined" && window.innerWidth <= 960) {
-      setIsSidebarCollapsed(true);
-    }
+    if (typeof window !== "undefined" && window.innerWidth <= 960) setIsSidebarCollapsed(true);
   }, [location.pathname, location.search, setIsSidebarCollapsed]);
 
   useEffect(() => {
-    if (!isMobileLayout) {
-      setIsSidebarCollapsed(false);
-    }
+    if (!isMobileLayout) setIsSidebarCollapsed(false);
   }, [isMobileLayout, setIsSidebarCollapsed]);
 
   const closeAllPanels = () => {
@@ -641,12 +555,7 @@ export const App = () => {
   return (
     <div className={`app-shell${isSidebarCollapsed ? " app-shell-collapsed" : ""}`}>
       {isMobileLayout && (!isSidebarCollapsed || isTocOpen) ? (
-        <button
-          type="button"
-          className="mobile-overlay"
-          aria-label="关闭面板"
-          onClick={closeAllPanels}
-        />
+        <button type="button" className="mobile-overlay" aria-label="关闭面板" onClick={closeAllPanels} />
       ) : null}
       <aside className="sidebar">
         <div className="sidebar-inner">
@@ -659,29 +568,19 @@ export const App = () => {
                   onClick={() => setIsSidebarCollapsed((current) => !current)}
                   aria-label={isSidebarCollapsed ? "展开目录" : "收起目录"}
                 >
-                  <span className="sidebar-toggle-icon" aria-hidden="true">
-                    {isSidebarCollapsed ? ">" : "<"}
-                  </span>
+                  <span className="sidebar-toggle-icon" aria-hidden="true">{isSidebarCollapsed ? ">" : "<"}</span>
                 </button>
               ) : null}
               <Link to="/" className="brand">
-                <span className="brand-logo brand-logo-fallback" aria-hidden="true">
-                  UM
-                </span>
-                <div className="brand-text">
-                  <span>UIChat Mira</span>
-                  <span className="brand-slogan">Project Truth</span>
-                </div>
+                <span className="brand-logo brand-logo-fallback" aria-hidden="true">UM</span>
+                <div className="brand-text"><span>UIChat Mira</span><span className="brand-slogan">Project Truth</span></div>
               </Link>
             </div>
             <form action={withBase("/search")} className="sidebar-search">
               <input name="q" type="search" defaultValue={query} placeholder="搜索文档..." />
             </form>
           </div>
-          <div className="sidebar-heading">
-            <span>导航</span>
-            <small>{stats.total} 篇</small>
-          </div>
+          <div className="sidebar-heading"><span>导航</span><small>{stats.total} 篇</small></div>
           <nav>{renderNavigation(leftRailNavigation)}</nav>
         </div>
       </aside>
@@ -690,38 +589,23 @@ export const App = () => {
           <button
             type="button"
             className="mobile-doc-toolbar-btn"
-            onClick={() => {
-              setIsTocOpen(false);
-              setIsSidebarCollapsed(false);
-            }}
+            onClick={() => { setIsTocOpen(false); setIsSidebarCollapsed(false); }}
           >
-            <span className="mobile-doc-toolbar-icon" aria-hidden="true">
-              ≡
-            </span>
-            <span>Menu</span>
+            <span className="mobile-doc-toolbar-icon" aria-hidden="true">≡</span><span>Menu</span>
           </button>
           <button
             type="button"
             className="mobile-doc-toolbar-btn"
-            onClick={() => {
-              setIsSidebarCollapsed(true);
-              setIsTocOpen((current) => !current);
-            }}
+            onClick={() => { setIsSidebarCollapsed(true); setIsTocOpen((current) => !current); }}
           >
-            <span>On this page</span>
-            <span className="mobile-doc-toolbar-icon" aria-hidden="true">
-              ›
-            </span>
+            <span>On this page</span><span className="mobile-doc-toolbar-icon" aria-hidden="true">›</span>
           </button>
         </div>
         <div className="page-shell">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/search" element={<SearchIndex />} />
-            <Route
-              path="/doc/*"
-              element={<DocumentPage isTocOpen={isTocOpen} onCloseToc={() => setIsTocOpen(false)} />}
-            />
+            <Route path="/doc/*" element={<DocumentPage isTocOpen={isTocOpen} onCloseToc={() => setIsTocOpen(false)} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
