@@ -17,16 +17,16 @@ related:
 
 # Chat 模块总览
 
-> 这页是 Chat 与 Agent 在产品界面的阅读入口，不重新定义 Agent Runtime。
+> 这页是 Chat 与 Agent 产品界面的阅读入口，不重新定义 Agent Runtime。
 
 ## 推荐阅读顺序
 
-1. [[../AGENT_CURRENT_TRUTH]]：Agent 当前产品与运行时总真相；
-2. [[../harness/agentgraph-harness-protocol]]：Main Planner、Harness、Evidence 与 SubAgent 技术协议；
-3. [[../development/agent-observability]]：execution node 与开发诊断；
-4. [[../skill/README]]：Skill 与 SubAgent 执行边界；
-5. [[../uchat]]：UChat 当前合同；
-6. [[../uchat-internal-maintenance]]：UChat 内部维护边界；
+1. [[AGENT_CURRENT_TRUTH]]：Agent 当前总真相；
+2. [[harness/agentgraph-harness-protocol]]：Main Planner、Harness、Evidence 与 SubAgent 技术协议；
+3. [[development/agent-observability]]：execution node 与开发诊断；
+4. [[skill/README]]：Skill 与 SubAgent 执行边界；
+5. [[uchat]]：UChat 当前合同；
+6. [[uchat-internal-maintenance]]：UChat 内部维护边界；
 7. `chat-system-practices.md`：Chat 工程实践。
 
 ## Agent 当前口径
@@ -89,12 +89,12 @@ Skill match / continuation
 
 Chat UI 负责：
 
-- 发起和停止 Agent run；
+- 发起和停止 AgentRun；
 - 显示 execution nodes；
-- 展示 Planner 公开 reason；
+- 展示 Planner public reason；
 - 展示 Main / SubAgent 工作状态；
 - 展示 concrete tool、Evidence、approval 与 resume；
-- 交付 waiting_user / waiting_approval / completed / failed 状态；
+- 交付 waiting_user / waiting_approval / completed / failed；
 - 持久化并恢复真实 trace。
 
 Chat UI 不负责：
@@ -103,16 +103,16 @@ Chat UI 不负责：
 - 用前端选中状态驱动工具执行；
 - 重建 pending tool args；
 - 在 Child 与 Parent 之间做隐藏路由；
-- 把旧 approval node 覆盖为当前状态；
-- 展示隐藏 chain of thought。
+- 把历史 approval node 覆盖成当前状态；
+- 展示 hidden chain of thought。
 
 ## 观测节点
 
-当前稳定观测语义包括：
+当前稳定语义包括：
 
 - prepare context；
 - next action planner；
-- generic task SubAgent；
+- Generic SubAgent；
 - Skill-owned SubAgent；
 - tool call normalize；
 - policy；
@@ -122,24 +122,15 @@ Chat UI 不负责：
 - Generate；
 - Finalize / error。
 
-SubAgent 还会投影：
-
-- task-local trace；
-- working state；
-- tool calls；
-- requirements；
-- artifacts；
-- resumed approval state。
+SubAgent 还会投影 task-local trace、working state、tool calls、requirements、artifacts 与 resumed approval state。
 
 ## 当前 Agent 已知偏差
 
 Recoverable failure 恢复耗尽的 settled contract 是 guarded answer + completed。
 
-截至 2026-07-30，`dev` Planner 当前会直接返回 `error`，使 Graph failed 且跳过 Generate。
+截至 2026-07-30，`dev` Planner 当前直接返回 `error`，使 Graph failed 且跳过 Generate。
 
-Chat UI 应显示真实失败状态，但文档和产品判断不能把该实现偏差写成新合同。
-
-详见 [[../AGENT_CURRENT_TRUTH#dev-已知实现漂移恢复耗尽被升级为-terminal-error]]。
+Chat UI 应显示真实失败状态，但文档和产品判断不能把该实现偏差写成新合同。详情见 [[AGENT_CURRENT_TRUTH]] 的“dev 已知实现漂移”章节。
 
 ## 历史与施工资料
 
