@@ -21,8 +21,6 @@ related:
 
 ## 1. 当前运行时
 
-应用默认：
-
 ```text
 MIRA_AGENT_RUNTIME 未设置
   -> 应用：pi_loop
@@ -36,7 +34,7 @@ MIRA_AGENT_RUNTIME=pi_loop
 MIRA_AGENT_RUNTIME=langgraph
 ```
 
-两种运行时都通过 `agentGraph.run(...)`，共用同一组语义步骤、execution nodes 与 tracing 包装。
+两种运行时都通过 `agentGraph.run(...)`，共用语义步骤、execution nodes 与 tracing 包装。
 
 ## 2. 两条观测通道
 
@@ -48,15 +46,13 @@ MIRA_AGENT_RUNTIME=langgraph
 
 - Prepare Context；
 - Planner public reason；
-- generic task SubAgent；
+- Generic SubAgent；
 - Skill-owned SubAgent / Skill Flow；
 - concrete tool / retrieval；
 - Evidence；
 - Policy / approval / resume；
 - Generate / Finalize；
 - waiting / blocked / failed / completed。
-
-刷新线程后，已持久化节点仍可恢复。
 
 ### Phoenix / OpenTelemetry
 
@@ -76,7 +72,7 @@ agent.graph.run
 
 ## 3. 稳定语义步骤
 
-普通 Main Agent 节点名：
+普通 Main Agent：
 
 - `prepareContext`
 - `nextActionPlanner`
@@ -90,12 +86,12 @@ agent.graph.run
 - `evaluate`
 - `error`
 
-Generic delegation 额外包含：
+Generic delegation：
 
 - `genericTaskSubAgent`
 - 产品 node `agent-generic-task-subagent`
 
-Skill-owned execution 额外包含：
+Skill-owned execution：
 
 - 产品 node `agent-forked-skill-agent`
 - `subagent-trace:<runId>:<seq>`
@@ -107,21 +103,13 @@ Skill-owned execution 额外包含：
 
 UI 中的“思考下一步”只来自 Planner structured JSON 的公开 `reason`。
 
-流式过程：
-
-1. task model 返回结构化 JSON；
-2. runtime 从未完成 JSON 中只提取 `reason`；
-3. 达到长度或自然停顿时发 execution update；
+1. task model 流式返回 JSON；
+2. runtime 只提取未完成 JSON 中的 `reason`；
+3. 达到长度或自然停顿时发送 update；
 4. 完整 JSON 通过 parse / schema / validation 后才可执行；
 5. 完成时记录最终 reason。
 
-不会展示：
-
-- 原始完整模型输出；
-- hidden reasoning；
-- chain of thought；
-- 未脱敏 prompt；
-- 不完整 JSON 中的工具参数作为可执行调用。
+不会展示 raw output、hidden reasoning、chain of thought、未脱敏 prompt，或把不完整 JSON 参数当成执行调用。
 
 ## 5. SubAgent trace
 
@@ -133,9 +121,7 @@ SubAgent runtime event 会投影到 Parent AgentRun。
 - Skill id；
 - task-local sequence；
 - working state；
-- current judgement；
-- current action；
-- next action；
+- current judgement / action / next；
 - tool started / completed / failed；
 - approval required；
 - input required；
@@ -144,9 +130,9 @@ SubAgent runtime event 会投影到 Parent AgentRun。
 - missing Evidence；
 - completed / failed。
 
-Generic Child 与 Skill-owned Child 都归入 Parent execution history，但 task-local trace 不等于新的 global control plane。
+Generic Child 与 Skill-owned Child 都归入 Parent execution history，但 task-local trace 不等于 global control plane。
 
-`publishSubAgentRuntimeEvent(...)` 失败时，Child execution 仍继续；最终 structured observation 会保留 bounded trace snapshot。
+发布 SubAgent runtime event 失败时，Child execution 仍继续；最终 structured observation 保留 bounded trace snapshot。
 
 ## 6. 典型路径
 
@@ -173,18 +159,6 @@ prepareContext
   -> evaluate
 ```
 
-### Retrieve
-
-```text
-prepareContext
-  -> nextActionPlanner
-  -> retrieve
-  -> evidenceStage
-  -> nextActionPlanner
-  -> generate
-  -> evaluate
-```
-
 ### Generic delegation
 
 ```text
@@ -194,7 +168,6 @@ prepareContext
   -> child trace / concrete tools
   -> evidenceStage
   -> nextActionPlanner
-  -> ...
 ```
 
 ### Skill-owned completed
@@ -219,16 +192,7 @@ prepareContext
   -> evaluate(waiting_user)
 ```
 
-### Approval
-
-```text
-...
-  -> exact invocation
-  -> approval
-  -> END(waiting_approval)
-```
-
-Approve 后：
+### Approval resume
 
 ```text
 resume execution node
@@ -250,16 +214,16 @@ Resume 必须记录：
 - Parent run id；
 - SubAgent checkpoint / Child run id（如适用）。
 
-任何 mismatch 都会产生 blocked / error execution node，并阻断工具运行。
+任何 mismatch 都会阻断工具运行，并产生 blocked / error node。
 
 历史 approval node 不能覆盖 AgentRun 当前状态。
 
-## 8. Planner 运行时记忆的观测边界
+## 8. Planner 运行时记忆边界
 
 - `planList` 只有 `{id, text, done}`；
-- bounded conversation history 服务上下文续轮；
-- 已进入 Evidence 的 canonical result 才能成为 Planner事实；
-- semantic action ledger 汇总全量 execution observations 并合并重复目标；
+- bounded conversation history 服务续轮；
+- 只有进入 Evidence 的 canonical result 才是 Planner事实；
+- semantic action ledger 合并重复目标；
 - latest Evidence content 与摘要分别记录；
 - 不存在通过打开工程记忆文件恢复 Agent 状态的隐藏流程。
 
@@ -275,7 +239,7 @@ AGENT_TRACE_VERBOSE=true
 | 变量 | 作用 |
 | --- | --- |
 | `AGENT_TRACE_PHOENIX` | 只有显式 `true` 才启用 |
-| `PHOENIX_COLLECTOR_ENDPOINT` | collector 根地址，runtime 补 `/v1/traces` |
+| `PHOENIX_COLLECTOR_ENDPOINT` | collector 根地址 |
 | `AGENT_TRACE_PROJECT` | project name |
 | `AGENT_TRACE_VERBOSE` | 增加脱敏结构化摘要 |
 | `MIRA_AGENT_RUNTIME` | `pi_loop` 或 `langgraph` |
@@ -286,65 +250,40 @@ AGENT_TRACE_VERBOSE=true
 pnpm dev:electron:win:trace
 ```
 
-## 10. 查看一次真实 run
+## 10. 最小真实验收
 
-1. 启动 Phoenix；
-2. 启动桌面开发链；
-3. 绑定 workspace；
-4. 发起 Agent 任务；
-5. 打开最新 `agent.graph.run`；
-6. 根据实际任务判断应该出现 direct、generic Child 或 Skill-owned Child 路径；
-7. 检查 Evidence 是否先于下一次 Planner 或 Generate；
-8. 检查 final AgentRun status 与 UI 一致。
+1. 启动 tracing 与桌面开发链；
+2. 绑定 workspace；
+3. 发起 Agent 任务；
+4. 根据任务判断应出现 direct、Generic Child 或 Skill-owned Child；
+5. 检查 Evidence 是否先于下一次 Planner 或 Generate；
+6. 检查 approval resume 是否保持 exact invocation；
+7. 检查最终 AgentRun status 与 UI 一致。
 
 不能只看节点数量判断成功。
 
-## 11. 普通摘要字段
+## 11. 普通摘要与 verbose
 
-至少包括：
+普通摘要至少包括：
 
 - runId / threadId；
 - iterationCount；
 - nextActionType；
-- pendingToolId；
-- policyDecisionType；
-- pendingApprovalToolId；
-- lastToolExecutionToolId；
-- latestEvidenceSource / ToolId；
-- retrievedChunkCount；
-- observationCount；
-- answerExists；
-- errorMessage / errorSourceNodeId；
-- blockedReason；
+- pending tool / approval；
+- policy decision；
+- latest Evidence；
+- retrieval / observation count；
+- answer exists；
+- error / blocked；
 - final status / terminalReason。
 
-说明：
+说明：Main Pi Loop 没有全局 iteration cap；schema replan 与 recoverable failure 有局部预算；SubAgent 有 task-local terminal 与 checkpoint。
 
-- `maxIterations` 是兼容诊断字段；
-- Main Pi Loop 没有全局 iteration cap；
-- schema replan 与 recoverable failure 有局部预算；
-- SubAgent 自己有 task-local终止状态与 checkpoint。
+Verbose 可以增加脱敏后的 nextAction、currentTaskFrame、toolExposure、pendingToolCall、policy、approval、Evidence、finalization packet、SubAgent working state 与 answer preview。
 
-## 12. Verbose 模式
+Verbose 不是 raw state dump。
 
-`AGENT_TRACE_VERBOSE=true` 可以增加脱敏后的：
-
-- nextAction；
-- currentTaskFrame；
-- toolExposure；
-- pendingToolCall；
-- policyDecision；
-- pendingApproval；
-- lastToolExecution；
-- Evidence summary；
-- retrieved chunk preview；
-- finalization packet；
-- SubAgent working state；
-- answer preview。
-
-Verbose 仍不是原始 state dump。
-
-## 13. 永远禁止记录
+## 12. 永远禁止记录
 
 禁止明文记录：
 
@@ -357,13 +296,11 @@ Verbose 仍不是原始 state dump。
 - private key；
 - session token；
 - provider secret；
-- 未脱敏用户敏感输入。
+- 未脱敏敏感输入。
 
-当前过滤包括敏感字段名、Bearer / key pattern、长度限制、数组和递归深度限制。
+当前过滤不是完整 DLP 系统。
 
-这不是完整 DLP 系统。
-
-## 14. 已知合同漂移如何观测
+## 13. 已知合同漂移如何观测
 
 当前 `dev` 在 recoverable recovery exhausted 时会出现：
 
@@ -373,13 +310,11 @@ nextActionPlanner(error)
   -> AgentRun failed
 ```
 
-settled contract 目标是 guarded answer + completed。
+Settled contract 目标是 guarded answer + completed。
 
-观测系统必须如实显示当前 failed 行为，但文档和验收应把它标记为实现漂移，而不是把失败 trace 当成新合同证据。
+观测系统必须如实显示当前 failed 行为，但文档和验收要把它标记为实现漂移，而不是把失败 trace 当成新合同证据。详情见 [[AGENT_CURRENT_TRUTH]] 的“dev 已知实现漂移”章节。
 
-详见 [[../AGENT_CURRENT_TRUTH#dev-已知实现漂移恢复耗尽被升级为-terminal-error]]。
-
-## 15. Observability 不做什么
+## 14. Observability 不做什么
 
 - 不改路由；
 - 不改 Planner 或 Child 决策；
