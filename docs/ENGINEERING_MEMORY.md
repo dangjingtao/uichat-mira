@@ -5,11 +5,12 @@ last_verified: 2026-07-30
 layer: wiki
 module: Project
 feature: EngineeringMemory
-doc_type: current-snapshot
+Doc Type: current-snapshot
 canonical: true
 related:
   - CURRENT_PRODUCT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
+  - TOOL_CURRENT_TRUTH.md
   - harness/agentgraph-harness-protocol.md
   - harness/README.md
   - skill/README.md
@@ -99,7 +100,7 @@ LangGraph 保留为显式兼容、历史测试和回归对照路径，不是应�
 
 - Parent 保留对话、审批、恢复、Evidence、终止与最终交付；
 - Child 负责领域局部规划、工具循环、Runtime、Evidence 与 Artifact；
-- completed 后冻结交付并直接 Generate，不让 Main Planner重做施工；
+- completed 后冻结交付并直接 Generate，不让 Main Planner 重做施工；
 - needs_input 由 Parent 提问；
 - recoverable 返回受限恢复面；
 - terminal failure 不进入 Generate。
@@ -143,7 +144,9 @@ Pi Loop 没有全局 iteration cap；局部 schema replan 与 recoverable failur
 
 ## 7. Approval 与恢复
 
-审批绑定：
+### Settled exact invocation
+
+目标合同绑定：
 
 - `toolId`；
 - `toolCallId`；
@@ -154,6 +157,12 @@ Pi Loop 没有全局 iteration cap；局部 schema replan 与 recoverable failur
 恢复必须使用 checkpoint 和 frozen invocation，不重新根据用户文字猜参数。
 
 SubAgent approval 还必须保存 transcript checkpoint。旧批准不能变成可复用权限。
+
+### 当前 core 实现漂移
+
+截至 2026-07-30，core `ApprovedInvocation` 实际匹配 `toolId + inputHash`；pending request 和 frozen call 虽然保存 `toolCallId`，但它尚未参与 grant match。批准在执行尝试后 one-shot 消费。
+
+这是 exact-invocation identity 漂移，不是合同改版。完整说明见 [[TOOL_CURRENT_TRUTH]]。
 
 ### Settled C contract
 
@@ -171,19 +180,21 @@ SubAgent approval 还必须保存 transcript checkpoint。旧批准不能变成�
 
 ## 8. Harness 当前定位
 
+完整工具事实见 [[TOOL_CURRENT_TRUTH]]。
+
 Harness 是 concrete tool 的控制平面，不是 Agent 的大脑。
 
 Harness 负责：
 
-- capability / tool registry；
-- ToolExposure；
+- registry 与 public surface；
+- availability 与 Tool Exposure；
 - schema 与 metadata；
 - risk / approval；
 - workspace boundary；
 - invocation；
 - external MCP projection；
-- trace / audit；
-- result 到 `llmContent` 的投影。
+- event / trace / artifact / audit；
+- result 到 bounded `llmContent` 的投影。
 
 Harness 不负责：
 
@@ -196,18 +207,129 @@ Harness 不负责：
 
 Skill-private Runtime 不暴露给 Main Planner，也不能绕过 Parent 治理。
 
-## 9. Tool 体系
+## 9. Tool 公共面
 
-当前工具应保持少而清楚：
+### Read
 
-- Read：发现、打开、抽取、切片；
-- Edit：受控写入与替换；
-- Search：统一搜索入口；
-- Terminal：受审批、工作区和 Runtime 约束的进程能力。
+```text
+read_discover
+grep
+read_open
+codebase_explore
+```
 
-不要把工具重新拆成几十个重叠入口，也不要用正则堆叠代替 schema 与 Runtime contract。
+旧 `read / read_list / read_locate / read_extract / read_slice` 是内部 primitive 或兼容面，不进入当前 Agent exposure。
 
-## 10. Skill 与 SubAgent
+### Edit
+
+```text
+write_file
+replace_block
+delete_path
+move_path
+```
+
+四个公开 Edit 工具都要求审批。旧 `edit_file / workspace_mutation` 只保留兼容。
+
+### Search
+
+- `web_search`：公共互联网，Tavily / SearXNG；
+- `news_search`：本地 News Hub 缓存。
+
+### Terminal
+
+`terminal_session` 是完整 host shell / PTY runtime：
+
+- 支持 Node、Python、Git、包管理器、脚本和长任务；
+- workspace 外 `cwd` 可以在 exact approval 后执行；
+- 当前不是强隔离 sandbox；
+- 不能退化成通用业务集成容器。
+
+### 扩展能力
+
+Managed Browser、Attached Browser、Mail、GitHub、External Expert 与 External MCP 可以按真实 availability 进入 public surface。
+
+## 10. Tool Exposure 不变量
+
+```text
+public eligible tools <= 20
+  -> expose all
+  -> skip ranking
+
+public eligible tools > 20
+  -> embedding / rerank
+  -> expose top 20
+```
+
+必须保护：
+
+- caller `topK / maxTools / minScore` 不能缩小 <=20 工具集；
+- >20 没有 score threshold 淘汰；
+- ranking 失败确定性回退前 20；
+- Tool Group 只提供偏好，不改变 exposure；
+- SkillContext 不扩大 Tool Exposure；
+- capability match、ranking、selectedToolId 与 UI 选中状态都不是 invocation；
+- risk 由 execution-time Policy / Approval 处理，不能靠假装工具不存在处理。
+
+## 11. Tool 执行不变量
+
+1. Planner 只选择本轮 exposed concrete tool；
+2. Normalize 校验 plain args 与 schema；
+3. workspace file args 机械归一化；
+4. frozen `pendingToolCall` 保存 tool id、args、toolCallId 与 inputHash；
+5. Policy 只读取 frozen call；
+6. Harness 再次验证 schema；
+7. ToolNode 只执行 Policy allow 且 hash 一致的 invocation；
+8. execution attempt 后 one-shot 消费批准；
+9. result / artifact / trace 进入统一 invocation；
+10. Evidence 是累计写入者；
+11. Generate 不调用 Tool。
+
+## 12. External MCP
+
+External MCP projected id：
+
+```text
+mcp:<serverId>:tool:<toolName>
+```
+
+进入 Agent 必须：
+
+- enabled；
+- connected；
+- disclaimer accepted；
+- discovery 成功；
+- transport 配置有效；
+- 用户显式 Agent Access；
+- concrete invocation 经过 approval。
+
+安装或连接不等于自动获得 Agent 权限。
+
+## 13. CodeGraph
+
+Planner 只看见 `codebase_explore`。
+
+当前事实：
+
+- 工具稳定注册；
+- CodeGraph Studio 提供 provider/runtime config；
+- 当前 Agent workspace 拥有实际 runtime context；
+- 原生 query / explore / affected 留在 wrapper；
+- candidate 必须回 workspace source verification；
+- verified excerpts 才进入 retrieval Evidence；
+- provider 不可用时返回 structured degraded / fallback signal。
+
+当前 fallback 认知动作是：
+
+```text
+codebase_explore
+  -> grep / read_discover
+  -> read_open
+```
+
+CodeGraph 是代码理解加速器，不是第二个 Planner。
+
+## 14. Skill 与 SubAgent
 
 Skill 本体是渐进式披露的领域能力包，不等于 Tool、权限或 Runtime。
 
@@ -225,22 +347,7 @@ Task Skill 可以使用 forked SubAgent。Stateful Skill Flow 是可选确定性
 
 V1 禁止 nested SubAgent 与 recursive `delegate_task`。
 
-## 11. CodeGraph
-
-Planner 只看见单一产品入口 `codebase_explore`。
-
-原生 query / explore / affected 留在 wrapper 内。候选不是最终 Evidence，必须经过 workspace source verification。
-
-```text
-CodeGraph
-  -> scoped search_text
-  -> workspace_inventory
-  -> read_file_slice
-```
-
-CodeGraph 是代码理解加速器，不是第二个 Planner。
-
-## 12. 文档真相合同
+## 15. 文档真相合同
 
 文档站必须区分：
 
@@ -258,14 +365,3 @@ CodeGraph 是代码理解加速器，不是第二个 Planner。
 - 修复状态。
 
 不能只选一边，让另一边消失。
-
-## 13. 判断冲突
-
-1. 当前代码与可重复验证；
-2. [[AGENT_CURRENT_TRUTH]] 或对应 current-contract；
-3. 本页；
-4. 施工、测试与评审记录；
-5. design / plan / POC；
-6. historical / superseded。
-
-任何施工线程都不能仅凭一段总结重开已经稳定的运行时合同。

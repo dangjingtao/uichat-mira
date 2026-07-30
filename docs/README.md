@@ -5,11 +5,12 @@ last_verified: 2026-07-30
 layer: schema
 module: Docs
 feature: DocsSystem
-doc_type: current-contract
+Doc Type: current-contract
 canonical: true
 related:
   - CURRENT_PRODUCT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
+  - TOOL_CURRENT_TRUTH.md
   - ENGINEERING_MEMORY.md
   - VAULT_HOME.md
   - archive/README.md
@@ -29,12 +30,13 @@ related:
 - 什么尚未核验；
 - 当前代码是否偏离 settled contract。
 
-## 先读这四页
+## 先读这五页
 
 1. [[CURRENT_PRODUCT_TRUTH]]：产品能力、边界与稳定迭代阶段；
-2. [[AGENT_CURRENT_TRUTH]]：Agent、Harness、SubAgent、终止语义与当前已知漂移；
-3. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
-4. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
+2. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
+3. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
+4. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
+5. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
 
 ## 五类文档
 
@@ -76,11 +78,14 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 ## 当前模块入口
 
 - [[AGENT_CURRENT_TRUTH]]：Agent 总真相；
+- [[TOOL_CURRENT_TRUTH]]：Tool / Harness 总真相；
 - [[harness/agentgraph-harness-protocol]]：AgentGraph、Harness、Evidence 与委派技术协议；
+- [[harness/README]]：Harness 控制平面；
+- [[tooling-runtime/README]]：Tool 模块阅读入口；
+- [[tooling-runtime/tools-protocol]]：Tool 技术协议；
 - [[skill/README]]：Skill 当前定义与 SubAgent 执行边界；
 - [[skill/pi-skill-agent-execution]]：SubAgent 详细参考；
 - [[development/agent-observability]]：Agent / SubAgent 观测与诊断；
-- [[tooling-runtime/README]]：工具运行时；
 - [[provider/README]]：Provider；
 - [[knowledge-base/README]]：知识库；
 - [[evaluation/README]]：评测；
@@ -90,14 +95,24 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 
 ## Agent 文档引用规则
 
-Agent 相关内容按以下顺序判断：
-
 ```text
 current code + repeatable tests
   -> AGENT_CURRENT_TRUTH
   -> agentgraph-harness current contract
   -> Skill / observability current reference
   -> workboard / checklist / review
+  -> design / plan / historical
+```
+
+## Tool 文档引用规则
+
+```text
+current code + repeatable tests
+  -> TOOL_CURRENT_TRUTH
+  -> harness current overview / Agent-Harness protocol
+  -> tooling-runtime/tools-protocol
+  -> capability detail / runbook
+  -> project-control evidence
   -> design / plan / historical
 ```
 
@@ -129,3 +144,6 @@ current code + repeatable tests
 ## 归档
 
 归档规则见 [[archive/README]]。
+
+- Agent 历史：[[archive/agent/README]]；
+- Tool 历史：[[archive/tool/README]]。
