@@ -5,12 +5,13 @@ last_verified: 2026-07-30
 layer: wiki
 module: Project
 feature: ProductTruth
-Doc Type: current-snapshot
+doc_type: current-snapshot
 canonical: true
 related:
   - ENGINEERING_MEMORY.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
+  - MICROAPP_CURRENT_TRUTH.md
   - harness/agentgraph-harness-protocol.md
   - skill/README.md
   - knowledge-base/README.md
@@ -50,7 +51,7 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 - Harness 与 Tool Runtime；
 - MCP Host；
 - Skill / SubAgent；
-- 可选微应用与外部 Runtime。
+- MicroApps Hub、领域 Studio 与外部 Runtime。
 
 ## 当前已经成立的能力
 
@@ -119,11 +120,35 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 - Stateful Skill Flow 是可选确定性 controller；
 - V1 禁止 nested SubAgent 与 recursive delegation。
 
-### 微应用
+### MicroApps Hub 与 MicroAPP Runtime
 
-- 微应用框架与若干具体能力已经进入实现或试验；
-- 每个微应用必须单独判断生命周期；
-- `docs/microapp/` 中存在大量 design、POC 和 runtime notes，不能因为文档存在就推断为正式产品能力。
+完整事实见 [[MICROAPP_CURRENT_TRUTH]]。
+
+当前必须区分：
+
+```text
+MicroApps Hub
+!= Integration MicroAPP registry
+!= Studio Runtime
+!= Agent Tool / Skill access
+```
+
+当前已经成立：
+
+- 设置页 MicroApps Hub 是宽产品入口，包含 Studio、领域 Runtime、Skill、Tool / MCP 集成和外部连接；
+- strict `MicroAppDefinition` registry 当前有七种 definition；
+- 只有 `knowledge_query` 完成统一 external AccessPoint invoke，并且只支持 `wecom.smart_robot`；
+- Image Generation、Computer Use、TTS、News Hub、CodeGraph 与智识进化库都有各自 Studio / service，但统一 MicroApp invoke 仍为 Studio-only 或未实现；
+- Mail Center、文枢、GitHub 和问策在产品中心有真实能力，但不属于当前七种 strict definition；
+- Image Generation 已有任务、实时进度、Artifact、Provider / ComfyUI；
+- Computer Use 已有 managed browser、持久任务与 Evidence、模型执行器、审批和 Browser tools；
+- TTS 已有 Windows、Piper、GPT-SoVITS 与 API Provider；
+- News Hub 与 Mail Center 分别通过 `news_search` 与 `mail_query` 进入 Agent 工具面；
+- 文枢通过 Skill-owned execution 与 private Runtime 工作；
+- GitHub 通过连接入口和四领域 Harness tools 工作；
+- Notion、智识进化库等能力仍需按部分实现或实验状态单独说明。
+
+产品入口、definition、领域 Runtime、Integration invoke 和 Agent access 必须逐层证明，不能互相代替。
 
 ## 当前不能这样宣传
 
@@ -133,6 +158,9 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 - “已经是成熟开放式多 Agent 平台”；
 - “已经有 Agent V2、DAG scheduler 或并发 Agent 编排”；
 - “所有 Skill 和 SubAgent 都可以获得任意工具”；
+- “所有微应用卡片都来自同一套 Runtime”；
+- “MicroApp definition 启用就代表领域 Runtime ready”；
+- “所有 Studio 都可以被企业接入点或 Agent 自动调用”；
 - “所有微应用和 POC 都已可用于生产”；
 - “已经完成通用长期记忆系统”；
 - “已经完成强隔离 Sandbox”；
@@ -154,6 +182,14 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 - 有回归保护；
 - 文档写清已实现和尚未实现；
 - 不依赖施工线程口头结论。
+
+MicroApp 还必须额外说明：
+
+- 是否只是一张产品入口卡片；
+- 是否有 strict definition；
+- 是否有真实领域 Runtime；
+- 是否支持 Integration invoke；
+- 是否通过 Tool 或 Skill 进入 Agent。
 
 ## 真相优先级
 
