@@ -1,29 +1,33 @@
-# Vault Home
-
-Status: Current
-Owner: docs
-Last verified: 2026-06-24
-Layer: wiki
-Module: Docs
-Feature: DocsSystem
-Doc Type: overview
-Canonical: true
-Related:
+---
+status: current
+owner: docs
+last_verified: 2026-07-30
+layer: wiki
+module: Docs
+feature: EngineeringVault
+doc_type: overview
+canonical: true
+related:
   - README.md
-  - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
-  - knowledge-system/OBSIDIAN_QUICKSTART.md
+  - CURRENT_PRODUCT_TRUTH.md
+  - ENGINEERING_MEMORY.md
+  - project-control/README.md
+---
 
-## 起点
+# UIChat Mira Engineering Vault
 
-这是给 Obsidian 用的首页。
+这是给 Obsidian、工程检索和长期维护使用的工作区入口。
 
-优先入口：
+**Vault 不是产品真相首页。** 它会同时收录当前契约、施工记录、研究、POC、决策和历史材料。阅读任何页面前，先看生命周期与核验状态。
 
+## 当前事实入口
+
+- [[CURRENT_PRODUCT_TRUTH]]
+- [[ENGINEERING_MEMORY]]
 - [[README]]
-- [[knowledge-system/KNOWLEDGE_SYSTEM_INDEX]]
-- [[knowledge-system/OBSIDIAN_QUICKSTART]]
+- [[harness/agentgraph-harness-protocol]]
 
-## 按区域浏览
+## 模块地图
 
 - [[maps/AREA_MAP_RUNTIME]]
 - [[maps/AREA_MAP_CHAT]]
@@ -31,17 +35,32 @@ Related:
 - [[maps/AREA_MAP_KNOWLEDGE_BASE]]
 - [[maps/AREA_MAP_PLATFORM]]
 
-## 按概念浏览
+## 核心模块
 
-- [[concepts/CONCEPTS_INDEX]]
-- [[concepts/CONCEPT_RUNTIME]]
-- [[concepts/CONCEPT_MCP]]
-- [[concepts/CONCEPT_UCHAT]]
-- [[concepts/CONCEPT_KNOWLEDGE_BASE]]
+- [[skill/README]]
+- [[tooling-runtime/README]]
+- [[provider/README]]
+- [[knowledge-base/README]]
+- [[evaluation/README]]
+- [[microapp/README]]
+- [[platform/tauri]]
 
-## 按知识系统浏览
+## 施工与项目控制
 
-- [[knowledge-system/KNOWLEDGE_SYSTEM_FULL_PLAN]]
-- [[knowledge-system/FULL_MCP_AND_INDEX_ARCHITECTURE]]
-- [[knowledge-system/GRAPH_VISUALIZATION_PLAN]]
+- [[project-control/README]]
+- [[project-control/project-control-ledger]]
+- [[developments/defect-log]]
+
+这些页面用于任务、证据、评审和阶段记录，不应覆盖 current-contract。
+
+## 知识系统
+
+- [[knowledge-system/KNOWLEDGE_SYSTEM_INDEX]]
+- [[knowledge-system/DOCUMENTATION_STANDARDS]]
 - [[knowledge-system/AI_READING_SCOPE]]
+
+## 历史与方案
+
+- [[archive/README]]
+
+历史、计划和 POC 会继续保留，但默认不进入当前事实入口。

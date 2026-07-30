@@ -1,170 +1,53 @@
-# Sandbox 模块说明
+---
+status: historical
+owner: runtime
+last_verified: 2026-07-30
+layer: wiki
+module: Sandbox
+feature: ModuleDefinition
+doc_type: historical
+canonical: false
+related:
+  - ../tooling-runtime/README.md
+  - ../tooling-runtime/terminal-capability-checklist.md
+  - ./README.md
+---
 
-Status: Current
-Owner: runtime
-Last verified: 2026-07-05
-Layer: wiki
-Module: Sandbox
-Feature: ModuleDefinition
-Doc Type: current-contract
+# Sandbox 模块说明（历史）
 
-## 单点真相范围
+> 这页描述的是早期轻量 Sandbox v0.5 路线，已经不能作为当前执行运行时合同。
 
-这页定义当前项目里 `Sandbox` 模块在 1 期的真实职责与边界。
+## 归档原因
 
-它回答：
+旧文档把 `Sandbox` 写成独立的受控执行层，并保留了已经失效的本地绝对路径与阶段性实现判断。
 
-- `Sandbox` 是什么
-- `Sandbox` 当前做到了什么
-- `Sandbox` 当前明确不做什么
-- 它和 `Harness`、external MCP、persistent PTY 的关系是什么
+当前工程讨论已经转向：
 
-## 当前定位
+- 终端能力如何在 Host Runtime 中获得更自由、可回收的执行空间；
+- Harness 如何负责审批、工作区、审计和能力暴露；
+- Sandbox 如何降低审批摩擦，而不是用大量正则把能力削弱；
+- 强隔离、WSL、小型系统、Windows Job Objects / AppContainer 等方案如何按真实效果评估。
 
-当前 `Sandbox` 不是完整强隔离平台。
+这些方向仍在演进，尚未形成一份可替代所有执行环境讨论的完整 current-contract。
 
-更准确地说，它是：
+## 仍然有效的历史背景
 
-- 一个独立模块
-- 被 `Harness` 调用的受控执行层
-- 当前主要承接命令执行的轻量 v0.5 路线
+早期路线曾强调：
 
-它不直接等同于：
+- workspace 边界；
+- env 控制；
+- stdout / stderr 截断；
+- timeout 与 abort；
+- Windows 进程树终止；
+- artifact 登记；
+- terminal capability 的可用性暴露。
 
-- Docker / VM / AppContainer 级强隔离
-- 统一承接所有执行型 capability 的最终运行时
-- external MCP 的真实执行平面
+这些问题仍然重要，但具体实现和归属必须回到当前 Tool / Harness / Terminal 文档核验。
 
-## 当前已实现
+## 当前阅读入口
 
-当前 1 期已经实现：
+- [[../tooling-runtime/README]]
+- [[../tooling-runtime/terminal-capability-checklist]]
+- [[README]]
 
-- `SandboxExecutor` 独立入口
-- workspace 真实路径边界检查
-- 最小 env 白名单
-- stdout / stderr 总量限制与 `truncated` 标记
-- `stdoutText` / `stderrText` 分离回传，并附带编码标记
-- 二进制输出检测；命中后不再直接当普通文本展开
-- 命令完成后可显式登记 workspace 内文件/目录 artifact
-- timeout 默认值、调用层限幅与执行层硬上限
-- abort / 进程树终止；Windows kill tree 为 best-effort，并在 timeout result 中标记 limitation
-- 最小命令 + 参数策略
-- L1 workspace runner status；条件不满足时 `command` profile 不可用
-- direct bench 最小合同与结构化 JSON runner
-
-相关实现：
-
-- [executor.ts](/D:/workspace/rag-demo/server/src/sandbox/executor.ts)
-- [policy.ts](/D:/workspace/rag-demo/server/src/sandbox/policy.ts)
-- [executor.test.ts](/D:/workspace/rag-demo/server/src/sandbox/executor.test.ts)
-- [contract.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/contract.ts)
-- [runner.ts](/D:/workspace/rag-demo/server/src/harness/sandbox/bench/runner.ts)
-
-## 当前接入范围
-
-当前 1 期已经接入：
-
-- `terminal_session` 的 ephemeral child-process 路径
-- `terminal_session` 的 persistent PTY 创建路径复用 workspace cwd 与 env 白名单入口
-- Harness exposure 依赖 L1 `command` profile 状态；sandbox unavailable / L1 不满足时不暴露 `terminal_session`
-
-当前 1 期没有接入：
-
-- `terminal_session` 的 persistent PTY 还没有完全并入 `SandboxExecutor` 的 process/result 模型
-- external MCP 的真实执行
-- `edit_file`
-
-## 与 Harness 的关系
-
-### Harness 负责
-
-- tool registry
-- invocation lifecycle
-- approval
-- trace / artifact / audit
-- 风险与治理边界
-
-### Sandbox 负责
-
-- 命令执行
-- 执行前边界检查
-- 进程级资源控制
-- 输出与超时限制
-
-### 不该混的边界
-
-- `Sandbox` 不持有审批最终状态
-- `Sandbox` 不直接决定 tool exposure
-- `Sandbox` 不替代 `Harness` 的 invocation 状态机
-
-## 与 external MCP 的关系
-
-当前决议是：
-
-- external MCP 继续保留专门治理
-- 1 期不把 external MCP 的真实执行统一并入 `SandboxExecutor`
-- 但 external MCP 的风险、transport、审计边界仍由 Harness 统一定义
-
-原因：
-
-- external MCP 不只是命令执行问题
-- 它还包含 server 生命周期、transport、secret、免责声明和投影治理
-
-## 与 persistent PTY 的关系
-
-当前决议是：
-
-- ephemeral child-process 路径进入 `SandboxExecutor`
-- persistent PTY 的创建路径复用 `SandboxExecutor` 暴露的 cwd/env 归一化入口
-- persistent PTY 仍保留自己的交互式 session 与 output/result 语义
-
-原因：
-
-- 先稳住最容易失控的非持久进程执行面
-- 避免在 1 期同时重写交互式 PTY 语义和沙箱边界
-
-## 1期不是最终沙箱
-
-当前 `SandboxExecutor v0.5` 的正确表述是：
-
-- 受控执行器
-- 轻量沙箱前置层
-- 桌面级可治理执行面
-- 带 direct bench 合同校验的最小执行层
-
-它不是：
-
-- 严格意义上的安全沙箱
-- 三端统一强隔离运行时
-
-## Direct Bench 当前范围
-
-当前已补一条绕过 LLM / Planner / Tool Selection / `read_list` / Generate 的 direct bench：
-
-- bench 直接调用 `SandboxRunRequest -> SandboxRunResult`
-- 正向覆盖 `echo hello`、中文输出、非零 `exitCode`、artifact 注册
-- 负向覆盖 `cwd` 越界、超短 `timeout`、巨量输出
-- 输出为结构化 JSON
-
-UIChat Mira V1.6 当前 gate 只承诺：
-
-- `command`
-
-当前声明但不计入 V1.6 gate 的 future profile：
-
-- `read_only`
-- `workspace_write`
-- `networked_command`
-
-这些 future profile 会被 direct bench 明确标成 `future_profile`，用于保留合同边界证据，不会伪装成 V1.6 已覆盖或已通过。
-
-## 后续方向
-
-后续可能继续补：
-
-- persistent PTY 是否并入 Sandbox
-- external MCP 与 Sandbox 的衔接
-- 并发限制
-- 联网命令专门风险标记
-- 更强的跨平台执行后端抽象
-
+在新的执行运行时合同形成前，不应继续引用本页中的旧模块边界、旧路径或“当前已实现”清单。

@@ -1,3 +1,17 @@
+export type DocumentLifecycle =
+  | "current"
+  | "active"
+  | "planning"
+  | "historical"
+  | "unverified";
+
+export type VerificationState =
+  | "fresh"
+  | "stale"
+  | "missing"
+  | "invalid"
+  | "not-required";
+
 export interface GeneratedHeading {
   level: number;
   text: string;
@@ -17,7 +31,11 @@ export interface GeneratedDocument {
     module: string | null;
     feature: string | null;
     docType: string | null;
+    canonical: boolean;
   };
+  lifecycle: DocumentLifecycle;
+  verification: VerificationState;
+  isPrimary: boolean;
   excerpt: string;
   headings: GeneratedHeading[];
   content: string;
@@ -35,6 +53,13 @@ export interface GeneratedDocsIndex {
   navigation: NavigationItem[];
   stats?: {
     total: number;
+    byLifecycle: Record<DocumentLifecycle, number>;
+    byVerification: {
+      fresh: number;
+      stale: number;
+      missing: number;
+      invalid: number;
+    };
     byLayer: {
       rawSource: number;
       wiki: number;
@@ -42,12 +67,6 @@ export interface GeneratedDocsIndex {
     };
     byModule: Record<string, number>;
     byFeature: Record<string, number>;
-    byDocType: {
-      currentContract: number;
-      reference: number;
-      overview: number;
-      design: number;
-      plan: number;
-    };
+    byDocType: Record<string, number>;
   };
 }
