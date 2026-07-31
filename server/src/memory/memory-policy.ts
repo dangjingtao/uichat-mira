@@ -9,6 +9,7 @@ const MAX_PATCHES_PER_TURN = 6;
 const MIN_CONFIDENCE = 0.85;
 const MIN_CONTENT_LENGTH = 4;
 const MAX_CONTENT_LENGTH = 500;
+const RESERVED_MARKERS = ["<!-- mira:memory", "<!-- /mira:memory -->"];
 
 const normalizeContent = (value: string) =>
   value.trim().toLocaleLowerCase().replaceAll(/\s+/g, " ");
@@ -29,7 +30,8 @@ const isValidContent = (value: string) => {
   const normalized = value.trim();
   return (
     normalized.length >= MIN_CONTENT_LENGTH &&
-    normalized.length <= MAX_CONTENT_LENGTH
+    normalized.length <= MAX_CONTENT_LENGTH &&
+    !RESERVED_MARKERS.some((marker) => normalized.includes(marker))
   );
 };
 
