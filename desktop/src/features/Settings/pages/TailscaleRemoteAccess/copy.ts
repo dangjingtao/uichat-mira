@@ -92,7 +92,7 @@ const zh = {
   },
 };
 
-const en: typeof zh = {
+const en = {
   page: {
     miniTitle: "REMOTE ACCESS",
     title: "Tailscale Remote Access",
@@ -113,7 +113,7 @@ const en: typeof zh = {
       unreachable: ["Unreachable", "Serve is configured, but the remote health check failed."],
       ready: ["Ready", "Tailnet, Serve, and the Mira health check are all working."],
       error: ["Check failed", "Mira could not read the Tailscale runtime state."],
-    },
+    } satisfies Record<TailscaleRemoteRuntimeState, readonly [string, string]>,
   },
   device: {
     title: "Device configuration",
@@ -183,8 +183,6 @@ const en: typeof zh = {
     ] as const,
   },
 };
-
-export type TailscaleRemoteAccessCopy = typeof zh;
 
 export const getTailscaleRemoteAccessCopy = (language?: string) =>
   language?.toLowerCase().startsWith("zh") ? zh : en;
