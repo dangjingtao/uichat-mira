@@ -6,10 +6,16 @@ import type {
   MemoryContextSnapshot,
   MemoryRecord,
   MemorySource,
+  MemoryTurnLedger,
 } from "./types.js";
 
 const MAX_CONTEXT_RECORDS = 40;
 const MAX_CONTEXT_CHARACTERS = 6000;
+const EMPTY_APPLY_RESULT: MemoryApplyResult = {
+  created: 0,
+  replaced: 0,
+  deleted: 0,
+};
 
 const KIND_LABELS = {
   preference: "偏好",
@@ -44,10 +50,29 @@ const buildSnapshot = (
 };
 
 export class MemoryService {
+  private readonly commitQueues = new Map<number, Promise<void>>();
+
   constructor(
     private readonly repository: FileMemoryRepository,
     private readonly consolidator: MemoryConsolidator,
+    private readonly turnLedger: MemoryTurnLedger,
   ) {}
+
+  private runCommitSerialized<T>(
+    userId: number,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.commitQueues.get(userId) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    this.commitQueues.set(
+      userId,
+      current.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return current;
+  }
 
   buildContextSync(userId: number): MemoryContextSnapshot {
     return buildSnapshot(
@@ -72,27 +97,34 @@ export class MemoryService {
     const userText = input.userText.trim();
     const assistantText = input.assistantText.trim();
     if (!userText || !assistantText) {
-      return { created: 0, replaced: 0, deleted: 0 };
+      return { ...EMPTY_APPLY_RESULT };
     }
 
-    const existing = await this.repository.list(input.userId);
-    const proposals = await this.consolidator.propose({
-      userId: input.userId,
-      source: input.source,
-      userText,
-      assistantText,
-      existing,
-    });
-    const patches = validateMemoryPatchProposals({
-      proposals,
-      existing,
-      source: input.source,
-    });
+    return this.runCommitSerialized(input.userId, async () => {
+      if (await this.turnLedger.has(input.userId, input.source)) {
+        return { ...EMPTY_APPLY_RESULT };
+      }
 
-    if (patches.length === 0) {
-      return { created: 0, replaced: 0, deleted: 0 };
-    }
+      const existing = await this.repository.list(input.userId);
+      const proposals = await this.consolidator.propose({
+        userId: input.userId,
+        source: input.source,
+        userText,
+        assistantText,
+        existing,
+      });
+      const patches = validateMemoryPatchProposals({
+        proposals,
+        existing,
+        source: input.source,
+      });
+      const result =
+        patches.length > 0
+          ? await this.repository.apply(input.userId, patches)
+          : { ...EMPTY_APPLY_RESULT };
 
-    return this.repository.apply(input.userId, patches);
+      await this.turnLedger.mark(input.userId, input.source);
+      return result;
+    });
   }
 }
