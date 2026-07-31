@@ -34,14 +34,15 @@ describe("workspace selection", () => {
     expect(() => getWorkspaceRoot()).toThrow("workspace root is not selected");
   });
 
-  it("uses configured workspace root when UI_CHAT_WORKSPACE_ROOT is explicitly set", () => {
-    fs.mkdirSync(tempRoot, { recursive: true });
+  it("materializes configured workspace root before exposing the selection", () => {
     process.env.UI_CHAT_WORKSPACE_ROOT = tempRoot;
+    expect(fs.existsSync(tempRoot)).toBe(false);
 
     expect(getWorkspaceSelection()).toMatchObject({
       rootPath: path.resolve(tempRoot),
       source: "configured",
     });
+    expect(fs.statSync(tempRoot).isDirectory()).toBe(true);
   });
 
   it("selects workspace root explicitly", () => {
