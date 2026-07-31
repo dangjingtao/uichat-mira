@@ -7,8 +7,10 @@ import type {
 
 const MAX_PATCHES_PER_TURN = 6;
 const MIN_CONFIDENCE = 0.85;
+const MAX_CONFIDENCE = 1;
 const MIN_CONTENT_LENGTH = 4;
 const MAX_CONTENT_LENGTH = 500;
+const MAX_REASON_LENGTH = 500;
 const RESERVED_MARKERS = ["<!-- mira:memory", "<!-- /mira:memory -->"];
 
 const normalizeContent = (value: string) =>
@@ -51,10 +53,13 @@ export const validateMemoryPatchProposals = (input: {
   const validated: ValidatedMemoryPatch[] = [];
 
   for (const proposal of input.proposals.slice(0, MAX_PATCHES_PER_TURN)) {
+    const reason = proposal.reason.trim();
     if (
       !Number.isFinite(proposal.confidence) ||
       proposal.confidence < MIN_CONFIDENCE ||
-      !proposal.reason.trim()
+      proposal.confidence > MAX_CONFIDENCE ||
+      !reason ||
+      reason.length > MAX_REASON_LENGTH
     ) {
       continue;
     }
@@ -66,7 +71,7 @@ export const validateMemoryPatchProposals = (input: {
       validated.push({
         operation: "delete",
         targetId: target.id,
-        reason: proposal.reason.trim(),
+        reason,
       });
       continue;
     }
@@ -93,7 +98,7 @@ export const validateMemoryPatchProposals = (input: {
           createdAt: now,
           updatedAt: now,
         },
-        reason: proposal.reason.trim(),
+        reason,
       });
       continue;
     }
@@ -116,7 +121,7 @@ export const validateMemoryPatchProposals = (input: {
         createdAt: target.createdAt,
         updatedAt: now,
       },
-      reason: proposal.reason.trim(),
+      reason,
     });
   }
 
