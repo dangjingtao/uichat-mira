@@ -9,6 +9,7 @@ doc_type: overview
 canonical: true
 related:
   - ../CHAT_CURRENT_TRUTH.md
+  - workspace.md
   - ../uchat.md
   - persistence-and-media.md
   - ../AGENT_CURRENT_TRUTH.md
@@ -25,12 +26,13 @@ related:
 ## 先读这里
 
 1. [[CHAT_CURRENT_TRUTH]]：Thread、Message、三条发送链、持久化与已知缺陷；
-2. [[uchat]]：桌面 UChat core / ui / integration 合同；
-3. [[chat/persistence-and-media]]：消息落库、编辑重跑、附件、TTS、图片与删除行为；
-4. [[AGENT_CURRENT_TRUTH]]：AgentRun、审批、恢复与终止语义；
-5. [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：Knowledge Base 与 RAG；
-6. [[PROVIDER_CURRENT_TRUTH]]：模型角色与调用解析；
-7. [[TOOL_CURRENT_TRUTH]]：Harness Tool 公共面与审批。
+2. [[chat/workspace]]：ChatWorkspace、`Mira BASE`、默认物理目录、Harness root 与受管 staging 合同；
+3. [[uchat]]：桌面 UChat core / ui / integration 合同；
+4. [[chat/persistence-and-media]]：消息落库、编辑重跑、附件、TTS、图片与删除行为；
+5. [[AGENT_CURRENT_TRUTH]]：AgentRun、审批、恢复与终止语义；
+6. [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：Knowledge Base 与 RAG；
+7. [[PROVIDER_CURRENT_TRUTH]]：模型角色与调用解析；
+8. [[TOOL_CURRENT_TRUTH]]：Harness Tool 公共面与审批。
 
 ## 当前对象链
 
@@ -48,12 +50,17 @@ ChatWorkspace
 
 必须分开：
 
-- `ChatWorkspace`：文件与 Tool 的默认执行空间；
+- `ChatWorkspace`：数据库中的工作空间记录，保存 rootPath；
+- `Mira BASE`：默认 ChatWorkspace 的逻辑名称；
+- Harness workspace root：Agent / Tool 的默认物理执行根；
+- Task staging workspace：建站、构建等任务的受管子目录；
 - `Thread`：聊天配置与归属真相；
 - `Message`：用户可见历史与 canonical parts；
 - `Request Context`：Role、Summary 等请求时临时 system context；
 - `AgentRun`：Agent 的运行、审批、Evidence 与 checkpoint 真相；
 - `ChatMedia`：成功 Assistant 后附加的音频或图片结果。
+
+默认空间的目录创建、自定义路径缺失语义和 MiraDocs staging 以 [[chat/workspace]] 为准。
 
 ## 三条真实发送链
 
@@ -110,7 +117,7 @@ status
 
 其中：
 
-- `workspaceId` 决定 Agent / Tool 默认执行空间；
+- `workspaceId` 选择数据库 ChatWorkspace；实际路径来自对应 `rootPath`；
 - `knowledgeBaseId` 决定非 Agent RAG 路由，或作为 Agent 检索输入；
 - `roleId` 注入 Role prompt；
 - `agentEnabled` 选择 Agent 路径；
@@ -156,6 +163,7 @@ UChat 不负责：
 
 - 选择 Provider Connection；
 - 决定 RAG、Agent 的后端合同；
+- 创建默认物理 Workspace 目录；
 - 执行 Tool；
 - 持有 AgentRun；
 - 保存 Knowledge Base；
@@ -179,12 +187,16 @@ ON DELETE CASCADE
 
 其他已知漂移：
 
+- 生产 launcher 传入默认 Workspace 路径前未明确创建物理目录；
+- MiraDocs GitHub 模式此前没有独立 task staging 合同；
 - Normal Chat Tool Loop 当前不可达；
 - `Thread.modelName` 不驱动默认 Chat；
 - Stop 不保证后台工作停止；
 - 普通 Chat / RAG 错误 Assistant 不完整持久化；
 - 附件 storage 缺少完整 GC；
 - Memory resolver 还没有 Thread persistence source。
+
+默认空间相关缺陷与整改边界见 [[chat/workspace]]。
 
 ## 历史与施工资料
 
@@ -195,6 +207,7 @@ ON DELETE CASCADE
 ```text
 current code
 → CHAT_CURRENT_TRUTH
+→ Chat Workspace current contract
 → UChat current contract
 → persistence and media reference
 ```
