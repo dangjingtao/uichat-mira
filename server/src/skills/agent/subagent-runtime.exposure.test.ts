@@ -119,6 +119,34 @@ describe("prepareSubAgent GitHub exposure", () => {
     expect(prepared.missingCapabilities).toEqual([]);
   });
 
+  it("binds the flattened agent-intent schema while retaining operation fields", () => {
+    registerGitHubTools();
+
+    const prepared = prepareSubAgent({
+      goal: "Write a file to dangjingtao/uichat-mira",
+      skillContext: createGitHubSkillContext("built-in"),
+      exposedHarnessToolIds: [],
+    });
+    const repositoryTool = prepared.tools.find(
+      (tool) => tool.id === "github_repository",
+    );
+    const schema = repositoryTool?.inputSchema as Record<string, unknown>;
+    const properties = schema.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    expect(schema).not.toHaveProperty("oneOf");
+    expect(properties.operation.enum).toContain("write_file");
+    expect(properties).toMatchObject({
+      repository: { type: "string" },
+      path: { type: "string" },
+      content: { type: "string" },
+      commitMessage: { type: "string" },
+      branch: { type: "string" },
+    });
+  });
+
   it("does not let a user Skill grant itself GitHub tools", () => {
     registerGitHubTools();
 
