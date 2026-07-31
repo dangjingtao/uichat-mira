@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -11,6 +12,7 @@ import type {
 const MEMORY_BLOCK_START = "<!-- mira:memory";
 const MEMORY_BLOCK_END = "<!-- /mira:memory -->";
 const DEFAULT_DOCUMENT = "# Mira Memory\n\n";
+const MAX_SYNC_DOCUMENT_BYTES = 256 * 1024;
 
 type ParsedMemoryBlock = {
   record: MemoryRecord;
@@ -183,6 +185,33 @@ export class FileMemoryRepository {
       ),
     );
     return current;
+  }
+
+  listSync(userId: number): MemoryRecord[] {
+    try {
+      const memoryPath = this.memoryPath(userId);
+      const stat = statSync(memoryPath);
+      if (stat.size > MAX_SYNC_DOCUMENT_BYTES) return [];
+      return parseMemoryDocument(readFileSync(memoryPath, "utf8")).map(
+        (block) => block.record,
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  updatedAtSync(userId: number): string | null {
+    try {
+      return statSync(this.memoryPath(userId)).mtime.toISOString();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async list(userId: number): Promise<MemoryRecord[]> {
