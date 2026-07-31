@@ -1,7 +1,4 @@
-import path from "node:path";
-import CONFIG from "@/config/index.js";
 import { FileMemoryRepository } from "./file-memory.repository.js";
-import { LlmMemoryConsolidator } from "./llm-memory.consolidator.js";
 import { validateMemoryPatchProposals } from "./memory-policy.js";
 import type {
   MemoryApplyResult,
@@ -99,10 +96,3 @@ export class MemoryService {
     return this.repository.apply(input.userId, patches);
   }
 }
-
-const memoryRoot = path.resolve(CONFIG.DATABASE_DIR, "memory");
-
-export const memoryService = new MemoryService(
-  new FileMemoryRepository(memoryRoot),
-  new LlmMemoryConsolidator(),
-);
