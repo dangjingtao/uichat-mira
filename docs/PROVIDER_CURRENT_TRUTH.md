@@ -12,6 +12,7 @@ related:
   - provider/FIRST_MODEL_SETUP.md
   - architecture/provider-api-standards.md
   - architecture/provider-proxy-api.md
+  - EVALUATION_CURRENT_TRUTH.md
   - CURRENT_PRODUCT_TRUTH.md
   - archive/provider/README.md
 ---
@@ -82,7 +83,7 @@ Provider Connection 是真实连接实例，保存：
 
 - connection id；
 - template code；
--可选 runtime provider code；
+- 可选 runtime provider code；
 - 显示名称；
 - Base URL；
 - 加密保存的 API Key；
@@ -162,7 +163,7 @@ params
 | 主模型 | `llm` | 普通聊天与最终文本生成 | 可选择模型、编辑参数 |
 | 小任务模型 | `task` | 标题、摘要等轻量任务兼容角色 | 可选择模型；参数详情只读 |
 | Agent 任务模型 | `agentTask` | Agent Planner / Generate 等任务模型 | 可选择模型；参数详情只读；未绑定时回退到 `task` |
-| 评测模型 | `evaluation` | 评测生成与裁判 | 可选择模型、编辑参数 |
+| 评测模型 | `evaluation` | 从 Knowledge Base Chunk 生成评测包样本 | 可选择模型、编辑参数；当前不承担 Run Judge |
 | 向量模型 | `embedding` | 远程文本向量化 | 可选择模型、编辑参数 |
 | 排序模型 | `rerank` | 远程候选重排 | 可选择模型、编辑参数 |
 
@@ -235,7 +236,7 @@ role
 
 显式请求 `/proxy/.../:provider` 不等于任意切换连接。当前 runtime 会检查显式 provider 是否与该角色的默认 runtime provider 一致。
 
-## 8. Chat、Embedding 与 Rerank
+## 8. Chat、Evaluation、Embedding 与 Rerank
 
 ### Chat
 
@@ -245,6 +246,16 @@ role
 - Ollama 使用原生 Chat API；
 - 其他当前文本 Provider 主要走 OpenAI-compatible Chat；
 - Ark Plan 连接在 adapter 内解析专用 Base URL。
+
+### Evaluation
+
+`evaluation` role 当前只在评测包生成器中使用，用于基于 Knowledge Base Chunk 生成：
+
+- question；
+- expectedAnswer；
+- tags。
+
+Evaluation Run 的 Faithfulness、Relevance 和 Completeness 当前使用本地词项重合启发式，不调用 `evaluation` role 做 Judge。完整事实见 [[EVALUATION_CURRENT_TRUTH]]。
 
 ### Embedding
 
@@ -364,11 +375,15 @@ Provider Proxy 当前没有为所有 Provider 统一归一化 Token 与成本字
 
 全局角色绑定与 Studio provider config 尚未成为同一个 source of truth。不能用其中一处“已配置”推断另一处 ready。
 
-### 13.5 Template capability 不是 per-model capability profile
+### 13.5 Evaluation role 不是 Judge role
+
+模型设置页面提供 `evaluation` role，但当前只被评测包生成器调用。Run 指标没有模型裁判调用。把该角色描述成“评测生成与裁判”会高估当前实现。
+
+### 13.6 Template capability 不是 per-model capability profile
 
 当前 catalog 能说明 adapter 和 role eligibility，但不能自动证明某个模型支持 Vision、Tool Calling、JSON Schema、上下文长度或全部参数。
 
-### 13.6 Token / Cost 尚未统一
+### 13.7 Token / Cost 尚未统一
 
 请求身份和耗时已有结构化 Observation，但 Token 与成本尚未在所有 Provider adapter 上形成统一、可信的归一化合同。
 
@@ -379,6 +394,7 @@ Mira 当前没有承诺：
 - 所有 OpenAI-compatible 服务都百分之百行为一致；
 - 模型目录同步就是完整健康检查；
 - 一个模型可以自动承担全部角色；
+- 评测模型已经承担 LLM Judge；
 - 通过供应商名称自动推断 Vision / Tool 能力；
 - Image、TTS、Chat 共用一个完成统一的 Provider Gateway；
 - 所有 Provider 都能返回统一 Token 与成本；
@@ -399,11 +415,13 @@ Mira 当前没有承诺：
 - `server/src/services/provider-settings.service.ts`；
 - `server/src/services/provider-proxy.service/`；
 - `server/src/services/local-model-runtime/`；
+- `server/src/services/evaluation-package-generator.service.ts`；
 - `server/src/routes/microapps/index.ts`。
 
 主要回归：
 
 - `server/src/services/provider-settings.service.test.ts`；
+- `server/src/services/evaluation-package-generator.service.test.ts`；
 - `desktop/src/features/Settings/components/PlatformConfigModal.test.tsx`；
 - `desktop/src/features/Settings/components/ApiConfigCard.test.tsx`；
 - `desktop/src/features/Settings/components/ModelConfig.test.tsx`；
