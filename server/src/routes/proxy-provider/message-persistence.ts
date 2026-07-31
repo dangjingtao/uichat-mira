@@ -1,4 +1,5 @@
 import { memoryService } from "@/memory/memory.service.js";
+import { shouldCommitTurnToMemory } from "@/memory/turn-commit-policy.js";
 import { threadService } from "@/services/thread.service.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.service/index.js";
 import {
@@ -174,21 +175,6 @@ const shouldClearStaleApprovalPlaceholder = (
   );
 };
 
-const shouldCommitMemory = (
-  metadata: Record<string, unknown> | undefined,
-) => {
-  if (metadata?.rag && typeof metadata.rag === "object") {
-    return false;
-  }
-
-  if (metadata?.agent && typeof metadata.agent === "object") {
-    const status = (metadata.agent as { status?: unknown }).status;
-    return status === "completed";
-  }
-
-  return true;
-};
-
 export const persistAssistantMessage = ({
   threadId,
   userId,
@@ -233,7 +219,7 @@ export const persistAssistantMessage = ({
     metadata,
   });
 
-  if (shouldCommitMemory(metadata) && parentId) {
+  if (shouldCommitTurnToMemory(metadata) && parentId) {
     const userMessage = threadService.getMessageById(parentId, userId);
     if (userMessage?.role === "user" && userMessage.content.trim()) {
       void memoryService
