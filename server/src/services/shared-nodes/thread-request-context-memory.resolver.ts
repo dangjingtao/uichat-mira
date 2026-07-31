@@ -1,4 +1,4 @@
-import { memoryService } from "@/memory/memory.service.js";
+import { memoryService } from "@/memory/runtime.js";
 import type { RequestContextResolver } from "./thread-request-context.types.js";
 
 export const createThreadMemoryContextPrompt = (memoryContext: string) =>
