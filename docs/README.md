@@ -1,7 +1,7 @@
 ---
 status: current
 owner: docs
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 layer: schema
 module: Docs
 feature: DocsSystem
@@ -9,6 +9,7 @@ doc_type: current-contract
 canonical: true
 related:
   - CURRENT_PRODUCT_TRUTH.md
+  - PROVIDER_CURRENT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
   - MICROAPP_CURRENT_TRUTH.md
@@ -31,14 +32,17 @@ related:
 - 什么尚未核验；
 - 当前代码是否偏离 settled contract。
 
-## 先读这六页
+## 先读这七页
 
 1. [[CURRENT_PRODUCT_TRUTH]]：产品能力、边界与稳定迭代阶段；
-2. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
-3. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
-4. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
-5. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
-6. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
+2. [[PROVIDER_CURRENT_TRUTH]]：首次模型配置、Provider Connection、角色绑定、运行解析与已知漂移；
+3. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
+4. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
+5. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
+6. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
+7. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
+
+新安装首先阅读 [[provider/FIRST_MODEL_SETUP]]，不要先尝试一次配齐所有模型角色。
 
 ## 五类文档
 
@@ -79,6 +83,9 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 
 ## 当前模块入口
 
+- [[PROVIDER_CURRENT_TRUTH]]：Provider、模型角色与调用总真相；
+- [[provider/FIRST_MODEL_SETUP]]：第一次模型配置；
+- [[provider/README]]：Provider 模块阅读入口；
 - [[AGENT_CURRENT_TRUTH]]：Agent 总真相；
 - [[TOOL_CURRENT_TRUTH]]：Tool / Harness 总真相；
 - [[MICROAPP_CURRENT_TRUTH]]：MicroApp 总真相；
@@ -90,11 +97,43 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 - [[skill/pi-skill-agent-execution]]：SubAgent 详细参考；
 - [[development/agent-observability]]：Agent / SubAgent 观测与诊断；
 - [[microapp/README]]：MicroApps Hub、Integration binding、Studio 与领域 Runtime 入口；
-- [[provider/README]]：Provider；
 - [[knowledge-base/README]]：知识库；
 - [[evaluation/README]]：评测；
 - [[chat/README]]：Chat 与 Agent UI 入口；
 - [[platform/tauri]]：Tauri 平台路径。
+
+## Provider 文档引用规则
+
+```text
+current code + repeatable tests
+  -> PROVIDER_CURRENT_TRUTH
+  -> provider/FIRST_MODEL_SETUP（用户首次配置）
+  -> provider/README
+  -> architecture/provider-api-standards
+  -> architecture/provider-proxy-api
+  -> project-control evidence
+  -> design / optimization note / historical
+```
+
+Provider 阅读必须区分：
+
+```text
+Provider Template
+Provider Connection
+ProviderModel Cache
+Model Role Assignment
+Provider Resolution
+Protocol Adapter
+Runtime Invocation
+```
+
+还必须区分三类状态：
+
+```text
+已保存模型绑定
+!= 最近一次模型目录同步成功
+!= 真实业务调用成功
+```
 
 ## Agent 文档引用规则
 
@@ -171,6 +210,7 @@ Agent Tool / Skill access
 
 归档规则见 [[archive/README]]。
 
+- Provider 历史：[[archive/provider/README]]；
 - Agent 历史：[[archive/agent/README]]；
 - Tool 历史：[[archive/tool/README]]；
 - MicroApp 历史：[[archive/microapp/README]]。

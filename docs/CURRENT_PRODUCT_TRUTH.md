@@ -1,7 +1,7 @@
 ---
 status: current
 owner: project-owner
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 layer: wiki
 module: Project
 feature: ProductTruth
@@ -9,6 +9,7 @@ doc_type: current-snapshot
 canonical: true
 related:
   - ENGINEERING_MEMORY.md
+  - PROVIDER_CURRENT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
   - MICROAPP_CURRENT_TRUTH.md
@@ -63,9 +64,35 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 
 ### Chat 与 Provider
 
-- 支持多 Provider；
-- Provider / Model Gateway 是模型接入统一入口；
-- Chat 是产品入口，但不是全部产品边界。
+完整事实见 [[PROVIDER_CURRENT_TRUTH]]。
+
+当前已经成立：
+
+- 支持多个内置 Provider Template 与多个自定义 OpenAI-compatible Connection；
+- Provider Template、Provider Connection、模型目录缓存和模型角色绑定是独立对象；
+- 模型设置总览当前显示 `llm / task / agentTask / evaluation / embedding / rerank` 六个角色；
+- `imageGeneration / voice` 存在于全局角色 schema，但对应 Studio 仍有独立 Provider 配置；
+- 模型目录同步支持 Ollama、OpenAI-compatible、Cloudflare 与 Ark Plan 路径；
+- Chat 根据角色绑定解析具体 Connection、模型、参数与 adapter；
+- AgentTask 未显式绑定时，当前兼容路径回退到 Task；
+- 远程 Embedding 支持 Ollama、Cloudflare 与 OpenAI-compatible adapter；
+- Rerank 必须由 Template 显式声明，不能从 Chat 兼容推断；
+- 内置本地 Embedding / Rerank 使用独立 ONNX / WASM Runtime；
+- 模型调用 Observation 已能记录 Provider、协议、endpoint、模型、参数、请求摘要与耗时；
+- 模型设置支持包含 Connection、凭据、角色绑定与参数的导入导出。
+
+新安装的第一验收不是“Provider 卡片出现”或“目录同步成功”，而是按 [[provider/FIRST_MODEL_SETUP]] 得到一条真实 Chat 回复。
+
+当前已知边界：
+
+- 模型卡“已配置”只表示保存了 Connection 与 remote model id；
+- Provider `connected` 只表示最近一次模型目录同步成功；
+- seed 的 Ollama 默认绑定可能在本地服务未启动、模型未下载时形成假就绪感；
+- `openai-compatible-custom` 当前在 Runtime Resolution 中映射为 `volcengine` provider code，供应商中立身份尚未完全收口；
+- Image / Voice 的全局角色绑定与 Studio provider config 尚未统一；
+- Template capability 不是 per-model Vision / Tool / Context 能力探测；
+- Provider Proxy 尚未为所有 adapter 统一归一化 Token 与成本；
+- 模型设置导出文件包含可恢复的明文 API Key，必须按敏感凭据备份处理。
 
 ### Knowledge Base 与 Evaluation
 
@@ -154,6 +181,12 @@ MicroApps Hub
 
 以下说法不属于当前真相：
 
+- “配置了 Provider 就一定可以聊天”；
+- “模型目录同步成功就是完整健康检查”；
+- “所有 OpenAI-compatible 服务行为完全一致”；
+- “所有模型都天然支持 vision、image、tool 等全部能力”；
+- “全局默认模型配置已经统一管理 Chat、Image 和 TTS”；
+- “所有 Provider 都可以准确显示 Token 与成本”；
 - “Mira 已经是完整自主软件工厂”；
 - “已经是成熟开放式多 Agent 平台”；
 - “已经有 Agent V2、DAG scheduler 或并发 Agent 编排”；
@@ -168,7 +201,6 @@ MicroApps Hub
 - “CodeGraph 仍只是文档计划”；
 - “external MCP 安装后自动获得 Agent Access”；
 - “手机端、服务器端和网页端已经是正式交付形态”；
-- “所有模型都天然支持 vision、image、tool 等全部能力”；
 - “文档里写过的计划就是产品承诺”。
 
 ## 稳定迭代的判断标准
@@ -182,6 +214,16 @@ MicroApps Hub
 - 有回归保护；
 - 文档写清已实现和尚未实现；
 - 不依赖施工线程口头结论。
+
+Provider 还必须额外说明：
+
+- 是 Template、Connection 还是具体模型；
+- 模型是否只存在于同步缓存；
+- 绑定的是哪个 role；
+- 当前 Runtime 最终解析到什么；
+- `connected` 是目录同步还是业务调用验证；
+- 是否走 Provider Proxy、本地模型 Runtime 或 MicroApp Studio；
+- 凭据与备份如何处理。
 
 MicroApp 还必须额外说明：
 

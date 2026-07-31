@@ -1,229 +1,457 @@
-# Provider Proxy API
+---
+status: current
+owner: runtime
+last_verified: 2026-07-31
+layer: schema
+module: ModelSetting
+feature: ProviderProxy
+doc_type: current-contract
+canonical: true
+related:
+  - ../PROVIDER_CURRENT_TRUTH.md
+  - ../provider/FIRST_MODEL_SETUP.md
+  - provider-api-standards.md
+  - ../archive/provider/README.md
+---
 
-Layer: raw-source
-Module: ModelSetting
-Feature: ProviderProxy
-Doc Type: current-contract
+# Provider Resolution 与 Proxy Runtime
 
-Status: Current
-Owner: runtime
-Last verified: 2026-06-24
+## 1. 文档范围
 
-## 单点真相范围
+本页定义模型角色如何解析为具体 Provider Connection、模型和 adapter，以及 Chat、Embedding、Rerank 调用如何形成 Invocation 与 Observation。
 
-这页文档统一说明：
+本页不再承载：
 
-- provider 无关的 chat / embeddings 代理层公开协议
-- 当前桌面聊天对消息、线程、附件协议的依赖
-- knowledge-base 导入流程与 provider proxy 的边界
+- Thread / Message 完整协议；
+- 附件上传生命周期；
+- RAG 文档导入；
+- regenerate / edit-message 规划；
+- Provider 设置 UI 操作；
+- Image Generation / TTS Studio Runtime。
 
-相关概念：
+首次配置见 [[provider/FIRST_MODEL_SETUP]]；协议族见 [[architecture/provider-api-standards]]。
 
-- [[CONCEPT_RUNTIME]]
-- [[CONCEPT_MCP]]
-- [[CONCEPT_UCHAT]]
-- [[maps/AREA_MAP_RUNTIME]]
+## 2. 当前 Runtime 入口
 
-## 概览
+Provider Proxy 当前公开注册：
 
-后端暴露了一层 provider-agnostic proxy，用来承接 chat 和 embeddings。公开代理路由元数据集中维护在 `server/src/config/public-api.ts`，再通过 Fastify route schema 挂到 Swagger。
+```text
+POST /proxy/chat/:provider
+POST /proxy/embeddings/:provider
+```
 
-非生产环境下，Swagger UI 挂在 `/docs`，可在不带 bearer token 的情况下访问。
+`:provider` 使用：
 
-- Chat stream endpoint: `POST /proxy/chat/:provider`
-- Embeddings endpoint: `POST /proxy/embeddings/:provider`
+```text
+default
+ollama
+lmstudio
+openai
+google
+cloudflare
+volcengine
+```
 
-支持的 `:provider`：
+`default` 表示按角色默认绑定解析。
 
-- `default`
-- `ollama`
-- `lmstudio`
-- `openai`
+显式 provider 不是任意连接选择器。当前 Runtime 会验证显式值是否与角色配置最终解析出的 runtime provider code 一致；不一致时拒绝调用。
 
-`default` 会按当前角色对应的默认模型配置解析：
+Rerank 当前主要由内部 Provider Proxy service 解析，不是这个公开 route plugin 的独立公共路由。
 
-- chat 用 `llm`
-- embeddings 用 `embedding`
+## 3. 角色与调用入口
 
-## Chat
+| 调用 | role | 解析方式 |
+| --- | --- | --- |
+| 普通 Chat | `llm` | `resolveProviderForRole("llm")` |
+| Agent / Task Text | `agentTask`，未配置时回退 `task` | `resolveAgentTaskProvider()` |
+| 评测或其他角色生成 | 传入具体 role | `generateTextForRole()` |
+| 远程 Embedding | `embedding` | `resolveProviderForRole("embedding")` |
+| 远程 Rerank | `rerank` | `resolveProviderForRole("rerank")` + adapter 检查 |
+| 评测显式模型 | 显式 provider + model | `resolveExplicitProviderSelection()` |
 
-`POST /proxy/chat/:provider`
+## 4. `resolveProviderForRole`
 
-桌面聊天当前只允许一套请求协议。前端会在发送前把运行时消息显式投影为应用自有协议，然后后端再把这套协议归一化成 provider 可消费的 `NormalizedChatMessage[]`。
+角色解析顺序：
 
-相关实现：
+```text
+读取默认 ModelRoleConfig
+→ 检查 remoteModelId
+→ 优先使用 providerConnectionId
+→ 兼容回退 providerCode
+→ 加载 ProviderConnection
+→ 检查 connection 存在且 enabled
+→ 解密 API Key
+→ 解析 runtime provider code
+→ 校验 Base URL / 必需凭据
+→ 解析可调用 model id
+→ 读取并标准化角色参数
+→ 应用 Provider / role 特判
+→ 返回 ProviderResolution
+```
 
-- 前端发送侧：`desktop/src/app/layouts/BaseLayout/chatRuntime.tsx`
-- 前端图片附件：`desktop/src/features/chat/core/protocol.ts`
-- 后端协议层：`server/src/services/provider-proxy.message-protocol.ts`
-- 后端路由 schema：`server/src/routes/proxy-provider/schemas.ts`
+输出：
 
-Request body:
-
-```json
+```ts
 {
-  "messages": [
-    {
-      "id": "optional-client-message-id",
-      "role": "user",
-      "parts": [
-        { "type": "text", "text": "请描述这张图片" },
-        {
-          "type": "image",
-          "image": "/attachments/7df1....webp",
-          "filename": "image.webp"
-        }
-      ]
-    }
-  ]
+  providerCode,
+  providerConnectionId,
+  providerTemplateCode,
+  baseUrl,
+  apiKey,
+  model,
+  modelConfigId,
+  params,
 }
 ```
 
-规则：
+调用层必须使用该结果，不应继续从显示名称或 UI 状态猜测 Provider。
 
-- 只接受 `messages[].parts[]`
-- part 类型只接受 `text`、`image`、`file`
-- `image` 和 `file` part 会在到达后端前由桌面运行时先做归一化
-- 不支持顶层 `content` 或 `content.parts` 之类 legacy mixed shape
-- renderer 负责始终发送 canonical shape
-- 后端 route schema 会拒绝每个 part item 中的额外字段
+## 5. Connection 校验
 
-附件说明：
+运行时会拒绝：
 
-- 桌面 renderer 会先把上传图片转换成 WebP
-- 上传通过 `POST /attachments`
-- 聊天消息只持久化内部 attachment URL，不落 inline base64
-- 调 provider 前，后端会把内部 attachment URL 解析成 provider 可消费的图片载荷
+- Connection 不存在；
+- Connection 被禁用；
+- Base URL 为空；
+- OpenAI / Cloudflare 缺少 API Key；
+- Cloudflare URL 仍包含 Account ID 占位符；
+- Cloudflare URL 格式不符合当前约束；
+- 角色没有 Provider 或 remote model 绑定；
+- 显式 provider 与默认角色解析结果不一致。
 
-当前协议边界：
+其他 Provider 是否要求 API Key，由上游服务真实响应决定；当前统一预校验只对 OpenAI 和 Cloudflare强制非空。
 
-- 当前 chat send path 只会在 `send()` 开始时上传附件
-- 在 composer 里选择文件，不会立刻创建持久化的服务端 attachment 记录
-- 删除未发送附件因此仍是纯前端动作，不需要附件删除 API
-- `POST /attachments` 当前只接受图片上传，桌面 UI 的 file picker 与 paste handling 也应保持同一限制
+## 6. Model ID 解析
 
-响应：
+普通 Provider 直接使用 `ModelRoleConfig.remoteModelId`。
 
-- `text/event-stream`
-- 使用当前桌面 chat runtime 消费的 SSE 格式
-- 当 `provider=default` 且当前线程绑定了 `knowledgeBaseId` 时，可能分流到 RAG pipeline
+需要 callable model id 前缀的 Provider，例如 Cloudflare，按以下顺序解析：
 
-线程元数据：
-
-- 请求体里的 `id` 表示当前远端 thread id
-- 请求体里的 `messageId` 表示最新 user message id
-- 这两个字段由前端 transport layer 注入，供后端对齐 RAG 持久化、重新生成和标题生成逻辑
-
-## Thread 与 message 协议
-
-当前桌面 chat 依赖下面这些 thread-side contract：
-
-- `GET /threads` 只返回轻量 thread summaries
-- `GET /threads/:id` 返回带 canonical `messages[]` 的完整 thread detail
-- `messages[].parts[]` 是唯一接受的消息回放 shape
-- 桌面 renderer 不再从 legacy metadata 在前端重建消息附件
-- `PATCH /threads/:id` 当前用于 `title`、`knowledgeBaseId` 这类可变线程字段
-- `DELETE /messages/:id` 已存在，可删除一条已持久化消息，但桌面 `uchat` runtime 还没在 UI 层暴露这项能力
-
-### Legacy compatibility 状态
-
-当前后端写入和 runtime 语义都收口到 canonical message shape：
-
-- `parts` 是主消息内容源
-- `assistantUi` 只作为兼容 / 展示辅助
-- 新的 assistant / user message 写入不应再引入对 `assistantUi` 的新语义依赖
-
-### 当前限制
-
-当前公开 thread / message 协议足以支撑：
-
-- 首发发送时建线程
-- 普通非 RAG 消息持久化
-- 按 `knowledgeBaseId` 进行 RAG / 非 RAG 分流
-- thread 标题回刷和消息回放
-- 通过 canonical `parts` 回放图片附件
-
-但它还不足以成为 `uchat` 全量分支能力的显式公开契约，例如 regenerate、edit-message、branch navigation。
-
-### 已确认的后续协议工作
-
-下面这些协议变化已明确属于 `uchat` 核心能力扩展的后续工作：
-
-1. 暴露稳定的 message lineage  
-   `GET /threads/:id` 后续应显式返回稳定的 `messages[].parentId`，而不是让前端从线性顺序里反推父子关系。
-
-2. 增加明确的 message edit 契约  
-   当前只有 `createMessage` 和 `deleteMessage`，还没有清晰的公共 message edit route。后续应增加 `PATCH /messages/:id` 或等价的消息变更契约。
-
-3. 增加明确的 regenerate 契约  
-   regenerate 不应长期停留在“客户端在 generic send 上自己叠一层隐式行为”的状态。后续要明确从哪个 message id 开始、替换旧 assistant 还是新建分支、返回 lineage 怎么表达。
-
-4. 明确 cancellation 语义  
-   当前桌面 runtime 可以在 UI 接通后取消本地 request transport，但 cancellation 还不是已文档化的持久化消息状态。如果后续需要 durable `cancelled` 状态或后端任务中断协议，就要单独设计 cancel contract。
-
-5. 区分 attachment response 里的展示文件名和存储文件名  
-   后续公共 attachment response shape 应显式区分：
-   - original display filename
-   - stored server filename / path key
-   - public attachment URL
-
-## Embeddings
-
-`POST /proxy/embeddings/:provider`
-
-Request body:
-
-```json
-{
-  "input": ["第一段文本", "第二段文本"]
-}
+```text
+remoteModelId
+→ ModelRoleConfig.name
+→ ProviderModel.modelName
+→ error
 ```
 
-Success response payload:
+当前 Cloudflare callable id 必须以 `@cf/` 开头。
 
-```json
+Ollama 在真实 Chat / Embedding 执行前额外查询模型目录，确认模型已经下载。
+
+## 7. AgentTask 回退
+
+当前兼容逻辑：
+
+```text
+agentTask 已显式绑定
+→ 使用 agentTask
+
+agentTask 未绑定
+→ 使用 task
+```
+
+该回退保证旧安装在新增 AgentTask role 后仍可运行。
+
+它不表示 Task 与 AgentTask 是同一职责，也不表示后续可以永久只配置一个角色。
+
+## 8. 角色参数
+
+Provider Resolution 从角色配置读取参数，并在调用前标准化。
+
+### 文本角色
+
+可能包含：
+
+```text
+temperature
+topP
+topK
+maxTokens
+frequencyPenalty
+presencePenalty
+```
+
+本次调用传入的 params 可以覆盖角色长期参数。
+
+### 角色特判
+
+`task / agentTask`：
+
+- Ollama 注入 `think: false`；
+- Volcengine 注入 `thinking: false`。
+
+### Embedding
+
+可能包含：
+
+```text
+dimensions
+batchSize
+normalize
+chunkSize
+chunkOverlap
+```
+
+只有 adapter 实际需要的参数进入上游请求。
+
+### Rerank
+
+```text
+topN
+scoreThreshold
+```
+
+## 9. Chat Adapter
+
+### Ollama
+
+调用：
+
+```text
+<baseUrl>/api/chat
+```
+
+消息投影：
+
+- Text part 合并为 content；
+- Image part 解析为 Ollama image payload；
+- 使用 Ollama 原生流式响应；
+- API Key 非空时作为 Bearer Header。
+
+### OpenAI-compatible
+
+调用：
+
+```text
+<resolvedBaseUrl>/chat/completions
+```
+
+消息投影：
+
+- Text → text content；
+- Image → `image_url`；
+- File → 带文件标记的文本内容；
+- Ark Plan 根据 Template 重写实际 Base URL；
+- 使用流式文本 delta。
+
+### 历史附件收缩
+
+Provider 调用会保留最新用户消息中的附件；较早历史消息中的非文本附件会被移除，只保留仍有意义的文本部分。
+
+这是当前 Provider payload 预算策略，不改变数据库中的原消息。
+
+## 10. Chat Invocation Metadata
+
+调用前可以生成：
+
+```ts
 {
-  "success": true,
-  "data": {
-    "providerCode": "ollama",
-    "model": "nomic-embed-text",
-    "modelConfigId": "xxx",
-    "dimensions": 768,
-    "embeddings": [[0.1, 0.2], [0.3, 0.4]]
+  providerCode,
+  providerLabel,
+  protocol,
+  operation,
+  endpoint,
+  model,
+  modelConfigId,
+  params,
+  request: {
+    method,
+    url,
+    body,
   },
-  "timestamp": "2026-06-09T00:00:00.000Z"
 }
 ```
 
-## Knowledge Base 导入边界
+Request body 是安全摘要，例如 message count、model 和标准参数，不应包含解密后的 API Key。
 
-knowledge-base 文档导入不要求前端直接调用 embeddings endpoint。
+当前 operation：
 
-当前桌面上传流程会把 `multipart/form-data` 发到 `POST /knowledge-base/documents/upload`。后端先存储抽取后的文本，再异步做索引。
+```text
+chat
+task-chat
+```
 
-导入流水线包括：
+## 11. Chat 执行
 
-1. 上传文件并提取 UTF-8 文本
-2. 创建 `indexStatus = processing` 的 document 记录
-3. 后台执行文本归一化与 chunking
-4. 通过 provider proxy service 批量生成内部 embedding
-5. 把向量写入 SQLite vector table
-6. 把 document 状态更新为 `ready` 或 `failed`
+普通文本调用：
 
-旧的 JSON 路由 `POST /knowledge-base/documents` 仍保留给直接文本导入，但桌面 UI 已不再通过这条路径发送大段正文。
+```text
+ProviderResolution
+→ Chat Adapter
+→ Stream upstream response
+→ normalize text delta
+→ require non-empty answer
+→ complete / error stream
+```
 
-这样可以把 provider-specific 行为继续封装在后端 service layer 内部。
+持久化 Chat 还会处理：
 
-## Provider 设置流程边界
+- User / Assistant message persistence；
+- Agent 或默认 Tool Loop；
+- Event stream；
+- title generation；
+- completion callback。
 
-模型设置页里的“服务商已链接”只表示某个角色已经分配了 `providerCode` 与 `remoteModelId`，不等同于一次实时 provider 健康检查。
+这些属于 Chat Runtime，不改变 Provider Resolution 合同。
 
-当前连接流程仍分三步：
+## 12. Embedding Runtime
 
-1. 保存 provider 连接配置。
-2. 同步 provider 模型列表到本地缓存。
-3. 从本地缓存中选择默认角色模型。
+### 解析
 
-选择默认模型依赖最近一次同步后的本地模型缓存。修改 `baseUrl` 或 `apiKey` 后，应重新同步模型列表，再选择角色模型；当前后端不在选择阶段隐式重试同步，也不添加旧缓存兼容兜底。
+```text
+embedding role
+→ ProviderResolution
+→ adapter family
+→ invocation endpoint
+```
 
-Rerank 是独立能力，不从 Chat 兼容性推断。只有 catalog 中显式声明 `rerankAdapter: "openai-compatible"` 的 provider 会调用 `/v1/rerank`。
+Endpoint：
+
+| adapter | endpoint |
+| --- | --- |
+| Ollama | `<baseUrl>/api/embed` |
+| OpenAI-compatible | `<baseUrl>/embeddings` |
+| Cloudflare | Account AI run URL |
+
+### 执行后验证
+
+Provider Proxy 会检查：
+
+- 输入去空后非空；
+- 向量数量与输入数量一致；
+- 第一条向量 dimensions > 0。
+
+成功后，若 dimensions 与当前 role 参数不同，会回写实际 dimensions。
+
+## 13. Rerank Runtime
+
+Rerank 解析必须满足：
+
+```text
+ModelRoleConfig.type = rerank
+Provider Template rerankAdapter = openai-compatible
+```
+
+否则立即失败。
+
+当前 endpoint 由 OpenAI-compatible Rerank URL helper 生成。
+
+Chat adapter 可用不能替代 Rerank adapter 声明。
+
+## 14. 内置本地模型例外
+
+Local Embedding / Rerank 不经过 Provider Connection Resolution。
+
+```text
+Local Model Resource
+→ ONNX / WASM Runtime
+→ local model result
+→ Model Call Observation
+```
+
+它使用：
+
+```text
+providerCode = local
+endpoint = local:model-runtime
+```
+
+因此 Provider Proxy 文档中的 Connection、API Key、模型目录同步不适用于该路径。
+
+## 15. Observation
+
+Shared Model Node 可以把 Invocation 和结果写为 Observation。
+
+当前 environment 可包含：
+
+```text
+model.role
+model.providerCode
+model.providerLabel
+model.protocol
+model.operation
+model.endpoint
+model.model
+model.modelConfigId
+model.params
+model.request
+timing.startedAt
+timing.finishedAt
+timing.durationMs
+result
+retrieval
+context
+```
+
+这提供了 Provider 身份、实际 endpoint、参数与耗时的可观测基础。
+
+## 16. Token 与成本边界
+
+当前 `ProviderInvocationMetadata` 不包含统一的：
+
+```text
+inputTokens
+outputTokens
+reasoningTokens
+cachedTokens
+cost
+currency
+```
+
+部分上游响应可能带 usage，但 Provider Proxy 尚未形成跨 adapter 的统一归一化合同。
+
+因此：
+
+- 不能把所有调用都宣传为可准确统计成本；
+- Observation 有 duration 不等于有 Token；
+- 没有 usage 不应被估算后冒充供应商真实账单；
+- 后续统一需要单独的 usage / pricing contract。
+
+## 17. 当前已知漂移
+
+### Custom OpenAI-compatible runtime provider code
+
+`openai-compatible-custom` 当前在 Resolution 中映射为：
+
+```text
+providerCode = volcengine
+```
+
+这会复用 Volcengine adapter family 和角色特判，但会损失自定义连接的供应商中立身份。
+
+目标上，Template/Connection 身份与协议 adapter 应能够独立表达；当前实现尚未完全收口。
+
+### Image / Voice 不走统一 Proxy
+
+全局角色 schema 中存在 `imageGeneration / voice`，但 Image Generation Studio 与 TTS Studio 当前主要使用独立 MicroApp provider config。
+
+不能从 `resolveProviderForRole` 推断对应 Studio 的实际调用来源。
+
+## 18. 错误语义
+
+常见错误应保持具体：
+
+- `No <ROLE> model configured`；
+- role 没有 Provider 或 remote model；
+- Provider 不存在或 disabled；
+- Base URL / API Key 未配置；
+- Cloudflare URL 无效；
+- callable model id 无效；
+- Ollama 模型未下载；
+- Embedding 数量不匹配；
+- Embedding 返回空向量；
+- Provider 不支持 Rerank adapter；
+- Model 返回空 assistant response。
+
+调用方不应把这些错误全部折叠成“模型连接失败”。
+
+## 19. 代码锚点
+
+- `server/src/services/provider-proxy.service/resolution.ts`；
+- `server/src/services/provider-proxy.service/chat-adapters.ts`；
+- `server/src/services/provider-proxy.service/index.ts`；
+- `server/src/services/provider-proxy.service/types.ts`；
+- `server/src/routes/proxy-provider/`；
+- `server/src/services/shared-nodes/llm.node.ts`；
+- `server/src/services/rag-node-observation.ts`；
+- `server/src/services/local-model-runtime/`。
