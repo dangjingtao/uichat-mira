@@ -1,37 +1,80 @@
-import { Download, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Download, Info, Loader2 } from "lucide-react";
+import type { McpMarketplaceServer } from "@/shared/api/tools";
+import type { McpMarketplaceSyncStatus } from "@/shared/api/tools";
 import Badge from "@/shared/ui/Badge";
 import { Button } from "@/shared/ui/Button";
-import type { McpMarketplaceServer } from "@/shared/api/tools";
+import SegmentedTabs from "@/shared/ui/SegmentedTabs";
+import { Select } from "@/shared/ui/Select";
+import McpMarketplaceDetailsDrawer from "./McpMarketplaceDetailsDrawer";
+
+export type MarketplaceFilter = "all" | "installable" | "remote" | "local";
 
 type McpMarketplacePanelProps = {
   hasMore: boolean;
   isLoading: boolean;
   isSearching: boolean;
   servers: McpMarketplaceServer[];
-  sourceUrl: string | null;
+  activeFilter: MarketplaceFilter;
+  activeCategory: string;
+  syncStatus: McpMarketplaceSyncStatus | null;
   cacheInfo: {
     hit: boolean;
     stale: boolean;
     cachedAt: string | null;
   } | null;
   labels: {
-    activeSource: string;
     cachedResult: string;
     emptyDescription: string;
     emptyTitle: string;
     install: string;
+    details: string;
+    unsupported: string;
     loadMore: string;
     loading: string;
-    title: string;
     transports: string;
+    filterLabel: string;
+    categoryLabel: string;
+    categories: Record<string, string>;
+    syncing: string;
+    syncFailed: string;
+    lastUpdated: string;
+    filters: {
+      all: string;
+      installable: string;
+      remote: string;
+      local: string;
+    };
+    detailsDrawer: {
+      close: string;
+      details: string;
+      description: string;
+      identity: string;
+      version: string;
+      status: string;
+      publishedAt: string;
+      updatedAt: string;
+      website: string;
+      repository: string;
+      links: string;
+      transports: string;
+      endpoint: string;
+      command: string;
+      packageIdentifier: string;
+      installable: string;
+      notInstallable: string;
+      unknown: string;
+    };
   };
   onInstall: (server: McpMarketplaceServer) => void;
   onLoadMore: () => void;
+  onFilterChange: (filter: MarketplaceFilter) => void;
+  onCategoryChange: (category: string) => void;
 };
 
 function formatTransport(transport: McpMarketplaceServer["transports"][number]) {
   if (transport.kind === "streamable-http") {
-    return "remote";
+    return "Remote HTTP";
   }
 
   if (transport.kind === "stdio") {
@@ -54,27 +97,86 @@ export default function McpMarketplacePanel({
   isLoading,
   isSearching,
   servers,
-  sourceUrl,
+  activeFilter,
+  activeCategory,
+  syncStatus,
   cacheInfo,
   labels,
   onInstall,
   onLoadMore,
+  onFilterChange,
+  onCategoryChange,
 }: McpMarketplacePanelProps) {
+  const [selectedServer, setSelectedServer] = useState<McpMarketplaceServer | null>(null);
+  const filterItems = useMemo(
+    () => [
+      { value: "all" as const, label: labels.filters.all },
+      { value: "installable" as const, label: labels.filters.installable },
+      { value: "remote" as const, label: labels.filters.remote },
+      { value: "local" as const, label: labels.filters.local },
+    ],
+    [labels.filters],
+  );
+  const categoryOptions = useMemo(
+    () =>
+      Object.entries(labels.categories).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    [labels.categories],
+  );
+
   return (
     <div className="min-h-0">
-      <div className="px-5 py-4">
-        <div className="text-sm font-medium text-text-primary">{labels.title}</div>
-        {sourceUrl ? (
-          <div className="mt-2 break-all text-xs text-text-tertiary">
-            {labels.activeSource}: {sourceUrl}
+      <div className="sticky top-0 z-10 border-b border-border bg-surface-primary px-5 py-4">
+        {syncStatus?.status === "syncing" ? (
+          <div className="mb-3 flex items-center gap-2 text-xs text-text-tertiary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {labels.syncing}
+          </div>
+        ) : null}
+        {syncStatus?.status === "failed" ? (
+          <div className="mb-3 text-xs text-amber-700">
+            {labels.syncFailed}
+            {syncStatus.lastError ? `：${syncStatus.lastError}` : ""}
+          </div>
+        ) : null}
+        {syncStatus?.status === "idle" && syncStatus.lastSuccessfulSyncAt ? (
+          <div className="mb-3 text-xs text-text-tertiary">
+            {labels.lastUpdated} {syncStatus.lastSuccessfulSyncAt}
           </div>
         ) : null}
         {cacheInfo?.stale ? (
-          <div className="mt-2 text-xs text-amber-700">
+          <div className="mb-3 text-xs text-amber-700">
             {labels.cachedResult}
             {cacheInfo.cachedAt ? ` (${cacheInfo.cachedAt})` : ""}
           </div>
         ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-text-tertiary">{labels.filterLabel}</span>
+          <SegmentedTabs
+            items={filterItems}
+            value={activeFilter}
+            onChange={onFilterChange}
+            size="sm"
+          />
+          <div className="ml-2 flex items-center gap-2">
+            <span className="text-xs text-text-tertiary">
+              {labels.categoryLabel}
+            </span>
+            <div className="w-32">
+              <Select
+                value={activeCategory}
+                onChange={onCategoryChange}
+                options={categoryOptions}
+                compact
+              />
+            </div>
+          </div>
+          <span className="text-xs text-text-tertiary">
+            {servers.length}
+          </span>
+        </div>
       </div>
 
       {isLoading && servers.length === 0 ? (
@@ -109,57 +211,74 @@ export default function McpMarketplacePanel({
 
       {servers.length > 0 ? (
         <div className="divide-y divide-border">
-          {servers.map((server) => (
-            <div key={server.id} className="px-5 py-4">
-              <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="truncate text-sm font-medium text-text-primary">
-                      {server.title}
+          {servers.map((server) => {
+            const installable = server.transports.some((item) => item.installable);
+            return (
+              <div key={server.id} className="px-5 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-sm font-medium text-text-primary">
+                        {server.title}
+                      </div>
+                      {server.version ? <Badge variant="muted">{server.version}</Badge> : null}
+                      {server.status ? <Badge variant="muted">{server.status}</Badge> : null}
+                      {server.isLatest === true ? <Badge variant="success">latest</Badge> : null}
                     </div>
-                    {server.version ? <Badge variant="muted">{server.version}</Badge> : null}
-                    {server.status ? <Badge variant="muted">{server.status}</Badge> : null}
-                    {server.isLatest === true ? <Badge variant="success">latest</Badge> : null}
+                    <div className="mt-1 break-all text-xs text-text-tertiary">{server.id}</div>
+                    <div className="mt-2 line-clamp-3 text-sm leading-6 text-text-secondary">
+                      {server.description || server.name}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-text-tertiary">{labels.transports}</span>
+                      {server.transports.length > 0 ? (
+                        server.transports.map((transport, index) => (
+                          <Badge
+                            key={`${server.id}-${formatTransport(transport)}-${index}`}
+                            variant="muted"
+                          >
+                            {formatTransport(transport)}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="muted">unknown</Badge>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-1 break-all text-xs text-text-tertiary">{server.id}</div>
-                  <div className="mt-2 text-sm leading-6 text-text-secondary">
-                    {server.description || server.name}
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-text-tertiary">{labels.transports}</span>
-                    {server.transports.length > 0 ? (
-                      server.transports.map((transport, index) => (
-                        <Badge key={`${server.id}-${formatTransport(transport)}-${index}`} variant="muted">
-                          {formatTransport(transport)}
-                        </Badge>
-                      ))
-                    ) : (
-                      <Badge variant="muted">unknown</Badge>
-                    )}
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedServer(server)}
+                    >
+                      <Info className="h-4 w-4" />
+                      {labels.details}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onInstall(server)}
+                      disabled={!installable}
+                      title={formatTransportSummary(server)}
+                    >
+                      <Download className="h-4 w-4" />
+                      {installable ? labels.install : labels.unsupported}
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onInstall(server)}
-                  disabled={server.transports.length === 0 || !server.transports.some((item) => item.installable)}
-                  title={formatTransportSummary(server)}
-                >
-                  <Download className="h-4 w-4" />
-                  {server.transports.some((item) => item.installable) ? labels.install : "暂不支持"}
-                </Button>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
-          {hasMore ? (
-            <div className="flex justify-center px-5 py-4">
-              <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={isLoading}>
-                {isLoading && !isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isLoading && !isSearching ? labels.loading : labels.loadMore}
-              </Button>
-            </div>
-          ) : null}
+        </div>
+      ) : null}
+
+      {hasMore ? (
+        <div className="flex justify-center border-t border-border px-5 py-4">
+          <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={isLoading}>
+            {isLoading && !isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {isLoading && !isSearching ? labels.loading : labels.loadMore}
+          </Button>
         </div>
       ) : null}
 
@@ -180,6 +299,17 @@ export default function McpMarketplacePanel({
           </div>
         </div>
       ) : null}
+
+      <McpMarketplaceDetailsDrawer
+        server={selectedServer}
+        onClose={() => setSelectedServer(null)}
+        onInstall={onInstall}
+        labels={{
+          ...labels.detailsDrawer,
+          install: labels.install,
+          unsupported: labels.unsupported,
+        }}
+      />
     </div>
   );
 }

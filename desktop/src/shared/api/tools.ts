@@ -208,6 +208,20 @@ export type McpMarketplaceServer = {
   websiteUrl: string | null;
   repositoryUrl: string | null;
   transports: McpMarketplaceTransport[];
+  category?: string;
+  categorySource?: "publisher" | "inferred" | "uncategorized";
+};
+
+export type McpMarketplaceSyncStatus = {
+  sourceUrl: string;
+  status: "idle" | "syncing" | "failed";
+  mode: "full" | "incremental" | null;
+  lastAttemptAt: string | null;
+  lastSuccessfulSyncAt: string | null;
+  lastFullSyncAt: string | null;
+  updatedCount: number;
+  lastError: string | null;
+  nextAutoSyncAt: string | null;
 };
 
 export type ExternalMcpServerRecord = {
@@ -298,12 +312,20 @@ export function getMcpMarketplaceServers(params?: {
   cursor?: string;
   limit?: number;
   query?: string;
+  category?: string;
+  transport?: "remote" | "local";
+  installable?: boolean;
   signal?: AbortSignal;
 }) {
   const searchParams = new URLSearchParams();
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   if (params?.limit) searchParams.set("limit", String(params.limit));
   if (params?.query) searchParams.set("query", params.query);
+  if (params?.category) searchParams.set("category", params.category);
+  if (params?.transport) searchParams.set("transport", params.transport);
+  if (typeof params?.installable === "boolean") {
+    searchParams.set("installable", String(params.installable));
+  }
   const query = searchParams.toString();
   return get<{
     servers: McpMarketplaceServer[];
@@ -316,11 +338,27 @@ export function getMcpMarketplaceServers(params?: {
         stale: boolean;
         cachedAt: string | null;
       };
+      sync?: McpMarketplaceSyncStatus;
+      searchPending?: boolean;
     };
   }>(`/mcp/marketplace/servers${query ? `?${query}` : ""}`, {
     signal: params?.signal,
     timeout: MCP_REQUEST_TIMEOUT_MS,
   });
+}
+
+export function getMcpMarketplaceSyncStatus() {
+  return get<McpMarketplaceSyncStatus>("/mcp/marketplace/sync-status", {
+    timeout: MCP_REQUEST_TIMEOUT_MS,
+  });
+}
+
+export function requestMcpMarketplaceSync() {
+  return post<{ started: boolean; status: McpMarketplaceSyncStatus }>(
+    "/mcp/marketplace/sync",
+    undefined,
+    { timeout: MCP_REQUEST_TIMEOUT_MS },
+  );
 }
 
 export function getExternalMcpServers() {

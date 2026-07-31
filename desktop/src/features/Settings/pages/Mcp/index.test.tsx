@@ -6,6 +6,8 @@ import McpSettings from "./index";
 import { resolveGithubMirrorUrl } from "@/shared/github";
 
 const getMcpMarketplaceServersMock = vi.fn();
+const getMcpMarketplaceSyncStatusMock = vi.fn();
+const requestMcpMarketplaceSyncMock = vi.fn();
 const getExternalMcpServersMock = vi.fn();
 const createExternalMcpServerMock = vi.fn();
 const connectExternalMcpServerMock = vi.fn();
@@ -30,6 +32,10 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("@/shared/api/tools", () => ({
   getMcpMarketplaceServers: (...args: unknown[]) => getMcpMarketplaceServersMock(...args),
+  getMcpMarketplaceSyncStatus: (...args: unknown[]) =>
+    getMcpMarketplaceSyncStatusMock(...args),
+  requestMcpMarketplaceSync: (...args: unknown[]) =>
+    requestMcpMarketplaceSyncMock(...args),
   getExternalMcpServers: (...args: unknown[]) => getExternalMcpServersMock(...args),
   createExternalMcpServer: (...args: unknown[]) => createExternalMcpServerMock(...args),
   connectExternalMcpServer: (...args: unknown[]) => connectExternalMcpServerMock(...args),
@@ -59,6 +65,8 @@ vi.mock("@/shared/ui/Message", () => ({
 describe("McpSettings", () => {
   beforeEach(() => {
     getMcpMarketplaceServersMock.mockReset();
+    getMcpMarketplaceSyncStatusMock.mockReset();
+    requestMcpMarketplaceSyncMock.mockReset();
     getExternalMcpServersMock.mockReset();
     createExternalMcpServerMock.mockReset();
     connectExternalMcpServerMock.mockReset();
@@ -106,6 +114,31 @@ describe("McpSettings", () => {
       },
     });
     getExternalMcpServersMock.mockResolvedValue([]);
+    getMcpMarketplaceSyncStatusMock.mockResolvedValue({
+      sourceUrl: "https://registry.modelcontextprotocol.io/v0.1/servers",
+      status: "idle",
+      mode: "incremental",
+      lastAttemptAt: null,
+      lastSuccessfulSyncAt: null,
+      lastFullSyncAt: null,
+      updatedCount: 0,
+      lastError: null,
+      nextAutoSyncAt: null,
+    });
+    requestMcpMarketplaceSyncMock.mockResolvedValue({
+      started: true,
+      status: {
+        sourceUrl: "https://registry.modelcontextprotocol.io/v0.1/servers",
+        status: "syncing",
+        mode: "incremental",
+        lastAttemptAt: "2026-07-31T00:00:00.000Z",
+        lastSuccessfulSyncAt: null,
+        lastFullSyncAt: null,
+        updatedCount: 0,
+        lastError: null,
+        nextAutoSyncAt: null,
+      },
+    });
     createExternalMcpServerMock.mockResolvedValue({
       id: "remote-docs",
       source: "registry",
@@ -645,7 +678,11 @@ describe("McpSettings", () => {
     render(<McpSettings />);
 
     await screen.findByText("OCI Only");
-    expect(screen.getByRole("button", { name: "暂不支持" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "settings.mcp.marketplace.unsupported",
+      }),
+    ).toBeDisabled();
     expect(createExternalMcpServerMock).not.toHaveBeenCalled();
   });
 
@@ -760,5 +797,156 @@ describe("McpSettings", () => {
     await screen.findByText("Docs MCP");
     expect(screen.queryByText("Docs MCP Duplicate")).not.toBeInTheDocument();
     expect(screen.getAllByText("ac.tandem/docs-mcp")).toHaveLength(1);
+  });
+
+  it("opens marketplace details with registry metadata and links", async () => {
+    const user = userEvent.setup();
+
+    render(<McpSettings />);
+    await screen.findByText("Remote Docs");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "settings.mcp.marketplace.details",
+      }),
+    );
+
+    expect(
+      await screen.findByText("settings.mcp.marketplace.detailsDrawer.identity"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "settings.mcp.marketplace.detailsDrawer.website",
+      }),
+    ).toHaveAttribute("href", "https://docs.example.dev/mcp");
+    expect(
+      screen.getByRole("link", {
+        name: "settings.mcp.marketplace.detailsDrawer.repository",
+      }),
+    ).toHaveAttribute("href", "https://github.com/example/remote-docs");
+    expect(screen.getByText("https://remote.example/mcp")).toBeInTheDocument();
+  });
+
+  it("filters marketplace results by installability and transport", async () => {
+    const user = userEvent.setup();
+    getMcpMarketplaceServersMock.mockResolvedValueOnce({
+      servers: [
+        {
+          id: "remote-server",
+          name: "remote-server",
+          title: "Remote Server",
+          description: "Remote MCP",
+          version: "1.0.0",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: null,
+          repositoryUrl: null,
+          transports: [
+            {
+              kind: "streamable-http",
+              packageType: "remote",
+              installable: true,
+              label: "Remote HTTP",
+              url: "https://remote.example/mcp",
+            },
+          ],
+        },
+        {
+          id: "local-server",
+          name: "local-server",
+          title: "Local Server",
+          description: "Local npm MCP",
+          version: "1.0.0",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: null,
+          repositoryUrl: null,
+          transports: [
+            {
+              kind: "stdio",
+              packageType: "npm",
+              installable: true,
+              label: "npm package",
+              command: "npx",
+              args: ["-y", "local-server"],
+              packageIdentifier: "local-server",
+            },
+          ],
+        },
+        {
+          id: "oci-server",
+          name: "oci-server",
+          title: "OCI Server",
+          description: "OCI MCP",
+          version: "1.0.0",
+          status: "active",
+          isLatest: true,
+          publishedAt: null,
+          updatedAt: null,
+          websiteUrl: null,
+          repositoryUrl: null,
+          transports: [
+            {
+              kind: "package",
+              packageType: "oci",
+              installable: false,
+              label: "OCI image",
+              packageIdentifier: "ghcr.io/example/oci-server:1.0.0",
+            },
+          ],
+        },
+      ],
+      metadata: {
+        count: 3,
+        nextCursor: null,
+        sourceUrl: "https://registry.modelcontextprotocol.io/v0.1/servers",
+        cache: {
+          hit: false,
+          stale: false,
+          cachedAt: null,
+        },
+      },
+    });
+
+    render(<McpSettings />);
+    await screen.findByText("Remote Server");
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "settings.mcp.marketplace.filters.local",
+      }),
+    );
+    await waitFor(() =>
+      expect(getMcpMarketplaceServersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ transport: "local" }),
+      ),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "settings.mcp.marketplace.filters.installable",
+      }),
+    );
+    await waitFor(() =>
+      expect(getMcpMarketplaceServersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ installable: true }),
+      ),
+    );
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(
+      await screen.findByRole("option", {
+        name: "settings.mcp.marketplace.categories.searchKnowledge",
+      }),
+    );
+    await waitFor(() =>
+      expect(getMcpMarketplaceServersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: "search-knowledge" }),
+      ),
+    );
   });
 });

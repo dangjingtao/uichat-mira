@@ -138,6 +138,10 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 
 当前已知 Tool 偏差：settled exact-invocation 审批口径包含 `toolCallId`，但 core matcher 当前只使用 `toolId + inputHash`；该问题本轮只记录，未修改 Runtime。
 
+MCP 市场目录以 SQLite 为读取真相，官方 Registry 只作为 backend 同步源。空目录只取得首个 100 条页面，本地市场目录硬上限也是 100 条，不继续遍历官方游标。之后按 6 小时间隔增量更新；增量请求使用带 5 分钟重叠的 `updated_since` 并处理 deleted 条目。列表、搜索、分类、transport 与可安装性筛选优先查询本地目录，本地搜索未命中时可按需向 Registry 补充结果。
+
+市场目录不保存 Registry 原始条目 JSON，只保存展示、搜索和安装需要的规范化字段。超出 100 条时优先清理 deleted、不可安装和长期未更新的市场记录；该清理不影响独立保存的已安装 MCP。市场同步失败不会清空最后一次成功数据；同一 backend 进程只运行一个同步任务。Settings -> MCP 会显示同步中、失败和最后成功更新时间，刷新按钮请求后台更新，不直接等待 Registry 返回列表。
+
 ### Skill
 
 - Skill 是渐进式披露的领域能力包；

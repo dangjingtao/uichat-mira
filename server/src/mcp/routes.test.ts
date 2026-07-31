@@ -538,7 +538,6 @@ describe("mcp routes", () => {
           ],
           metadata: {
             count: 1,
-            nextCursor: "next-1",
           },
         }),
         { status: 200 },
@@ -558,28 +557,20 @@ describe("mcp routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(seenUrls).toEqual([
-      "https://registry.modelcontextprotocol.io/v0.1/servers?limit=5&search=search",
-    ]);
+    await vi.waitFor(() =>
+      expect(seenUrls).toEqual([
+        "https://registry.modelcontextprotocol.io/v0.1/servers?limit=100&search=search&version=latest",
+        "https://registry.modelcontextprotocol.io/v0.1/servers?limit=100&version=latest",
+      ]),
+    );
     expect(response.json()).toMatchObject({
       success: true,
       data: {
-        servers: [
-          {
-            id: "example.com/search",
-            title: "Example Search",
-            status: "active",
-            transports: [
-              {
-                kind: "streamable-http",
-                url: "https://example.com/mcp",
-              },
-            ],
-          },
-        ],
+        servers: [],
         metadata: {
-          count: 1,
-          nextCursor: "next-1",
+          count: 0,
+          cache: { hit: true },
+          sync: { status: "syncing" },
         },
       },
     });

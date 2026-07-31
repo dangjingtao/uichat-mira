@@ -2,17 +2,17 @@
 
 Status: Current
 Owner: runtime
-Last verified: 2026-06-26
+Last verified: 2026-07-31
 Layer: raw-source
 Module: MCP
 Feature: ExternalMarketplace
-Doc Type: design
+Doc Type: current-contract
 
 ## 单点真相范围
 
 这页只回答一件事：
 
-UIChat Mira 将来要怎样消费第三方 MCP server。
+UIChat Mira 怎样消费第三方 MCP server，以及市场目录怎样更新。
 
 它覆盖：
 
@@ -55,6 +55,108 @@ UIChat Mira 将来要怎样消费第三方 MCP server。
 - renderer 里的 Settings -> Tools workbench
 
 当前缺的不是 invocation 基础设施，而是“第三方 MCP server 生命周期管理”。
+
+市场目录已经迁移为 SQLite 本地读取：Registry 请求只发生在 backend 同步任务中，renderer 的列表、搜索、分类和筛选不再直接等待外部 Registry。下面的合同已经由实现、路由测试、目录测试和前端测试验证。
+
+## 市场目录与更新合同
+
+### 数据源与读取边界
+
+- 官方 Registry `https://registry.modelcontextprotocol.io/v0.1/servers` 是同步源，不是页面实时读取源；
+- backend 负责访问 Registry，renderer 不直接连接外部 Registry；
+- SQLite 中的本地市场目录是产品列表、搜索、分类和详情的唯一读取源；
+- 已安装 external MCP server 记录与市场目录是两类数据，不合并生命周期，也不因市场条目删除而删除用户安装记录；
+- 同步失败时保留最后一次成功目录，不用空结果覆盖本地数据。
+
+### 首次同步
+
+本地目录为空时，backend 启动一个全量同步任务：
+
+1. 使用 `version=latest&limit=100` 请求 Registry；
+2. 只读取首个 100 条页面，不继续请求 `nextCursor`；
+3. 该页面在一个 SQLite transaction 中写入，完成后页面即可展示；
+4. Registry 标记为 deleted 的条目退出默认列表。
+
+页面不等待长时间上游请求。空目录可以先显示正在首次更新，更新完成后重新读取本地目录。
+
+### 增量同步
+
+- 常规自动更新间隔为 6 小时；
+- 使用最后一次成功增量水位减去 5 分钟作为 `updated_since`，避免边界时间与时钟误差漏数据；
+- 请求带 `include_deleted=true`，删除状态写入本地目录并从默认列表排除；
+- 只有这一页增量结果成功写入后才推进成功水位；
+- 每 7 天重新读取首个 100 条页面用于目录校正；
+- 手动“更新市场”强制发起一次增量同步；需要全量修复时由 backend 显式选择 full 模式，不在 renderer 拼接 Registry 参数；
+- Registry 单次请求超时为 10 秒。失败状态可观察，但不清空目录。
+
+### 并发与生命周期
+
+- 同一进程同一时刻只允许一个市场同步任务；
+- 自动更新、首次同步和手动更新复用同一个在途 Promise；
+- 同步状态由 backend 持有并写入 SQLite；异常退出留下的 `syncing` 状态在下次启动时转换为失败状态；
+- backend 不创建独立常驻端口或额外外部服务，仍使用现有 Fastify 与 SQLite 生命周期。
+
+### 本地目录字段
+
+本地记录至少保存：
+
+- Registry source URL；
+- server id、name、title、description、version、status；
+- published / updated 时间；
+- website / repository 链接；
+- 规范化 transport 与 installable 信息；
+- 分类 id、分类来源与分类规则版本；
+- deleted 状态与最后同步时间。
+
+市场目录不保存 Registry 原始条目 JSON。需要安装的信息必须在同步时规范化为明确字段，不能为方便调试无限复制上游 payload。
+
+### 资源预算与淘汰
+
+- 本地市场目录硬上限为 100 条；
+- 单次 Registry 页面为 100 条，只读取一页；
+- backend 不得在内存中累计完整 Registry；
+- 超量时依次优先删除 deleted、不可安装、更新时间更旧的市场记录；
+- 市场淘汰只作用于 `mcp_marketplace_servers`，不删除 `external_mcp_servers`；
+- 本地名称搜索未命中时，可用官方 `search` 请求补充结果并纳入同一 100 条预算；
+- 100 条是产品容量和数据库硬上限，不保留更大的隐藏后台目录。
+
+分类是 Mira 的目录字段，不伪装成 Registry 官方分类。当前分类来源只允许：
+
+- `publisher`：Registry 明确提供且通过映射表识别；
+- `inferred`：按版本化规则从名称、描述、包与 transport 信息推断；
+- `uncategorized`：没有足够证据。
+
+分类规则变化必须提高规则版本，并在下一次全量同步中重算。
+
+### 本地查询合同
+
+`GET /mcp/marketplace/servers` 只查询 SQLite，支持：
+
+- 名称、标题、描述、包标识的本地文本搜索；
+- category；
+- transport；
+- installable；
+- 稳定分页与确定性排序。
+
+新增状态接口：
+
+```text
+GET  /mcp/marketplace/sync-status
+POST /mcp/marketplace/sync
+```
+
+状态至少返回：
+
+- `status`: `idle | syncing | failed`；
+- 当前模式 `full | incremental`；
+- `lastAttemptAt`；
+- `lastSuccessfulSyncAt`；
+- `lastFullSyncAt`；
+- 最近更新数量；
+- 脱敏后的最近错误；
+- 下次允许自动同步时间。
+
+renderer 的刷新按钮表示“请求更新市场”，不是直接绕过本地目录请求 Registry。同步期间页面继续读取并展示本地目录。
 
 ## 当前怎么用
 
@@ -829,6 +931,8 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 
 - [x] 确认产品边界：`Tool` 和 `MCP` 分离，`Settings -> MCP` 作为独立产品域
 - [x] 完成 MCP 市场浏览 MVP：独立页面、市场拉取、基础文档与文案
+- [x] 市场列表支持按可安装性、远程服务和本地包进行本地筛选
+- [x] 市场条目支持打开详情抽屉，查看 Registry 已返回的版本、维护时间、链接和 transport 信息
 - [x] 完成 Phase 1 后端：external MCP server record、`streamable-http` connect/discover、capability projection、手动 invocation
 - [x] MCP Agent Job Release Complete：市场安装、连接、Discover、用户授权 Agent、语义选择、审批、Harness 调用、Evidence 和回答已完成
 
@@ -845,12 +949,15 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 
 - [x] marketplace response normalization
 - [x] invalid registry payload handling
+- [x] marketplace transport/installable filter
+- [x] marketplace metadata details drawer
 - [x] external server 创建、connect、discover、projection、manual invocation 路由链路
 - [x] disclaimer 未接受时拒绝安装 external MCP server
 
 需要你手测的项目：
 
 - [ ] 打开 `Settings -> MCP`，确认市场页入口、文案和 Tool/MCP 产品边界符合预期
+- [ ] 验证市场筛选与详情抽屉在真实 Registry 数据下的可读性
 - [ ] 确认当前 MCP 页面没有再混进 `Settings -> Tools`
 
 当前已完成项的验收标准：
@@ -963,16 +1070,17 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 - 官方 MCP registry 当前很多条目返回 `registryType`
 - 我们已经兼容 `registry_type` 与 `registryType`
 
-#### 用例 C：市场上游超时后的缓存回退
+#### 用例 C：本地目录立即读取与后台同步
 
 目标：
 
-- 验证官方 registry 抖动时，市场页不整页报废
-- 验证“最近一次成功结果”缓存生效
+- 验证市场列表只读取 SQLite 本地目录
+- 验证相同时间触发的自动更新和手动更新复用同一个同步任务
+- 验证官方 registry 抖动时，已返回的市场页不整页报废
 
 前提：
 
-- 先成功打开一次市场列表，让后端缓存写入
+- 先完成一次市场全量同步，让 SQLite 中存在本地目录
 
 建议搜索词：
 
@@ -983,25 +1091,25 @@ Electron 打包态通过内置 Node runtime 跑 backend。
 
 1. 正常进入 `Settings -> MCP -> 市场`
 2. 成功看到一批列表结果
-3. 在官方 registry 不稳定或临时超时时再次点击 `刷新`
-4. 观察页面是否继续显示旧列表
-5. 观察页面头部是否出现缓存提示
-
-预期提示文案：
-
-- `官方 MCP 市场暂时不可用，当前显示最近一次成功结果`
+3. 再次进入市场或点击 `刷新`
+4. 观察页面是否继续显示本地目录和“正在后台更新”状态
+5. 观察同步完成后，列表与最后更新时间是否更新
 
 通过标准：
 
-- 上游超时时，列表仍保留最近一次成功结果
-- 页面不会因为一次上游超时变成空白/整页失败
-- 会明确提示当前结果来自缓存
+- 本地目录读取不等待上游响应
+- 后台同步失败不影响已经返回的列表
+- 同一进程并发触发只运行一个同步任务
+- 空目录会触发首次全量同步，并能通过状态看到进度或失败
+- 搜索、分类、transport 与可安装性筛选都作用于完整本地目录
 
 实现说明：
 
-- marketplace 上游超时已从 `8s` 调整到 `20s`
-- 后端缓存为按请求参数分桶的最近成功结果缓存
-- 当前缓存 TTL 为 `5` 分钟
+- Registry 单次同步请求超时为 `10s`
+- 自动增量间隔为 `6h`，增量水位向前重叠 `5min`
+- 每 `7d` 执行一次全量校正
+- 同步结果与状态持久化在 SQLite
+- 同步失败保留最后一次成功目录
 
 ### 进行中
 

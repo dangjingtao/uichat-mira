@@ -22,7 +22,7 @@ import { getHarnessEnvironmentSnapshot } from "../harness/environment.js";
 import { toSseChunk } from "./core/events.js";
 import { mcpNotFound } from "./core/errors.js";
 import { getWorkspaceSelection, selectWorkspaceRoot } from "./workspace.js";
-import { fetchMcpMarketplaceServers } from "./marketplace.js";
+import { createMcpMarketplaceCatalog } from "./marketplace-catalog.js";
 import {
   connectExternalMcpServer,
   createExternalMcpServer,
@@ -178,8 +178,22 @@ const upsertDefaultWecomResources = (input: {
 
 const mcpRoutes: FastifyPluginAsync = async (app) => {
   initializeHarnessRuntime();
+  const marketplaceCatalog = createMcpMarketplaceCatalog();
+  const stopMarketplaceAutoSync = marketplaceCatalog.startAutoSync();
+  app.addHook("onClose", async () => {
+    stopMarketplaceAutoSync();
+  });
 
-  app.get<{ Querystring: { cursor?: string; limit?: number; query?: string } }>(
+  app.get<{
+    Querystring: {
+      cursor?: string;
+      limit?: number;
+      query?: string;
+      category?: string;
+      transport?: "remote" | "local";
+      installable?: boolean;
+    };
+  }>(
     "/mcp/marketplace/servers",
     {
       schema: {
@@ -191,6 +205,9 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
             cursor: { type: "string" },
             limit: { type: "integer", minimum: 1, maximum: 100 },
             query: { type: "string" },
+            category: { type: "string" },
+            transport: { type: "string", enum: ["remote", "local"] },
+            installable: { type: "boolean" },
           },
           additionalProperties: false,
         },
@@ -201,12 +218,44 @@ const mcpRoutes: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to list marketplace MCP servers", async (request) =>
       success(
-        await fetchMcpMarketplaceServers({
+        marketplaceCatalog.list({
           cursor: request.query.cursor,
-          limit: request.query.limit,
+          limit: request.query.limit ?? 20,
           query: request.query.query,
+          category: request.query.category,
+          transport: request.query.transport,
+          installable: request.query.installable,
         }),
       )),
+  );
+
+  app.get(
+    "/mcp/marketplace/sync-status",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Get MCP marketplace catalog sync status",
+        response: { 200: successEnvelope(objectSchema) },
+      },
+    },
+    routeHandler("Failed to get MCP marketplace sync status", async () =>
+      success(marketplaceCatalog.getStatus()),
+    ),
+  );
+
+  app.post(
+    "/mcp/marketplace/sync",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Request an MCP marketplace catalog update",
+        response: { 200: successEnvelope(objectSchema) },
+      },
+    },
+    routeHandler("Failed to start MCP marketplace sync", async () => {
+      const result = marketplaceCatalog.requestSync();
+      return success({ started: true, status: result.status });
+    }),
   );
 
   app.get(

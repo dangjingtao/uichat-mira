@@ -17,16 +17,21 @@ import {
   getExternalMcpServerConfigSchema,
   getExternalMcpServers,
   getMcpMarketplaceServers,
+  getMcpMarketplaceSyncStatus,
+  requestMcpMarketplaceSync,
   updateExternalMcpServerConfig,
   updateExternalMcpAccess,
   type ExternalMcpConfigSchemaResolution,
   type ExternalMcpServerConfigRecord,
   type ExternalMcpServerRecord,
   type McpMarketplaceServer,
+  type McpMarketplaceSyncStatus,
 } from "@/shared/api/tools";
 import McpConfigModalContent from "./components/McpConfigModalContent";
 import McpGuideDrawer from "./components/McpGuideDrawer";
-import McpMarketplacePanel from "./components/McpMarketplacePanel";
+import McpMarketplacePanel, {
+  type MarketplaceFilter,
+} from "./components/McpMarketplacePanel";
 import McpInstalledServersPanel from "./components/McpInstalledServersPanel";
 
 type McpTab = "marketplace" | "installed";
@@ -125,6 +130,9 @@ export default function McpSettings() {
   const [installedServers, setInstalledServers] = useState<ExternalMcpServerRecord[]>([]);
   const [marketplaceQuery, setMarketplaceQuery] = useState("");
   const [committedMarketplaceQuery, setCommittedMarketplaceQuery] = useState("");
+  const [marketplaceFilter, setMarketplaceFilter] =
+    useState<MarketplaceFilter>("all");
+  const [marketplaceCategory, setMarketplaceCategory] = useState("all");
   const [installedQuery, setInstalledQuery] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -136,6 +144,9 @@ export default function McpSettings() {
   const [isMarketplaceLoading, setIsMarketplaceLoading] = useState(false);
   const [isMarketplaceSearching, setIsMarketplaceSearching] = useState(false);
   const [marketplaceError, setMarketplaceError] = useState<string | null>(null);
+  const [marketplaceSyncStatus, setMarketplaceSyncStatus] =
+    useState<McpMarketplaceSyncStatus | null>(null);
+  const [marketplaceSearchPending, setMarketplaceSearchPending] = useState(false);
   const [isInstalledLoading, setIsInstalledLoading] = useState(false);
   const [installedError, setInstalledError] = useState<string | null>(null);
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
@@ -173,6 +184,12 @@ export default function McpSettings() {
           limit: 24,
           cursor: options?.cursor ?? undefined,
           query: options?.query ?? "",
+          category: marketplaceCategory === "all" ? undefined : marketplaceCategory,
+          transport:
+            marketplaceFilter === "remote" || marketplaceFilter === "local"
+              ? marketplaceFilter
+              : undefined,
+          installable: marketplaceFilter === "installable" ? true : undefined,
           signal: controller.signal,
         });
 
@@ -186,6 +203,10 @@ export default function McpSettings() {
         setNextCursor(result.metadata.nextCursor);
         setSourceUrl(result.metadata.sourceUrl);
         setMarketplaceCacheInfo(result.metadata.cache);
+        if (result.metadata.sync) {
+          setMarketplaceSyncStatus(result.metadata.sync);
+        }
+        setMarketplaceSearchPending(Boolean(result.metadata.searchPending));
       } catch (loadError) {
         if (controller.signal.aborted) {
           return;
@@ -207,7 +228,7 @@ export default function McpSettings() {
         }
       }
     },
-    [t],
+    [marketplaceCategory, marketplaceFilter, t],
   );
 
   const loadInstalledServers = useCallback(async () => {
@@ -268,8 +289,61 @@ export default function McpSettings() {
     };
   }, [loadInstalledServers, loadServers]);
 
-  const refreshMarketplace = () =>
-    loadServers({ query: committedMarketplaceQuery, cursor: null, append: false });
+  useEffect(() => {
+    if (marketplaceSyncStatus?.status !== "syncing") return;
+    const timer = window.setInterval(() => {
+      void getMcpMarketplaceSyncStatus()
+        .then((status) => {
+          setMarketplaceSyncStatus(status);
+          void loadServers({
+            query: committedMarketplaceQuery,
+            cursor: null,
+            append: false,
+            silent: true,
+          });
+        })
+        .catch((error) => {
+          setMarketplaceError(
+            error instanceof Error
+              ? error.message
+              : t("settings.mcp.messages.marketplaceLoadFailed"),
+          );
+        });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [committedMarketplaceQuery, loadServers, marketplaceSyncStatus?.status, t]);
+
+  useEffect(() => {
+    if (!marketplaceSearchPending) return;
+    const timer = window.setTimeout(() => {
+      void loadServers({
+        query: committedMarketplaceQuery,
+        cursor: null,
+        append: false,
+        silent: true,
+      });
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [committedMarketplaceQuery, loadServers, marketplaceSearchPending]);
+
+  const refreshMarketplace = async () => {
+    try {
+      const result = await requestMcpMarketplaceSync();
+      setMarketplaceSyncStatus(result.status);
+      await loadServers({
+        query: committedMarketplaceQuery,
+        cursor: null,
+        append: false,
+        silent: true,
+      });
+    } catch (error) {
+      setMarketplaceError(
+        error instanceof Error
+          ? error.message
+          : t("settings.mcp.messages.marketplaceLoadFailed"),
+      );
+    }
+  };
   const loadMore = () => {
     if (!nextCursor) {
       return;
@@ -718,8 +792,23 @@ export default function McpSettings() {
                   {t("settings.mcp.marketplace.search")}
                 </Button>
               ) : null}
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={activeLoading}>
-                <RefreshCw className={`h-4 w-4 ${activeLoading ? "animate-spin" : ""}`} />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={
+                  activeLoading ||
+                  (activeTab === "marketplace" && marketplaceSyncStatus?.status === "syncing")
+                }
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    activeLoading ||
+                    (activeTab === "marketplace" && marketplaceSyncStatus?.status === "syncing")
+                      ? "animate-spin"
+                      : ""
+                  }`}
+                />
                 {t("settings.mcp.installed.refresh")}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setIsGuideOpen(true)}>
@@ -750,21 +839,79 @@ export default function McpSettings() {
               isLoading={isMarketplaceLoading}
               isSearching={isMarketplaceSearching}
               servers={marketplaceServers}
-              sourceUrl={sourceUrl}
+              activeFilter={marketplaceFilter}
+              activeCategory={marketplaceCategory}
+              syncStatus={marketplaceSyncStatus}
               cacheInfo={marketplaceCacheInfo}
               labels={{
-                activeSource: t("settings.mcp.marketplace.activeSource"),
                 cachedResult: "官方 MCP 市场暂时不可用，当前显示最近一次成功结果",
                 emptyDescription: t("settings.mcp.marketplace.emptyDescription"),
                 emptyTitle: t("settings.mcp.marketplace.emptyTitle"),
                 install: t("settings.mcp.marketplace.install"),
+                details: t("settings.mcp.marketplace.details"),
+                unsupported: t("settings.mcp.marketplace.unsupported"),
                 loadMore: t("settings.mcp.marketplace.loadMore"),
                 loading: t("settings.mcp.marketplace.loading"),
-                title: t("settings.mcp.marketplace.title"),
                 transports: t("settings.mcp.marketplace.transports"),
+                filterLabel: t("settings.mcp.marketplace.filterLabel"),
+                categoryLabel: t("settings.mcp.marketplace.categoryLabel"),
+                syncing: t("settings.mcp.marketplace.syncing"),
+                syncFailed: t("settings.mcp.marketplace.syncFailed"),
+                lastUpdated: t("settings.mcp.marketplace.lastUpdated"),
+                categories: {
+                  all: t("settings.mcp.marketplace.categories.all"),
+                  "developer-tools": t(
+                    "settings.mcp.marketplace.categories.developerTools",
+                  ),
+                  data: t("settings.mcp.marketplace.categories.data"),
+                  "search-knowledge": t(
+                    "settings.mcp.marketplace.categories.searchKnowledge",
+                  ),
+                  "browser-automation": t(
+                    "settings.mcp.marketplace.categories.browserAutomation",
+                  ),
+                  "files-office": t("settings.mcp.marketplace.categories.filesOffice"),
+                  "cloud-devops": t("settings.mcp.marketplace.categories.cloudDevops"),
+                  communication: t(
+                    "settings.mcp.marketplace.categories.communication",
+                  ),
+                  other: t("settings.mcp.marketplace.categories.other"),
+                },
+                filters: {
+                  all: t("settings.mcp.marketplace.filters.all"),
+                  installable: t("settings.mcp.marketplace.filters.installable"),
+                  remote: t("settings.mcp.marketplace.filters.remote"),
+                  local: t("settings.mcp.marketplace.filters.local"),
+                },
+                detailsDrawer: {
+                  close: t("settings.mcp.marketplace.detailsDrawer.close"),
+                  details: t("settings.mcp.marketplace.detailsDrawer.details"),
+                  description: t("settings.mcp.marketplace.detailsDrawer.description"),
+                  identity: t("settings.mcp.marketplace.detailsDrawer.identity"),
+                  version: t("settings.mcp.marketplace.detailsDrawer.version"),
+                  status: t("settings.mcp.marketplace.detailsDrawer.status"),
+                  publishedAt: t("settings.mcp.marketplace.detailsDrawer.publishedAt"),
+                  updatedAt: t("settings.mcp.marketplace.detailsDrawer.updatedAt"),
+                  website: t("settings.mcp.marketplace.detailsDrawer.website"),
+                  repository: t("settings.mcp.marketplace.detailsDrawer.repository"),
+                  links: t("settings.mcp.marketplace.detailsDrawer.links"),
+                  transports: t("settings.mcp.marketplace.detailsDrawer.transports"),
+                  endpoint: t("settings.mcp.marketplace.detailsDrawer.endpoint"),
+                  command: t("settings.mcp.marketplace.detailsDrawer.command"),
+                  packageIdentifier: t(
+                    "settings.mcp.marketplace.detailsDrawer.packageIdentifier",
+                  ),
+                  installable: t("settings.mcp.marketplace.detailsDrawer.installable"),
+                  notInstallable: t(
+                    "settings.mcp.marketplace.detailsDrawer.notInstallable",
+                  ),
+                  unknown: t("settings.mcp.marketplace.detailsDrawer.unknown"),
+                },
               }}
               onInstall={installServer}
               onLoadMore={loadMore}
+              onFilterChange={setMarketplaceFilter}
+              onCategoryChange={setMarketplaceCategory}
             />
           ) : (
             <McpInstalledServersPanel
