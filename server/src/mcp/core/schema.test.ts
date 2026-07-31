@@ -1,6 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { validateInvocationArgs } from "./schema.js";
 
+const repositorySchema = {
+  oneOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["operation", "repository"],
+      properties: {
+        operation: { type: "string", enum: ["get"] },
+        repository: { type: "string" },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "operation",
+        "repository",
+        "path",
+        "content",
+        "commitMessage",
+        "branch",
+      ],
+      properties: {
+        operation: { type: "string", enum: ["write_file"] },
+        repository: { type: "string" },
+        path: { type: "string" },
+        content: { type: "string" },
+        commitMessage: { type: "string" },
+        branch: { type: "string" },
+      },
+    },
+  ],
+};
+
 describe("mcp schema validation", () => {
   it("accepts object args that satisfy the declared schema", () => {
     expect(() =>
@@ -75,5 +109,30 @@ describe("mcp schema validation", () => {
         },
       ),
     ).toThrow("args.sessionMode must be one of: ephemeral, persistent");
+  });
+
+  it("preserves the selected operation variant error", () => {
+    expect(() =>
+      validateInvocationArgs(
+        {
+          operation: "write_file",
+          repository: "dangjingtao/uichat-mira",
+          path: "README.md",
+        },
+        repositorySchema,
+      ),
+    ).toThrow("args.content is required");
+  });
+
+  it("reports allowed operations for a discriminated oneOf schema", () => {
+    expect(() =>
+      validateInvocationArgs(
+        {
+          operation: "publish",
+          repository: "dangjingtao/uichat-mira",
+        },
+        repositorySchema,
+      ),
+    ).toThrow("args.operation must be one of: get, write_file");
   });
 });
