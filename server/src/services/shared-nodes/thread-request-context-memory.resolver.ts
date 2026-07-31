@@ -7,21 +7,27 @@ export const createThreadMemoryContextPrompt = (memoryContext: string) =>
 /**
  * Unified Chat / Agent memory resolver.
  *
- * `thread.memoryContext` remains a compatible explicit override for tests and
- * future projections. Normal runtime reads the independent user memory module.
+ * `thread.memoryContext` remains a compatible explicit projection for tests and
+ * future callers. `undefined` means "load user memory"; null or empty means the
+ * caller explicitly requests no memory for this request.
  */
 export const resolveMemoryContext: RequestContextResolver = ({ thread, userId }) => {
+  const hasExplicitProjection = thread.memoryContext !== undefined;
   let normalized = thread.memoryContext?.trim() ?? "";
   let updatedAt = thread.memoryContextUpdatedAt ?? null;
   let recordCount: number | null = null;
 
-  // V1 serves ordinary Chat and Agent only. A non-Agent knowledge-base thread
-  // follows the RAG branch and must not consume the new user memory module yet.
-  if (!normalized && thread.knowledgeBaseId && !thread.agentEnabled) {
+  if (hasExplicitProjection && !normalized) {
     return null;
   }
 
-  if (!normalized) {
+  // V1 serves ordinary Chat and Agent only. A non-Agent knowledge-base thread
+  // follows the RAG branch and must not consume the new user memory module yet.
+  if (!hasExplicitProjection && thread.knowledgeBaseId && !thread.agentEnabled) {
+    return null;
+  }
+
+  if (!hasExplicitProjection) {
     try {
       const snapshot = memoryService.buildContextSync(userId);
       normalized = snapshot.content.trim();
