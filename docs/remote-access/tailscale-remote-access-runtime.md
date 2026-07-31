@@ -1,7 +1,7 @@
 # Tailscale 远程连接运行时设计
 
 > 状态：首个可执行版本
-> 目标分支：`feat/tailscale-remote-access-runtime`
+> 目标分支：`feature/tailscale-remote-access-runtime`
 > 基线：`dev`
 
 ## 1. 目标
@@ -34,7 +34,7 @@ Mira Host
 2. 从 `tailscale status --json` 自动读取设备名、MagicDNS 名称、Tailnet 与 Tailscale IP。
 3. 检测当前 Tailscale Serve 配置，不通过字符串拼接伪造访问地址。
 4. 启用时使用 Tailscale Serve 将 Mira Host 的 localhost 端口发布到 Tailnet。
-5. 禁用时仅撤销由 Mira 管理的 Serve 入口，不重置或覆盖用户已有的其他 Serve 配置。
+5. 禁用时仅撤销由 Mira 独占管理的 Serve 入口，不重置或覆盖用户已有的其他 Serve 配置。
 6. 从最终 HTTPS 地址请求 `/health`，给出可访问或不可访问的验证结果。
 7. 持久化“是否启用”配置；切换网络、重启页面后可恢复当前状态。
 8. 展示诊断信息与已配对设备入口；设备认证协议由 mobile 与 Host 的后续契约完成。
@@ -58,7 +58,7 @@ Mira Host
 | `needs_login` | CLI 存在，但尚未加入 Tailnet | 登录 Tailscale |
 | `connecting` | 后端状态正在切换或节点尚未在线 | 稍后重新检查 |
 | `connected` | Tailnet 已连接，远程入口未启用 | 保存并启用 |
-| `serve_conflict` | 已存在非 Mira 管理的 Serve 配置 | 人工处理冲突，不自动覆盖 |
+| `serve_conflict` | 已存在非 Mira 独占管理的 Serve 配置 | 人工处理冲突，不自动覆盖 |
 | `serve_not_configured` | 配置要求启用，但 Serve 尚未生效 | 重新保存或查看诊断 |
 | `unreachable` | Serve 已配置，但远程健康检查失败 | 检查 Host、证书与策略 |
 | `ready` | Tailnet、Serve 与 `/health` 均正常 | 手机可连接 |
@@ -82,20 +82,21 @@ tailscale serve status --json
 
 规则：
 
-- 当前没有 Serve 配置：允许创建。
-- 当前配置已包含 Mira Host 目标：视为幂等，可继续。
-- 当前存在其他 Serve 配置但不包含 Mira Host 目标：返回 `serve_conflict`，拒绝覆盖。
+- 当前没有有效 Serve 配置：允许创建。
+- 当前配置只包含 Mira Host 目标：视为 Mira 独占管理，可幂等启用或安全关闭。
+- 当前配置包含其他目标，或同时包含 Mira 与其他目标：返回 `serve_conflict`，拒绝覆盖或关闭。
+- `{ "TCP": {}, "Web": {}, "AllowFunnel": false }` 一类结构性空对象不视为有效配置。
 
 启用命令：
 
 ```bash
-tailscale serve --bg --yes 127.0.0.1:<Mira Host port>
+tailscale serve --bg --yes --https=<serve port> 127.0.0.1:<Mira Host port>
 ```
 
-禁用命令仅在当前配置确认指向 Mira Host 时执行：
+禁用命令仅在当前配置确认由 Mira 独占管理时执行：
 
 ```bash
-tailscale serve off
+tailscale serve --https=<serve port> off
 ```
 
 若未来需要与用户已有的根路径 Serve 共存，应改为独立 Tailscale Service 或经过验证的专用监听端口；在完成该契约前不得静默接管现有配置。
@@ -172,8 +173,8 @@ DELETE /general-settings/tailscale-remote-access/devices/:id
 
 - 未安装 Tailscale 时显示 `not_installed`，页面不崩溃。
 - 已登录时自动显示真实 DNS 名称和 Tailscale IP。
-- 存在非 Mira Serve 配置时，启用操作失败且原配置不被修改。
+- 存在非 Mira 或混合 Serve 配置时，启用与禁用操作都失败，原配置不被修改。
 - 启用成功后重载页面仍显示启用，且 `/health` 检查成功时状态为 `ready`。
-- 禁用只撤销确认属于 Mira 的 Serve 入口。
+- 禁用只撤销确认由 Mira 独占管理的 Serve 入口。
 - 所有系统命令均使用参数数组执行，不拼接 shell 字符串。
 - 前后端均有覆盖状态解析、冲突保护、保存和错误展示的测试。
