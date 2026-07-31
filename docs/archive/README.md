@@ -1,7 +1,7 @@
 ---
 status: current
 owner: docs
-last_verified: 2026-07-30
+last_verified: 2026-07-31
 layer: schema
 module: Docs
 feature: ArchivePolicy
@@ -9,6 +9,7 @@ doc_type: current-contract
 canonical: true
 related:
   - ../README.md
+  - provider/README.md
   - agent/README.md
   - tool/README.md
   - microapp/README.md
@@ -21,6 +22,7 @@ related:
 
 ## 当前归档索引
 
+- [[archive/provider/README]]：Provider 旧总纲、旧混合 Proxy 文档与 Catalog 重构记录；
 - [[archive/agent/README]]：Agent 历史路线、阶段清单与旧多 Agent / Pilot 口径；
 - [[archive/tool/README]]：Tool / Harness 旧矩阵、整改台账与 CodeGraph 实现前方案；
 - [[archive/microapp/README]]：MicroApp 旧总纲、实现前 POC、早期 Studio 设计与迁移前合同。
@@ -86,4 +88,5 @@ related:
 - 当前产品具备什么；
 - 当前代码如何运行；
 - 当前审批和恢复语义是什么；
+- 当前 Provider 状态是否代表真实请求成功；
 - 下一步施工应该遵守哪份合同。
