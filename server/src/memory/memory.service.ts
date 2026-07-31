@@ -7,6 +7,7 @@ import type {
   MemoryApplyResult,
   MemoryConsolidator,
   MemoryContextSnapshot,
+  MemoryRecord,
   MemorySource,
 } from "./types.js";
 
@@ -20,32 +21,49 @@ const KIND_LABELS = {
   constraint: "约束",
 } as const;
 
+const buildSnapshot = (
+  records: MemoryRecord[],
+  updatedAt: string | null,
+): MemoryContextSnapshot => {
+  const sorted = records.toSorted((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  );
+  const lines: string[] = [];
+  let length = 0;
+
+  for (const record of sorted.slice(0, MAX_CONTEXT_RECORDS)) {
+    const line = `- [${KIND_LABELS[record.kind]}] ${record.content}`;
+    const nextLength = length + line.length + (lines.length > 0 ? 1 : 0);
+    if (nextLength > MAX_CONTEXT_CHARACTERS) break;
+    lines.push(line);
+    length = nextLength;
+  }
+
+  return {
+    content: lines.join("\n"),
+    updatedAt,
+    recordCount: lines.length,
+  };
+};
+
 export class MemoryService {
   constructor(
     private readonly repository: FileMemoryRepository,
     private readonly consolidator: MemoryConsolidator,
   ) {}
 
-  async buildContext(userId: number): Promise<MemoryContextSnapshot> {
-    const records = (await this.repository.list(userId)).toSorted((left, right) =>
-      right.updatedAt.localeCompare(left.updatedAt),
+  buildContextSync(userId: number): MemoryContextSnapshot {
+    return buildSnapshot(
+      this.repository.listSync(userId),
+      this.repository.updatedAtSync(userId),
     );
-    const lines: string[] = [];
-    let length = 0;
+  }
 
-    for (const record of records.slice(0, MAX_CONTEXT_RECORDS)) {
-      const line = `- [${KIND_LABELS[record.kind]}] ${record.content}`;
-      const nextLength = length + line.length + (lines.length > 0 ? 1 : 0);
-      if (nextLength > MAX_CONTEXT_CHARACTERS) break;
-      lines.push(line);
-      length = nextLength;
-    }
-
-    return {
-      content: lines.join("\n"),
-      updatedAt: await this.repository.updatedAt(userId),
-      recordCount: lines.length,
-    };
+  async buildContext(userId: number): Promise<MemoryContextSnapshot> {
+    return buildSnapshot(
+      await this.repository.list(userId),
+      await this.repository.updatedAt(userId),
+    );
   }
 
   async commitTurn(input: {
