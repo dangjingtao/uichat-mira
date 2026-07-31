@@ -7,7 +7,7 @@ GitHub 微应用负责两件事：
 1. 使用 Mira 内置 GitHub App 的 Device Flow 连接当前用户，不要求用户填写 PAT、Client ID 或 App Slug，也不在桌面包中保存 Client Secret 或 GitHub App 私钥。
 2. 读取 GitHub App installation 的真实仓库范围，按个人账号或组织展示 GitHub 已授权给 Mira 的项目。
 
-仓库授权不由 Mira 自建白名单模拟。用户在 GitHub 原生安装页选择 `All repositories` 或 `Only select repositories`，Mira 只允许工具访问 installation 实际返回的仓库。
+仓库授权不由 Mira 自建白名单模拟。用户在 GitHub 原生安装页选择 `All repositories` 或 `Only select repositories`，Mira 只允许工具访问 installation 实际返回的仓库；仓库创建与 installation 授权检查是两个独立步骤。
 
 ## 系统边界
 
@@ -27,7 +27,9 @@ github_pull_request
 github_actions
 ```
 
-每个工具使用有限 `operation` 枚举，并通过 `oneOf` 判别联合为不同 operation 声明独立参数。传给某个 operation 的无关字段会在执行前被拒绝。
+每个工具使用有限 `operation` 枚举，并通过以 `operation` 为判别字段的 `oneOf` 为不同 operation 声明独立参数。传给某个 operation 的无关字段会在执行前被拒绝。
+
+Provider 若不支持复杂组合 schema，只能在 Provider 请求边界使用临时兼容投影。兼容投影不得替换 Tool definition 或 Harness 的严格 `oneOf` 校验。
 
 ### `github_repository`
 
@@ -38,9 +40,27 @@ github_actions
 | `list_commits` | 按 ref、作者、路径和时间范围读取提交 |
 | `read_file` | 按 path/ref 读取仓库文件 |
 | `create_branch` | 从指定 ref 创建分支 |
-| `write_file` | 通过 Contents API 创建或更新文件并产生提交 |
-| `delete_file` | 删除文件并产生提交 |
+| `write_file` | 通过 Contents API 创建或更新完整文件并产生提交 |
+| `delete_file` | 使用当前 SHA 删除文件并产生提交 |
 | `compare_commits` | 比较 base/head，返回提交与文件变更摘要 |
+| `create` | 使用 owner/name/visibility 创建仓库并回读；不使用 repository 参数 |
+| `ensure_installation_access` | 检查仓库是否已进入 Mira installation；未授权时返回用户动作 |
+| `get_pages` | 读取 GitHub Pages 当前状态、来源、域名、HTTPS 与 URL |
+| `configure_pages` | 配置 workflow 或 branch Pages，并回读最终状态 |
+
+关键顺序：
+
+```text
+create
+→ read-back repository
+→ ensure_installation_access
+→ create_branch / write_file
+→ local verification
+→ PR / Actions
+→ user requested deployment 时才 get_pages / configure_pages
+```
+
+不得因为仓库创建成功就假设 installation 已授权，也不得因为 Pages 配置请求成功就声称网站已经上线。
 
 ### `github_issue`
 
@@ -80,11 +100,61 @@ Issue operation 会拒绝 Pull Request 编号，避免把 GitHub 共用的 Issue
 | `rerun` | 重跑整个 run 或仅重跑失败 Jobs |
 | `cancel` | 取消运行中的 workflow run |
 
+## Schema 与错误合同
+
+Canonical runtime schema 保持严格：
+
+```text
+operation-specific oneOf
+→ 按 operation 选择唯一 variant
+→ 校验该 variant 的 required / type / additionalProperties
+→ Harness 执行前再次校验
+```
+
+Provider 兼容投影必须：
+
+- 保留全部 operation 枚举；
+- 保留各 variant 字段的并集；
+- 只把所有 variant 共同要求的字段设为全局 required；
+- 不写回 registry，不降低 runtime validation。
+
+运行时错误应指出具体字段，例如：
+
+```text
+args.content is required
+args.branch is not allowed
+args.operation must be one of: ...
+```
+
+不能把所有错误都压成 `args must match exactly one schema variant`。
+
 ## 授权与审批
 
 四个工具每次执行都会重新读取当前用户的 GitHub App installation 仓库范围，并验证目标 `owner/repository`。公开仓库也不能绕过 installation 授权。
 
-读取 operation 直接执行。所有远程写入 operation 使用当前 Harness 的精确输入指纹审批：
+默认无需审批的仓库 operation：
+
+```text
+get
+list_branches
+list_commits
+read_file
+compare_commits
+ensure_installation_access
+get_pages
+```
+
+需要精确输入指纹审批的仓库 operation：
+
+```text
+create
+create_branch
+write_file
+delete_file
+configure_pages
+```
+
+其他三个领域工具的读取 operation 直接执行；远程写入 operation 使用当前 Harness 的精确输入指纹审批：
 
 ```text
 scope = github.remote_write
@@ -100,7 +170,7 @@ github_actions.cancel
 scope = github.high_risk
 ```
 
-审批只对当前 `toolId + inputHash` 生效；仓库、分支、正文、文件内容、SHA 或其他参数发生变化后必须重新审批。未获审批时，工具只能做 installation 范围确认和必要的只读目标确认，不会发送 GitHub 写请求。
+审批只对当前 `toolId + inputHash` 生效；仓库、visibility、分支、正文、文件内容、SHA、Pages 配置或其他参数变化后必须重新审批。未获审批时不会发送 GitHub 写请求。
 
 ## GitHub App 权限
 
@@ -127,9 +197,11 @@ GitHub App 必须开启 **Device Flow**。要完整使用四个领域工具，Re
 | Issues | Read and write | Issue 读取、创建、更新与评论 |
 | Pull requests | Read and write | PR 读取、创建、更新、Review 与合并 |
 | Actions | Read and write | Runs、Jobs、日志、dispatch、rerun、cancel |
-| Workflows | Read and write | 仅当允许修改 `.github/workflows` 文件时需要 |
+| Workflows | Read and write | 修改 `.github/workflows` 或使用相关部署流程时需要 |
+| Pages | Read and write | 读取和配置 GitHub Pages |
+| Administration | Read and write | 由 App/组织策略决定；创建仓库本身仍通过用户或组织 API 权限完成 |
 
-GitHub App 提升权限后，已有 installation 可能需要用户或组织管理员在 GitHub 中确认新权限；在确认前，相应写 operation 会收到 GitHub `403`。
+GitHub App 提升权限后，已有 installation 可能需要用户或组织管理员在 GitHub 中确认新权限；在确认前，相应 operation 会收到 GitHub `403`。
 
 用户访问令牌与刷新令牌使用 Mira 现有 secret encryption 工具加密落库。Client Secret、GitHub App Private Key 和 Webhook Secret 不进入项目代码。
 
