@@ -40,6 +40,21 @@ const connectedStatus = JSON.stringify({
   },
 });
 
+const managedServeStatus = (overrides: Record<string, unknown> = {}) => ({
+  TCP: {
+    "443": { HTTPS: true },
+  },
+  Web: {
+    "mira-desktop.example.ts.net:443": {
+      Handlers: {
+        "/": { Proxy: "http://127.0.0.1:8787" },
+      },
+    },
+  },
+  AllowFunnel: {},
+  ...overrides,
+});
+
 const commandKey = (args: string[]) => args.join(" ");
 
 beforeEach(() => {
@@ -112,11 +127,13 @@ describe("TailscaleRemoteAccessService", () => {
       if (commandKey(args) === "serve status --json") {
         return {
           stdout: JSON.stringify({
+            TCP: { "443": { HTTPS: true } },
             Web: {
               "mira-desktop.example.ts.net:443": {
                 Handlers: { "/": { Proxy: "http://127.0.0.1:3000" } },
               },
             },
+            AllowFunnel: {},
           }),
           stderr: "",
         };
@@ -139,16 +156,45 @@ describe("TailscaleRemoteAccessService", () => {
       }
       if (commandKey(args) === "serve status --json") {
         return {
-          stdout: JSON.stringify({
-            Web: {
-              "mira-desktop.example.ts.net:443": {
-                Handlers: {
-                  "/": { Proxy: "http://127.0.0.1:8787" },
-                  "/other": { Proxy: "http://127.0.0.1:3000" },
+          stdout: JSON.stringify(
+            managedServeStatus({
+              Web: {
+                "mira-desktop.example.ts.net:443": {
+                  Handlers: {
+                    "/": { Proxy: "http://127.0.0.1:8787" },
+                    "/other": { Proxy: "http://127.0.0.1:3000" },
+                  },
                 },
               },
-            },
-          }),
+            }),
+          ),
+          stderr: "",
+        };
+      }
+      throw new Error(`Unexpected command: ${commandKey(args)}`);
+    });
+    const service = new TailscaleRemoteAccessService(runCommand);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.runtime.state).toBe("serve_conflict");
+    expect(snapshot.runtime.serveManagedByMira).toBe(false);
+  });
+
+  it("treats Funnel permission as a conflict even when its hostname is only a JSON key", async () => {
+    const runCommand: TailscaleCommandRunner = vi.fn(async (args) => {
+      if (commandKey(args) === "status --json") {
+        return { stdout: connectedStatus, stderr: "" };
+      }
+      if (commandKey(args) === "serve status --json") {
+        return {
+          stdout: JSON.stringify(
+            managedServeStatus({
+              AllowFunnel: {
+                "mira-desktop.example.ts.net:443": true,
+              },
+            }),
+          ),
           stderr: "",
         };
       }
@@ -174,13 +220,7 @@ describe("TailscaleRemoteAccessService", () => {
       }
       if (commandKey(args) === "serve status --json") {
         return {
-          stdout: JSON.stringify({
-            Web: {
-              "mira-desktop.example.ts.net:443": {
-                Handlers: { "/": { Proxy: "http://127.0.0.1:8787" } },
-              },
-            },
-          }),
+          stdout: JSON.stringify(managedServeStatus()),
           stderr: "",
         };
       }
