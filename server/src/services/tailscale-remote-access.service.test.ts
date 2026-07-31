@@ -19,7 +19,6 @@ vi.mock(
 );
 
 import {
-  TailscaleRemoteAccessError,
   TailscaleRemoteAccessService,
   type TailscaleCommandRunner,
 } from "./tailscale-remote-access.service.js";
@@ -53,11 +52,13 @@ beforeEach(() => {
     servePort: 443,
     updatedAt: null,
   });
-  repositoryMock.updateConfig.mockImplementation((patch) => ({
-    enabled: Boolean(patch.enabled),
-    servePort: 443,
-    updatedAt: "2026-08-01T00:00:00.000Z",
-  }));
+  repositoryMock.updateConfig.mockImplementation(
+    (patch: { enabled?: boolean }) => ({
+      enabled: Boolean(patch.enabled),
+      servePort: 443,
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    }),
+  );
   repositoryMock.listDevices.mockReturnValue([]);
 });
 
@@ -76,13 +77,16 @@ describe("TailscaleRemoteAccessService", () => {
     expect(snapshot.runtime.installed).toBe(false);
   });
 
-  it("uses the runtime DNS name instead of constructing a preview address", async () => {
+  it("uses the runtime DNS name and treats structural empty Serve JSON as unconfigured", async () => {
     const runCommand: TailscaleCommandRunner = vi.fn(async (args) => {
       if (commandKey(args) === "status --json") {
         return { stdout: connectedStatus, stderr: "" };
       }
       if (commandKey(args) === "serve status --json") {
-        return { stdout: "{}", stderr: "" };
+        return {
+          stdout: JSON.stringify({ TCP: {}, Web: {}, AllowFunnel: false }),
+          stderr: "",
+        };
       }
       throw new Error(`Unexpected command: ${commandKey(args)}`);
     });
@@ -91,6 +95,7 @@ describe("TailscaleRemoteAccessService", () => {
     const snapshot = await service.getSnapshot();
 
     expect(snapshot.runtime.state).toBe("connected");
+    expect(snapshot.runtime.serveConfigured).toBe(false);
     expect(snapshot.runtime.dnsName).toBe("mira-desktop.example.ts.net");
     expect(snapshot.runtime.accessUrl).toBe(
       "https://mira-desktop.example.ts.net",
@@ -120,14 +125,44 @@ describe("TailscaleRemoteAccessService", () => {
     });
     const service = new TailscaleRemoteAccessService(runCommand);
 
-    await expect(service.updateEnabled(true)).rejects.toMatchObject<
-      Partial<TailscaleRemoteAccessError>
-    >({ code: "TAILSCALE_SERVE_CONFLICT" });
+    await expect(service.updateEnabled(true)).rejects.toMatchObject({
+      code: "TAILSCALE_SERVE_CONFLICT",
+    });
     expect(calls).toEqual(["status --json", "serve status --json"]);
     expect(repositoryMock.updateConfig).not.toHaveBeenCalled();
   });
 
-  it("reports ready only after the Mira Serve target and health check pass", async () => {
+  it("treats a mixed Mira and user Serve configuration as a conflict", async () => {
+    const runCommand: TailscaleCommandRunner = vi.fn(async (args) => {
+      if (commandKey(args) === "status --json") {
+        return { stdout: connectedStatus, stderr: "" };
+      }
+      if (commandKey(args) === "serve status --json") {
+        return {
+          stdout: JSON.stringify({
+            Web: {
+              "mira-desktop.example.ts.net:443": {
+                Handlers: {
+                  "/": { Proxy: "http://127.0.0.1:8787" },
+                  "/other": { Proxy: "http://127.0.0.1:3000" },
+                },
+              },
+            },
+          }),
+          stderr: "",
+        };
+      }
+      throw new Error(`Unexpected command: ${commandKey(args)}`);
+    });
+    const service = new TailscaleRemoteAccessService(runCommand);
+
+    const snapshot = await service.getSnapshot();
+
+    expect(snapshot.runtime.state).toBe("serve_conflict");
+    expect(snapshot.runtime.serveManagedByMira).toBe(false);
+  });
+
+  it("reports ready only after the exclusive Mira Serve target and health check pass", async () => {
     repositoryMock.getConfig.mockReturnValue({
       enabled: true,
       servePort: 443,
