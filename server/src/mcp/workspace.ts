@@ -56,6 +56,12 @@ export const getWorkspaceSelection = () => {
   const overrideRoot = resolveWorkspaceRootOverride();
   const activeRoot = overrideRoot ?? selectedWorkspaceRoot ?? configuredRoot;
 
+  // A workspace snapshot is an execution contract, not just a path hint.
+  // Materialize it before Harness or a subAgent hands it to terminal/read tools.
+  if (activeRoot) {
+    assertWorkspaceDirectory(activeRoot);
+  }
+
   return {
     rootPath: activeRoot,
     source: overrideRoot || selectedWorkspaceRoot
