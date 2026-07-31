@@ -15,6 +15,12 @@ export const resolveMemoryContext: RequestContextResolver = ({ thread, userId })
   let updatedAt = thread.memoryContextUpdatedAt ?? null;
   let recordCount: number | null = null;
 
+  // V1 serves ordinary Chat and Agent only. A non-Agent knowledge-base thread
+  // follows the RAG branch and must not consume the new user memory module yet.
+  if (!normalized && thread.knowledgeBaseId && !thread.agentEnabled) {
+    return null;
+  }
+
   if (!normalized) {
     try {
       const snapshot = memoryService.buildContextSync(userId);
