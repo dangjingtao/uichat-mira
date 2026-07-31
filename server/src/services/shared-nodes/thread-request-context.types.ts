@@ -1,5 +1,6 @@
 export type RequestContextThread = {
   roleId: string | null;
+  knowledgeBaseId?: string | null;
   contextSummary: string | null;
   contextSummaryUpdatedAt: string | null;
   memoryContext?: string | null;
