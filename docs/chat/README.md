@@ -1,169 +1,200 @@
 ---
 status: current
 owner: chat
-last_verified: 2026-07-30
+last_verified: 2026-08-01
 layer: wiki
 module: Chat
 feature: Overview
 doc_type: overview
 canonical: true
 related:
-  - ../AGENT_CURRENT_TRUTH.md
+  - ../CHAT_CURRENT_TRUTH.md
   - ../uchat.md
-  - ../uchat-internal-maintenance.md
-  - ../harness/agentgraph-harness-protocol.md
-  - ../development/agent-observability.md
+  - persistence-and-media.md
+  - ../AGENT_CURRENT_TRUTH.md
+  - ../KNOWLEDGE_BASE_CURRENT_TRUTH.md
+  - ../PROVIDER_CURRENT_TRUTH.md
+  - ../TOOL_CURRENT_TRUTH.md
+  - ../archive/chat/README.md
 ---
 
 # Chat 模块总览
 
-> 这页是 Chat 与 Agent 产品界面的阅读入口，不重新定义 Agent Runtime。
+> Chat 的第一真相入口是 [[CHAT_CURRENT_TRUTH]]。本页只负责阅读导航，不用 Agent 文档代写普通 Chat、RAG、Thread 或 Message 合同。
 
-## 推荐阅读顺序
+## 先读这里
 
-1. [[AGENT_CURRENT_TRUTH]]：Agent 当前总真相；
-2. [[harness/agentgraph-harness-protocol]]：Main Planner、Harness、Evidence 与 SubAgent 技术协议；
-3. [[development/agent-observability]]：execution node 与开发诊断；
-4. [[skill/README]]：Skill 与 SubAgent 执行边界；
-5. [[uchat]]：UChat 当前合同；
-6. [[uchat-internal-maintenance]]：UChat 内部维护边界；
-7. `chat-system-practices.md`：Chat 工程实践。
+1. [[CHAT_CURRENT_TRUTH]]：Thread、Message、三条发送链、持久化与已知缺陷；
+2. [[uchat]]：桌面 UChat core / ui / integration 合同；
+3. [[chat/persistence-and-media]]：消息落库、编辑重跑、附件、TTS、图片与删除行为；
+4. [[AGENT_CURRENT_TRUTH]]：AgentRun、审批、恢复与终止语义；
+5. [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：Knowledge Base 与 RAG；
+6. [[PROVIDER_CURRENT_TRUTH]]：模型角色与调用解析；
+7. [[TOOL_CURRENT_TRUTH]]：Harness Tool 公共面与审批。
 
-## Agent 当前口径
-
-以下术语必须分开：
-
-- `AgentRun`：产品运行真相与持久化状态；
-- `AgentGraph`：稳定运行时门面；
-- `Pi Loop`：应用默认 Main Agent 编排器；
-- `LangGraph`：显式兼容与测试对照运行时；
-- `Main Planner`：用户 global goal、下一步与最终完成判断；
-- `Harness`：concrete tool 的候选、边界、审批、执行、结果和审计控制平面；
-- `Generic SubAgent`：由 `delegate_task` 启动的通用 task-local executor；
-- `Skill-owned SubAgent`：由 primary Skill execution profile 启动的领域 executor；
-- `Evidence`：真实工具、检索与 Child observation 的累计真相；
-- `Generate`：只依据 frozen finalization packet 组织用户回答。
-
-不得再说：
-
-- AgentGraph 就等于 LangGraph；
-- Agent 只有 Planner→Tool 一条路径；
-- `delegate_task` 是普通 Harness Tool；
-- SubAgent completed 就等于用户 global goal completed；
-- Skill 仍然只能把说明书注入 Main Planner；
-- 当前已经是开放式多 Agent 系统。
-
-## 当前执行路径
-
-### 普通回答或简单动作
+## 当前对象链
 
 ```text
-Main Planner
-  -> answer / retrieve / concrete tool
-  -> Evidence
-  -> Main Planner
-  -> Generate
+ChatWorkspace
+→ Thread
+→ Message Parts / Metadata
+→ Request-only Thread Context
+→ Normal Chat | RAG Chat | Agent Chat
+→ SSE Events
+→ UChat Runtime
+→ Persisted Assistant Message
+→ Optional TTS / Image Media
 ```
 
-### 通用工作包
+必须分开：
+
+- `ChatWorkspace`：文件与 Tool 的默认执行空间；
+- `Thread`：聊天配置与归属真相；
+- `Message`：用户可见历史与 canonical parts；
+- `Request Context`：Role、Summary 等请求时临时 system context；
+- `AgentRun`：Agent 的运行、审批、Evidence 与 checkpoint 真相；
+- `ChatMedia`：成功 Assistant 后附加的音频或图片结果。
+
+## 三条真实发送链
+
+### Normal Chat
 
 ```text
-Main Planner
-  -> delegate_task
-  -> Generic SubAgent
-  -> Evidence
-  -> Main Planner acceptance
+User Message
+→ request-only Role / Summary context
+→ global llm role
+→ Assistant Message
 ```
 
-### 领域 Skill
+普通 Chat 当前不经过 Main Planner，也不调用 Harness Tool。
+
+### RAG Chat
 
 ```text
-Skill match / continuation
-  -> Skill-owned SubAgent or deterministic Skill Flow
-  -> Evidence / Artifact / Requirement
-  -> Parent governance
-  -> Generate or ask_user
+Bound Knowledge Base
++ non-Agent text question
+→ RAG Pipeline
+→ Answer + Sources
 ```
 
-## UI 当前责任
+RAG 是独立路径，不等于“普通 Chat 额外拼一段知识文本”。
 
-Chat UI 负责：
+### Agent Chat
 
-- 发起和停止 AgentRun；
-- 显示 execution nodes；
-- 展示 Planner public reason；
-- 展示 Main / SubAgent 工作状态；
-- 展示 concrete tool、Evidence、approval 与 resume；
-- 交付 waiting_user / waiting_approval / completed / failed；
-- 持久化并恢复真实 trace。
+```text
+agentEnabled = true
+→ AgentRun
+→ Main Agent Runtime
+→ Evidence / Approval / Finalization
+→ Assistant delivery
+```
 
-Chat UI 不负责：
+Agent 详细行为必须回到 [[AGENT_CURRENT_TRUTH]]，不能由 Chat UI 文档重新定义。
 
-- 自己决定下一步；
-- 用前端选中状态驱动工具执行；
-- 重建 pending tool args；
-- 在 Child 与 Parent 之间做隐藏路由；
-- 把历史 approval node 覆盖成当前状态；
-- 展示 hidden chain of thought。
+## Thread 当前保存什么
 
-## 观测节点
+Thread 当前持久化：
 
-当前稳定语义包括：
+```text
+title
+modelName
+workspaceId
+knowledgeBaseId
+roleId
+agentEnabled
+ttsEnabled
+imageEnabled
+contextSummary
+status
+```
 
-- prepare context；
-- next action planner；
-- Generic SubAgent；
-- Skill-owned SubAgent；
-- tool call normalize；
-- policy；
-- approval / resume；
-- retrieve / tool；
-- Evidence；
-- Generate；
-- Finalize / error。
+其中：
 
-SubAgent 还会投影 task-local trace、working state、tool calls、requirements、artifacts 与 resumed approval state。
+- `workspaceId` 决定 Agent / Tool 默认执行空间；
+- `knowledgeBaseId` 决定非 Agent RAG 路由，或作为 Agent 检索输入；
+- `roleId` 注入 Role prompt；
+- `agentEnabled` 选择 Agent 路径；
+- `ttsEnabled / imageEnabled` 控制成功回答后的媒体任务；
+- `contextSummary` 作为不可见 request-only context；
+- `modelName` 当前不驱动默认 Chat Provider Resolution。
 
-## 当前 Agent 已知偏差
+## Message 当前保存什么
 
-Recoverable failure 恢复耗尽的 settled contract 是 guarded answer + completed。
+Message 当前保存：
 
-截至 2026-07-30，`dev` Planner 当前直接返回 `error`，使 Graph failed 且跳过 Generate。
+- role；
+- content；
+- canonical `partsJson`；
+- metadata；
+- createdAt。
 
-Chat UI 应显示真实失败状态，但文档和产品判断不能把该实现偏差写成新合同。详情见 [[AGENT_CURRENT_TRUTH]] 的“dev 已知实现漂移”章节。
+Canonical parts：
+
+```text
+text
+image
+file
+data
+```
+
+数据库没有 `parent_id`。编辑与重新生成会裁掉旧尾部并重写当前时间线，不保存可切换分支树。
+
+## UChat 当前责任
+
+UChat 负责：
+
+- Thread 列表和按需 hydration；
+- 每个 Thread 的 Composer Draft；
+- 附件上传状态；
+- 乐观 User / Assistant 消息；
+- SSE 文本、Tool Event、Execution Node 和 metadata 映射；
+- 单一进行中发送；
+- 前端停止、失败展示与发送后对账；
+- 消息正文、Trace、审批与媒体扩展渲染。
+
+UChat 不负责：
+
+- 选择 Provider Connection；
+- 决定 RAG、Agent 的后端合同；
+- 执行 Tool；
+- 持有 AgentRun；
+- 保存 Knowledge Base；
+- 保证客户端 Stop 取消后台工作；
+- 把 memory resolver 空插槽变成长期记忆。
+
+## 当前最重要的缺陷
+
+### High：删除 Knowledge Base 会删除绑定对话
+
+当前外键是：
+
+```text
+threads.knowledge_base_id
+ON DELETE CASCADE
+```
+
+删除非默认 Knowledge Base 会连带删除绑定 Thread，再级联删除 Messages。
+
+这是高严重度数据删除缺陷，不是目标合同。完整原因与影响见 [[CHAT_CURRENT_TRUTH]]。
+
+其他已知漂移：
+
+- Normal Chat Tool Loop 当前不可达；
+- `Thread.modelName` 不驱动默认 Chat；
+- Stop 不保证后台工作停止；
+- 普通 Chat / RAG 错误 Assistant 不完整持久化；
+- 附件 storage 缺少完整 GC；
+- Memory resolver 还没有 Thread persistence source。
 
 ## 历史与施工资料
 
-以下页面只能用于理解演进或施工背景：
+旧总纲已经保存到 [[archive/chat/README]]。
 
-- `agent-runtime-design.md`：superseded LangGraph-first 设计；
-- `agent-loop-v1.7-construction-plan.md`；
-- `agent-swot-plan.md`；
-- `agent-phase-1-checklist.md`；
-- `agent-phase-2-checklist.md`；
-- `agent-phase-3-checklist.md`；
-- `agent-workspace-context-system.md`；
-- `agent-workspace-context-checklist.md`；
-- `chat-tool-integration-research.md`；
-- `chat-tool-integration-poc.md`；
-- `chat-tool-integration-checklist.md`。
-
-引用优先级：
+施工 checklist、设计稿、UChat governance 与 Agent UI 记录可以解释演进，但不能覆盖：
 
 ```text
-AGENT_CURRENT_TRUTH
-  > current technical contract / runbook
-  > current module overview
-  > implementation checklist / workboard
-  > design / plan / historical
+current code
+→ CHAT_CURRENT_TRUTH
+→ UChat current contract
+→ persistence and media reference
 ```
-
-## UChat 与其他入口
-
-- `../uchat.md`：UChat 组件与消息渲染合同；
-- `../uchat-internal-maintenance.md`：内部维护；
-- `chat-execution-trace-design.md`：trace 产品设计背景；
-- `chat-execution-trace-checklist.md`：实施与验收记录；
-- `uchat-governance/README.md`：UChat governance；
-- `uchat-ui-slot-design.md`：规划材料，不是当前实现；
-- `uchat-application-state-lifecycle-design.md`：应用状态合同与记录。
