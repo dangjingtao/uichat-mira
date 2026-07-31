@@ -11,6 +11,7 @@ related:
   - CURRENT_PRODUCT_TRUTH.md
   - PROVIDER_CURRENT_TRUTH.md
   - KNOWLEDGE_BASE_CURRENT_TRUTH.md
+  - EVALUATION_CURRENT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
   - MICROAPP_CURRENT_TRUTH.md
@@ -33,16 +34,17 @@ related:
 - 什么尚未核验；
 - 当前代码是否偏离 settled contract。
 
-## 先读这八页
+## 先读这九页
 
 1. [[CURRENT_PRODUCT_TRUTH]]：产品能力、边界与稳定迭代阶段；
 2. [[PROVIDER_CURRENT_TRUTH]]：首次模型配置、Provider Connection、角色绑定、运行解析与已知漂移；
 3. [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：知识库、入库、索引、混合检索、RAG 与接入边界；
-4. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
-5. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
-6. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
-7. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
-8. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
+4. [[EVALUATION_CURRENT_TRUTH]]：评测包、Dataset、Run、指标、报告与恢复边界；
+5. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
+6. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
+7. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
+8. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
+9. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
 
 新安装首先阅读 [[provider/FIRST_MODEL_SETUP]]，不要先尝试一次配齐所有模型角色。
 
@@ -91,6 +93,12 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 - [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：Knowledge Base、索引与 RAG 总真相；
 - [[knowledge-base/README]]：Knowledge Base 模块阅读入口；
 - [[knowledge-base/rag-runtime]]：RAG Runtime；
+- [[EVALUATION_CURRENT_TRUTH]]：Evaluation 总真相；
+- [[evaluation/README]]：Evaluation 模块阅读入口；
+- [[evaluation/workbench]]：评测工作台与中心；
+- [[evaluation/package-format]]：评测 ZIP 合同；
+- [[evaluation/runtime]]：Run 生命周期；
+- [[evaluation/metrics]]：指标算法语义；
 - [[AGENT_CURRENT_TRUTH]]：Agent 总真相；
 - [[TOOL_CURRENT_TRUTH]]：Tool / Harness 总真相；
 - [[MICROAPP_CURRENT_TRUTH]]：MicroApp 总真相；
@@ -102,7 +110,6 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 - [[skill/pi-skill-agent-execution]]：SubAgent 详细参考；
 - [[development/agent-observability]]：Agent / SubAgent 观测与诊断；
 - [[microapp/README]]：MicroApps Hub、Integration binding、Studio 与领域 Runtime 入口；
-- [[evaluation/README]]：评测；
 - [[chat/README]]：Chat 与 Agent UI 入口；
 - [[platform/tauri]]：Tauri 平台路径。
 
@@ -131,7 +138,7 @@ Protocol Adapter
 Runtime Invocation
 ```
 
-还必须区分三类状态：
+还必须区分：
 
 ```text
 已保存模型绑定
@@ -174,6 +181,53 @@ Agent / Integration Access
 != 真实检索命中
 != 最终回答正确
 ```
+
+## Evaluation 文档引用规则
+
+```text
+current code + repeatable tests
+  -> EVALUATION_CURRENT_TRUTH
+  -> evaluation/README
+  -> evaluation/workbench
+  -> evaluation/package-format
+  -> evaluation/runtime
+  -> evaluation/metrics
+  -> Knowledge Base / Provider current contract
+  -> project-control evidence
+  -> historical
+```
+
+Evaluation 阅读必须区分：
+
+```text
+Evaluation Package
+Evaluation Dataset
+Evaluation Run
+Sample Result
+Attempt
+Metric Summary
+Client-side Report
+```
+
+还必须区分：
+
+```text
+评测模型
+!= Judge Model
+
+评测包
+!= Frozen Knowledge Base Snapshot
+
+Run 已持久化
+!= Run 可重启恢复
+
+Metric Label
+!= Current Formula
+!= Standard Benchmark
+!= Release Gate
+```
+
+任何指标说明必须以 [[evaluation/metrics]] 中的当前代码公式为准，不能仅凭名称推断标准实现。
 
 ## Agent 文档引用规则
 
@@ -252,6 +306,7 @@ Agent Tool / Skill access
 
 - Provider 历史：[[archive/provider/README]]；
 - Knowledge Base 历史：[[archive/knowledge-base/README]]；
+- Evaluation 历史：[[archive/evaluation/README]]；
 - Agent 历史：[[archive/agent/README]]；
 - Tool 历史：[[archive/tool/README]]；
 - MicroApp 历史：[[archive/microapp/README]]。

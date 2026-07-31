@@ -11,6 +11,7 @@ related:
   - ../README.md
   - provider/README.md
   - knowledge-base/README.md
+  - evaluation/README.md
   - agent/README.md
   - tool/README.md
   - microapp/README.md
@@ -25,6 +26,7 @@ related:
 
 - [[archive/provider/README]]：Provider 旧总纲、旧混合 Proxy 文档与 Catalog 重构记录；
 - [[archive/knowledge-base/README]]：Knowledge Base 单库 MVP、旧 API / Schema 与 Markdown Workspace 设计；
+- [[archive/evaluation/README]]：Evaluation 六月薄总览、旧 Workbench 摘要和 moved 兼容页；
 - [[archive/agent/README]]：Agent 历史路线、阶段清单与旧多 Agent / Pilot 口径；
 - [[archive/tool/README]]：Tool / Harness 旧矩阵、整改台账与 CodeGraph 实现前方案；
 - [[archive/microapp/README]]：MicroApp 旧总纲、实现前 POC、早期 Studio 设计与迁移前合同。
@@ -93,4 +95,7 @@ related:
 - 当前 Provider 状态是否代表真实请求成功；
 - 当前 Knowledge Base 是否已经 ready；
 - 当前检索、Rerank 和 Agent 接入实际走哪条路径；
+- 当前 Evaluation Package 是否保存真实语料；
+- 当前 Run 是否支持重启恢复；
+- 当前指标名称对应什么算法；
 - 下一步施工应该遵守哪份合同。

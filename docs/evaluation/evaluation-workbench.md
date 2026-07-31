@@ -1,16 +1,33 @@
-# Evaluation Workbench Docs Moved
+---
+status: superseded
+owner: evaluation
+last_verified: 2026-07-31
+layer: historical
+module: Evaluation
+feature: EvaluationWorkbenchMoved
+doc_type: historical
+canonical: false
+superseded_by:
+  - ../EVALUATION_CURRENT_TRUTH.md
+  - README.md
+  - workbench.md
+  - runtime.md
+  - metrics.md
+related:
+  - ../archive/evaluation/README.md
+---
 
-Status: Current
-Owner: evaluation
-Last verified: 2026-06-26
-Layer: wiki
-Module: Develoments
-Feature: EvaluationWorkbench
-Doc Type: overview
+# Evaluation Workbench 旧兼容入口
 
-评测工作台与评测中心文档已统一收口到 `docs/evaluation/` 目录。
+本路径曾用于说明评测文档已经移动到 `docs/evaluation/`。
 
-请改读：
+它不再承担当前解释权。请改读：
 
-- [[evaluation/README]]
-- [[evaluation/workbench]]
+- [[EVALUATION_CURRENT_TRUTH]]；
+- [[evaluation/README]]；
+- [[evaluation/workbench]]；
+- [[evaluation/package-format]]；
+- [[evaluation/runtime]]；
+- [[evaluation/metrics]]。
+
+2026-06-26 的原文保存在 [[archive/evaluation/README]]。

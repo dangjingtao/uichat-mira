@@ -11,12 +11,14 @@ related:
   - ENGINEERING_MEMORY.md
   - PROVIDER_CURRENT_TRUTH.md
   - KNOWLEDGE_BASE_CURRENT_TRUTH.md
+  - EVALUATION_CURRENT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
   - MICROAPP_CURRENT_TRUTH.md
   - harness/agentgraph-harness-protocol.md
   - skill/README.md
   - knowledge-base/README.md
+  - evaluation/README.md
   - provider/README.md
 ---
 
@@ -91,6 +93,7 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 - seed 的 Ollama 默认绑定可能在本地服务未启动、模型未下载时形成假就绪感；
 - `openai-compatible-custom` 当前在 Runtime Resolution 中映射为 `volcengine` provider code，供应商中立身份尚未完全收口；
 - Image / Voice 的全局角色绑定与 Studio provider config 尚未统一；
+- `evaluation` role 当前用于评测包样本生成，不是 Run 的 Judge Model；
 - Template capability 不是 per-model Vision / Tool / Context 能力探测；
 - Provider Proxy 尚未为所有 adapter 统一归一化 Token 与成本；
 - 模型设置导出文件包含可恢复的明文 API Key，必须按敏感凭据备份处理。
@@ -129,10 +132,42 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 
 ### Evaluation
 
-- 评测中心与评测工作台已经存在；
-- 评测使用知识库、检索和生成结果做质量验证；
-- 评测用于定位问题和保护回归，不替代真实产品验收；
-- 具体数据集、运行、报告与指标应由 Evaluation current contract 单独说明，不能被 Knowledge Base 文档代写。
+完整事实见 [[EVALUATION_CURRENT_TRUTH]]。
+
+当前已经成立：
+
+- 评测中心和新建评测工作台都有真实桌面入口；
+- 支持从现有 Knowledge Base 生成 Evaluation ZIP，或上传单个 ZIP；
+- Dataset 会解析 manifest、evalset、documents 清单、配置、样本和校验结果；
+- Run 使用 `queued / running / completed / failed`；
+- Sample 支持 Repeat、并发 workers、Timeout、Attempt 级错误和来源预览；
+- Dataset、Samples 和 Run 会写入 SQLite，并在 Backend 启动时 hydrate；
+- 支持 `retrieve` 与 `retrieve-generate` 两种模式；
+- Run 结果包含 Retrieval 命中、生成启发式分数、延迟、失败数、日志和 Sample 明细；
+- 评测中心支持搜索、详情、Markdown 导出和已结束 Run 删除；
+- Markdown 报告可以包含配置、指标、Sample、来源、日志、Mermaid 图和客户端加权概览。
+
+当前必须按真实算法解释：
+
+- `evaluation` role 只用于生成评测包样本，不承担 Run 裁判；
+- 自动 ZIP 中 documents 是占位文件，不保存 Knowledge Base 原文快照；
+- Gold Source 当前只按规范化 documentName 精确匹配；
+- Faithfulness / Relevance / Completeness 是词项重合启发式，不是 LLM Judge；
+- 当前 `mrr` 不是实际 rank 的 reciprocal mean，而是命中与 Recall 的近似；
+- Source Hit Rate 当前实质与 Hit@K 同义；
+- retrieve 模式当前仍经过完整 RAG Graph 和 Generate，再丢弃 answer；
+- Markdown weighted score 只存在于客户端报告，不是 Runtime 指标合同。
+
+当前已知边界：
+
+- Run 调度使用进程内 `queueMicrotask`，不是 durable job system；
+- Backend 在 queued / running 时重启后，Run 会保留状态但不会恢复执行，且当前删除 API 会拒绝删除；
+- Timeout 不会取消底层 RAG / Provider 请求；
+- 任一 Repeat 失败会令 Sample failed，任一 Sample failed 会令 Run failed；
+- Dataset 没有列表、详情和删除入口，可能形成孤立记录；
+- Run 和 Dataset schema 当前没有 userId，不是多租户隔离合同；
+- Center 无分页、无 Run Compare、Baseline、Retry、Cancel 或 Release Gate；
+- 指标分数用于回归和定位，不替代真实产品验收。
 
 ### Agent
 
@@ -225,6 +260,11 @@ MicroApps Hub
 - “所有模型都天然支持 vision、image、tool 等全部能力”；
 - “全局默认模型配置已经统一管理 Chat、Image 和 TTS”；
 - “所有 Provider 都可以准确显示 Token 与成本”；
+- “评测模型已经承担 LLM Judge”；
+- “评测包包含冻结的完整知识库语料”；
+- “Evaluation 的 MRR、Faithfulness 等就是标准学术实现”；
+- “评测 Run 可以在 Backend 重启后自动恢复”；
+- “评测分数可以直接作为上线 Gate 或专业正确性证明”；
 - “知识库支持任意文档格式自动解析”；
 - “上传成功就代表索引和检索已经可用”；
 - “切换 Embedding 后会自动重建已有索引”；
@@ -279,6 +319,17 @@ Knowledge Base 还必须额外说明：
 - Sources 是否来自真实检索；
 - 是 Chat、Agent 还是 Integration 调用路径；
 - 是否存在重建和重启恢复合同。
+
+Evaluation 还必须额外说明：
+
+- Package 是否包含真实语料快照；
+- Dataset 是否绑定当前存在的 Knowledge Base；
+- Run 调度是否 durable；
+- Metric label 对应的当前公式；
+- 分数是否来自 LLM Judge、启发式还是人工；
+- failed 是完整失败还是部分 Repeat 失败；
+- 报告是 Runtime Artifact 还是客户端即时生成；
+- 是否具备重启恢复、Cancel、Compare 与 Release Gate。
 
 MicroApp 还必须额外说明：
 
