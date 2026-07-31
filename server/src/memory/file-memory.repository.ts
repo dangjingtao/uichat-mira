@@ -26,6 +26,7 @@ type MemoryTombstone = {
   id: string;
   content: string;
   normalizedContent: string;
+  sources: MemorySource[];
   deletedAt: string;
 };
 
@@ -46,6 +47,11 @@ const isMemorySource = (value: unknown): value is MemorySource => {
     typeof source.assistantMessageId === "string"
   );
 };
+
+const isSameSource = (left: MemorySource, right: MemorySource) =>
+  left.threadId === right.threadId &&
+  left.userMessageId === right.userMessageId &&
+  left.assistantMessageId === right.assistantMessageId;
 
 const parseMetadata = (raw: string): MemoryBlockMetadata | null => {
   try {
@@ -239,8 +245,28 @@ export class FileMemoryRepository {
       .filter(Boolean)
       .flatMap((line) => {
         try {
-          const parsed = JSON.parse(line) as MemoryTombstone;
-          return typeof parsed.normalizedContent === "string" ? [parsed] : [];
+          const parsed = JSON.parse(line) as Partial<MemoryTombstone>;
+          if (
+            typeof parsed.id !== "string" ||
+            typeof parsed.content !== "string" ||
+            typeof parsed.normalizedContent !== "string" ||
+            typeof parsed.deletedAt !== "string"
+          ) {
+            return [];
+          }
+          return [
+            {
+              id: parsed.id,
+              content: parsed.content,
+              normalizedContent: parsed.normalizedContent,
+              sources:
+                Array.isArray(parsed.sources) &&
+                parsed.sources.every(isMemorySource)
+                  ? parsed.sources
+                  : [],
+              deletedAt: parsed.deletedAt,
+            },
+          ];
         } catch {
           return [];
         }
@@ -266,10 +292,16 @@ export class FileMemoryRepository {
           const alreadyExists = blocks.some(
             (block) => normalizeContent(block.record.content) === normalized,
           );
-          const wasDeleted = tombstones.some(
-            (tombstone) => tombstone.normalizedContent === normalized,
+          const replaysDeletedEvidence = tombstones.some(
+            (tombstone) =>
+              tombstone.normalizedContent === normalized &&
+              patch.record.sources.some((source) =>
+                tombstone.sources.some((deletedSource) =>
+                  isSameSource(source, deletedSource),
+                ),
+              ),
           );
-          if (alreadyExists || wasDeleted) continue;
+          if (alreadyExists || replaysDeletedEvidence) continue;
 
           document = `${document.trimEnd()}\n\n${renderMemoryBlock(patch.record)}\n`;
           result.created += 1;
@@ -307,6 +339,7 @@ export class FileMemoryRepository {
           id: target.record.id,
           content: target.record.content,
           normalizedContent: normalizeContent(target.record.content),
+          sources: target.record.sources,
           deletedAt,
         });
         result.deleted += 1;
