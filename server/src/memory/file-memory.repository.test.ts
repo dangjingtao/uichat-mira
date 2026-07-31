@@ -86,9 +86,10 @@ describe("FileMemoryRepository", () => {
       "utf8",
     );
     assert.match(tombstones, /用户偏好先看明确结论/);
+    assert.match(tombstones, /user-1/);
   });
 
-  it("does not recreate content recorded in tombstones", async () => {
+  it("blocks stale evidence replay but allows a new explicit source", async () => {
     const root = await createRoot();
     const repository = new FileMemoryRepository(root);
     const record = createRecord("不要自动打开网页。 ");
@@ -100,15 +101,38 @@ describe("FileMemoryRepository", () => {
       { operation: "delete", targetId: record.id, reason: "withdrawn" },
     ]);
 
-    const result = await repository.apply(1, [
+    const staleReplay = await repository.apply(1, [
       {
         operation: "create",
         record: { ...record, id: "mem_recreated" },
         reason: "stale replay",
       },
     ]);
-
-    assert.deepEqual(result, { created: 0, replaced: 0, deleted: 0 });
+    assert.deepEqual(staleReplay, { created: 0, replaced: 0, deleted: 0 });
     assert.deepEqual(await repository.list(1), []);
+
+    const reaffirmed: MemoryRecord = {
+      ...record,
+      id: "mem_reaffirmed",
+      sources: [
+        {
+          threadId: "thread-2",
+          userMessageId: "user-2",
+          assistantMessageId: "assistant-2",
+        },
+      ],
+      createdAt: "2026-08-02T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    };
+    const newSource = await repository.apply(1, [
+      {
+        operation: "create",
+        record: reaffirmed,
+        reason: "user explicitly reaffirmed it",
+      },
+    ]);
+
+    assert.deepEqual(newSource, { created: 1, replaced: 0, deleted: 0 });
+    assert.equal((await repository.list(1))[0]?.id, reaffirmed.id);
   });
 });
