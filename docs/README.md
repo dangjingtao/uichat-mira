@@ -10,6 +10,7 @@ canonical: true
 related:
   - CURRENT_PRODUCT_TRUTH.md
   - PROVIDER_CURRENT_TRUTH.md
+  - KNOWLEDGE_BASE_CURRENT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
   - MICROAPP_CURRENT_TRUTH.md
@@ -32,15 +33,16 @@ related:
 - 什么尚未核验；
 - 当前代码是否偏离 settled contract。
 
-## 先读这七页
+## 先读这八页
 
 1. [[CURRENT_PRODUCT_TRUTH]]：产品能力、边界与稳定迭代阶段；
 2. [[PROVIDER_CURRENT_TRUTH]]：首次模型配置、Provider Connection、角色绑定、运行解析与已知漂移；
-3. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
-4. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
-5. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
-6. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
-7. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
+3. [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：知识库、入库、索引、混合检索、RAG 与接入边界；
+4. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
+5. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
+6. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
+7. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
+8. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
 
 新安装首先阅读 [[provider/FIRST_MODEL_SETUP]]，不要先尝试一次配齐所有模型角色。
 
@@ -86,6 +88,9 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 - [[PROVIDER_CURRENT_TRUTH]]：Provider、模型角色与调用总真相；
 - [[provider/FIRST_MODEL_SETUP]]：第一次模型配置；
 - [[provider/README]]：Provider 模块阅读入口；
+- [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：Knowledge Base、索引与 RAG 总真相；
+- [[knowledge-base/README]]：Knowledge Base 模块阅读入口；
+- [[knowledge-base/rag-runtime]]：RAG Runtime；
 - [[AGENT_CURRENT_TRUTH]]：Agent 总真相；
 - [[TOOL_CURRENT_TRUTH]]：Tool / Harness 总真相；
 - [[MICROAPP_CURRENT_TRUTH]]：MicroApp 总真相；
@@ -97,7 +102,6 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 - [[skill/pi-skill-agent-execution]]：SubAgent 详细参考；
 - [[development/agent-observability]]：Agent / SubAgent 观测与诊断；
 - [[microapp/README]]：MicroApps Hub、Integration binding、Studio 与领域 Runtime 入口；
-- [[knowledge-base/README]]：知识库；
 - [[evaluation/README]]：评测；
 - [[chat/README]]：Chat 与 Agent UI 入口；
 - [[platform/tauri]]：Tauri 平台路径。
@@ -133,6 +137,42 @@ Runtime Invocation
 已保存模型绑定
 != 最近一次模型目录同步成功
 != 真实业务调用成功
+```
+
+## Knowledge Base 文档引用规则
+
+```text
+current code + repeatable tests
+  -> KNOWLEDGE_BASE_CURRENT_TRUTH
+  -> knowledge-base/README
+  -> knowledge-base/api
+  -> knowledge-base/backend-schema
+  -> knowledge-base/rag-runtime
+  -> Provider / Agent / Evaluation current contract
+  -> project-control evidence
+  -> design / historical
+```
+
+Knowledge Base 阅读必须区分：
+
+```text
+Knowledge Base
+Document
+Chunk
+Vector Index
+Lexical Index
+RAG Runtime
+Evaluation
+Agent / Integration Access
+```
+
+还必须区分：
+
+```text
+上传请求成功
+!= 文档索引 ready
+!= 真实检索命中
+!= 最终回答正确
 ```
 
 ## Agent 文档引用规则
@@ -211,6 +251,7 @@ Agent Tool / Skill access
 归档规则见 [[archive/README]]。
 
 - Provider 历史：[[archive/provider/README]]；
+- Knowledge Base 历史：[[archive/knowledge-base/README]]；
 - Agent 历史：[[archive/agent/README]]；
 - Tool 历史：[[archive/tool/README]]；
 - MicroApp 历史：[[archive/microapp/README]]。

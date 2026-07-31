@@ -10,6 +10,7 @@ canonical: true
 related:
   - ENGINEERING_MEMORY.md
   - PROVIDER_CURRENT_TRUTH.md
+  - KNOWLEDGE_BASE_CURRENT_TRUTH.md
   - AGENT_CURRENT_TRUTH.md
   - TOOL_CURRENT_TRUTH.md
   - MICROAPP_CURRENT_TRUTH.md
@@ -94,11 +95,44 @@ UIChat Mira 是一个 **本地优先、桌面优先、多 Provider 的个人 AI 
 - Provider Proxy 尚未为所有 adapter 统一归一化 Token 与成本；
 - 模型设置导出文件包含可恢复的明文 API Key，必须按敏感凭据备份处理。
 
-### Knowledge Base 与 Evaluation
+### Knowledge Base 与 RAG
 
-- 知识库、RAG 与相关评测能力已经存在；
-- 评测用于验证能力，不替代真实产品验收；
-- 具体检索链、schema 和工作台以对应 current-contract 为准。
+完整事实见 [[KNOWLEDGE_BASE_CURRENT_TRUTH]]。
+
+当前已经成立：
+
+- 支持多个知识库，并保留不可删除的默认知识库；
+- Knowledge Base 可以保存名称、描述、persona、scenario、tags 和 chunking config；
+- 桌面工作台支持知识库 CRUD、文档搜索筛选、启停、详情和删除；
+- 当前上传只接受单个 Markdown / TXT，最大 100 MB；
+- 添加向导支持 Chunk 配置、抽样预览和索引状态轮询；
+- Document 使用 `processing / ready / failed` 表达索引状态；
+- 索引通过默认 Embedding role 生成向量并写入按知识库、模型、配置和维度派生的 sqlite-vec 表；
+- 检索同时使用向量召回与 Orama 中文词法召回，并通过 RRF 融合；
+- Rerank 可选，未配置或调用失败时降级为检索顺序；
+- RAG Graph 当前执行 rewrite、embed、retrieve、rerank / fallback、generate；
+- Chat thread 可以绑定一个 knowledgeBaseId，并持久化最终 sources；
+- Main Agent 可以把知识库 sources 累积为 Retrieval Evidence；
+- `knowledge_query` MicroApp 可以将企业微信智能机器人接入指定知识库。
+
+当前已知边界：
+
+- 索引队列只存在于 backend 进程内，不是 durable job system；
+- KnowledgeBase.embeddingModelConfigId 已持久化，但实际索引和查询仍使用全局默认 Embedding role；
+- 切换 Embedding 模型或维度不会自动重建已有索引；
+- 桌面“重建索引”入口当前只显示 pending message，没有完成后端调用闭环；
+- 添加向导第二步当前同时要求 LLM 与 Embedding，虽然索引后端的最小模型依赖是 Embedding；
+- 数据库维护 FTS5 表，但当前主词法 Runtime 使用 Orama Mandarin cache；
+- Agent retrieve 当前调用完整 RAG runnable，可能产生一轮被丢弃的生成调用；
+- 当前一个线程只绑定一个知识库；
+- Knowledge Base 不是长期记忆，也不是任意文档解析器。
+
+### Evaluation
+
+- 评测中心与评测工作台已经存在；
+- 评测使用知识库、检索和生成结果做质量验证；
+- 评测用于定位问题和保护回归，不替代真实产品验收；
+- 具体数据集、运行、报告与指标应由 Evaluation current contract 单独说明，不能被 Knowledge Base 文档代写。
 
 ### Agent
 
@@ -191,6 +225,12 @@ MicroApps Hub
 - “所有模型都天然支持 vision、image、tool 等全部能力”；
 - “全局默认模型配置已经统一管理 Chat、Image 和 TTS”；
 - “所有 Provider 都可以准确显示 Token 与成本”；
+- “知识库支持任意文档格式自动解析”；
+- “上传成功就代表索引和检索已经可用”；
+- “切换 Embedding 后会自动重建已有索引”；
+- “知识库索引任务可以在重启后自动恢复”；
+- “Rerank 失败会阻断错误回答”；
+- “Knowledge Base 就是 Mira 的长期记忆”；
 - “Mira 已经是完整自主软件工厂”；
 - “已经是成熟开放式多 Agent 平台”；
 - “已经有 Agent V2、DAG scheduler 或并发 Agent 编排”；
@@ -228,6 +268,17 @@ Provider 还必须额外说明：
 - `connected` 是目录同步还是业务调用验证；
 - 是否走 Provider Proxy、本地模型 Runtime 或 MicroApp Studio；
 - 凭据与备份如何处理。
+
+Knowledge Base 还必须额外说明：
+
+- 上传是否只创建 Document，还是索引已经 ready；
+- 文档是否 enabled；
+- 使用哪份 Embedding 身份和维度；
+- 当前实际词法 Runtime；
+- Rerank 是 applied 还是 degraded；
+- Sources 是否来自真实检索；
+- 是 Chat、Agent 还是 Integration 调用路径；
+- 是否存在重建和重启恢复合同。
 
 MicroApp 还必须额外说明：
 
