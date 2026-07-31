@@ -25,7 +25,7 @@ const buildSnapshot = (
   records: MemoryRecord[],
   updatedAt: string | null,
 ): MemoryContextSnapshot => {
-  const sorted = records.toSorted((left, right) =>
+  const sorted = [...records].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
   const lines: string[] = [];
