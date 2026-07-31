@@ -85,6 +85,11 @@ type TailscaleStatusJson = {
   } | null;
 };
 
+type ServeOwnership = {
+  configured: boolean;
+  managedByMira: boolean;
+};
+
 const COMMAND_TIMEOUT_MS = 10_000;
 const HEALTH_TIMEOUT_MS = 4_000;
 
@@ -159,24 +164,84 @@ const getErrorCode = (error: unknown) =>
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const hasServeConfiguration = (value: unknown) => {
+const hasMeaningfulServeValue = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
   if (Array.isArray(value)) {
-    return value.length > 0;
+    return value.some(hasMeaningfulServeValue);
   }
 
-  if (!isRecord(value)) {
-    return false;
+  if (isRecord(value)) {
+    return Object.values(value).some(hasMeaningfulServeValue);
   }
 
-  return Object.keys(value).length > 0;
+  return false;
 };
 
-const containsManagedTarget = (value: unknown, backendPort: number) => {
-  const serialized = JSON.stringify(value).toLowerCase();
-  return (
-    serialized.includes(`127.0.0.1:${backendPort}`) ||
-    serialized.includes(`localhost:${backendPort}`)
+const collectServeStringLeaves = (
+  value: unknown,
+  target: string[] = [],
+): string[] => {
+  if (typeof value === "string") {
+    if (value.trim()) {
+      target.push(value.trim().toLowerCase());
+    }
+    return target;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectServeStringLeaves(item, target));
+    return target;
+  }
+
+  if (isRecord(value)) {
+    Object.values(value).forEach((item) =>
+      collectServeStringLeaves(item, target),
+    );
+  }
+
+  return target;
+};
+
+const isManagedTarget = (value: string, backendPort: number) =>
+  value.includes(`127.0.0.1:${backendPort}`) ||
+  value.includes(`localhost:${backendPort}`);
+
+const inspectServeOwnership = (
+  value: unknown,
+  backendPort: number,
+): ServeOwnership => {
+  const configured = hasMeaningfulServeValue(value);
+  if (!configured) {
+    return { configured: false, managedByMira: false };
+  }
+
+  const stringLeaves = collectServeStringLeaves(value);
+  const managedTargets = stringLeaves.filter((item) =>
+    isManagedTarget(item, backendPort),
   );
+  const otherTargets = stringLeaves.filter(
+    (item) => !isManagedTarget(item, backendPort),
+  );
+
+  // Conservative by design: Mira may only mutate a Serve configuration when
+  // every string target in the active configuration points to its own Host.
+  // Mixed or unfamiliar handlers are treated as user-owned configuration.
+  return {
+    configured: true,
+    managedByMira:
+      managedTargets.length > 0 && otherTargets.length === 0,
+  };
 };
 
 const buildAccessUrl = (dnsName: string | null, servePort: number) => {
@@ -270,7 +335,9 @@ export class TailscaleRemoteAccessService {
     return "connecting" as const;
   }
 
-  async getSnapshot(options: { verifyHealth?: boolean } = {}): Promise<TailscaleRemoteAccessSnapshot> {
+  async getSnapshot(
+    options: { verifyHealth?: boolean } = {},
+  ): Promise<TailscaleRemoteAccessSnapshot> {
     const config = tailscaleRemoteAccessRepository.getConfig();
     const pairedDevices = tailscaleRemoteAccessRepository.listDevices();
 
@@ -308,13 +375,9 @@ export class TailscaleRemoteAccessService {
       }
 
       const serveStatus = await this.readServeStatus();
-      const serveConfigured = hasServeConfiguration(serveStatus);
-      const serveManagedByMira = containsManagedTarget(
-        serveStatus,
-        CONFIG.PORT,
-      );
+      const ownership = inspectServeOwnership(serveStatus, CONFIG.PORT);
 
-      if (serveConfigured && !serveManagedByMira) {
+      if (ownership.configured && !ownership.managedByMira) {
         return {
           config,
           pairedDevices,
@@ -323,20 +386,20 @@ export class TailscaleRemoteAccessService {
             state: "serve_conflict",
             serveConfigured: true,
             error:
-              "An existing Tailscale Serve configuration is present and is not managed by Mira",
+              "An existing Tailscale Serve configuration is present and is not exclusively managed by Mira",
           }),
         };
       }
 
-      if (config.enabled && !serveManagedByMira) {
+      if (config.enabled && !ownership.managedByMira) {
         return {
           config,
           pairedDevices,
           runtime: createBaseRuntime({
             ...common,
             state: "serve_not_configured",
-            serveConfigured,
-            serveManagedByMira,
+            serveConfigured: ownership.configured,
+            serveManagedByMira: ownership.managedByMira,
           }),
         };
       }
@@ -348,8 +411,8 @@ export class TailscaleRemoteAccessService {
           runtime: createBaseRuntime({
             ...common,
             state: "connected",
-            serveConfigured,
-            serveManagedByMira,
+            serveConfigured: ownership.configured,
+            serveManagedByMira: ownership.managedByMira,
           }),
         };
       }
@@ -397,7 +460,9 @@ export class TailscaleRemoteAccessService {
     }
   }
 
-  async updateEnabled(enabled: boolean): Promise<TailscaleRemoteAccessSnapshot> {
+  async updateEnabled(
+    enabled: boolean,
+  ): Promise<TailscaleRemoteAccessSnapshot> {
     const currentConfig = tailscaleRemoteAccessRepository.getConfig();
     const status = await this.readStatus();
 
@@ -409,21 +474,17 @@ export class TailscaleRemoteAccessService {
     }
 
     const serveStatus = await this.readServeStatus();
-    const serveConfigured = hasServeConfiguration(serveStatus);
-    const serveManagedByMira = containsManagedTarget(
-      serveStatus,
-      CONFIG.PORT,
-    );
+    const ownership = inspectServeOwnership(serveStatus, CONFIG.PORT);
 
-    if (serveConfigured && !serveManagedByMira) {
+    if (ownership.configured && !ownership.managedByMira) {
       throw new TailscaleRemoteAccessError(
         "TAILSCALE_SERVE_CONFLICT",
-        "Mira did not change Tailscale Serve because another configuration already exists",
+        "Mira did not change Tailscale Serve because another or mixed configuration already exists",
       );
     }
 
     try {
-      if (enabled && !serveManagedByMira) {
+      if (enabled && !ownership.managedByMira) {
         await this.runCommand([
           "serve",
           "--bg",
@@ -431,7 +492,7 @@ export class TailscaleRemoteAccessService {
           `--https=${currentConfig.servePort}`,
           `127.0.0.1:${CONFIG.PORT}`,
         ]);
-      } else if (!enabled && serveManagedByMira) {
+      } else if (!enabled && ownership.managedByMira) {
         await this.runCommand([
           "serve",
           `--https=${currentConfig.servePort}`,
