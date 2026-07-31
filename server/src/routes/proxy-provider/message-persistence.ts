@@ -1,4 +1,4 @@
-import { memoryService } from "@/memory/memory.service.js";
+import { memoryService } from "@/memory/runtime.js";
 import { shouldCommitTurnToMemory } from "@/memory/turn-commit-policy.js";
 import { threadService } from "@/services/thread.service.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.service/index.js";
