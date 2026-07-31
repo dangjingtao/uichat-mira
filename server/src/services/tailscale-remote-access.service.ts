@@ -188,59 +188,98 @@ const hasMeaningfulServeValue = (value: unknown): boolean => {
   return false;
 };
 
-const collectServeStringLeaves = (
-  value: unknown,
-  target: string[] = [],
-): string[] => {
-  if (typeof value === "string") {
-    if (value.trim()) {
-      target.push(value.trim().toLowerCase());
-    }
-    return target;
+const meaningfulEntries = (value: unknown) =>
+  isRecord(value)
+    ? Object.entries(value).filter(([, item]) =>
+        hasMeaningfulServeValue(item),
+      )
+    : [];
+
+const isManagedTarget = (value: unknown, backendPort: number) => {
+  if (typeof value !== "string") {
+    return false;
   }
 
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectServeStringLeaves(item, target));
-    return target;
-  }
-
-  if (isRecord(value)) {
-    Object.values(value).forEach((item) =>
-      collectServeStringLeaves(item, target),
-    );
-  }
-
-  return target;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized.includes(`127.0.0.1:${backendPort}`) ||
+    normalized.includes(`localhost:${backendPort}`)
+  );
 };
-
-const isManagedTarget = (value: string, backendPort: number) =>
-  value.includes(`127.0.0.1:${backendPort}`) ||
-  value.includes(`localhost:${backendPort}`);
 
 const inspectServeOwnership = (
   value: unknown,
   backendPort: number,
+  servePort: number,
 ): ServeOwnership => {
   const configured = hasMeaningfulServeValue(value);
   if (!configured) {
     return { configured: false, managedByMira: false };
   }
 
-  const stringLeaves = collectServeStringLeaves(value);
-  const managedTargets = stringLeaves.filter((item) =>
-    isManagedTarget(item, backendPort),
+  if (!isRecord(value)) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const allowedRootKeys = new Set(["TCP", "Web", "AllowFunnel"]);
+  const hasUnknownRootConfig = Object.entries(value).some(
+    ([key, item]) =>
+      !allowedRootKeys.has(key) && hasMeaningfulServeValue(item),
   );
-  const otherTargets = stringLeaves.filter(
-    (item) => !isManagedTarget(item, backendPort),
+  if (hasUnknownRootConfig || hasMeaningfulServeValue(value.AllowFunnel)) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const tcpEntries = meaningfulEntries(value.TCP);
+  if (tcpEntries.length !== 1 || tcpEntries[0]?.[0] !== String(servePort)) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const tcpConfig = tcpEntries[0]?.[1];
+  if (
+    !isRecord(tcpConfig) ||
+    tcpConfig.HTTPS !== true ||
+    Object.entries(tcpConfig).some(
+      ([key, item]) => key !== "HTTPS" && hasMeaningfulServeValue(item),
+    )
+  ) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const webEntries = meaningfulEntries(value.Web);
+  if (webEntries.length !== 1 || !webEntries[0]?.[0].endsWith(`:${servePort}`)) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const webConfig = webEntries[0]?.[1];
+  if (!isRecord(webConfig)) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const webExtraConfig = Object.entries(webConfig).some(
+    ([key, item]) => key !== "Handlers" && hasMeaningfulServeValue(item),
+  );
+  if (webExtraConfig) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const handlerEntries = meaningfulEntries(webConfig.Handlers);
+  if (handlerEntries.length !== 1 || handlerEntries[0]?.[0] !== "/") {
+    return { configured: true, managedByMira: false };
+  }
+
+  const handler = handlerEntries[0]?.[1];
+  if (!isRecord(handler) || !isManagedTarget(handler.Proxy, backendPort)) {
+    return { configured: true, managedByMira: false };
+  }
+
+  const handlerExtraConfig = Object.entries(handler).some(
+    ([key, item]) => key !== "Proxy" && hasMeaningfulServeValue(item),
   );
 
-  // Conservative by design: Mira may only mutate a Serve configuration when
-  // every string target in the active configuration points to its own Host.
-  // Mixed or unfamiliar handlers are treated as user-owned configuration.
   return {
     configured: true,
-    managedByMira:
-      managedTargets.length > 0 && otherTargets.length === 0,
+    managedByMira: !handlerExtraConfig,
   };
 };
 
@@ -375,7 +414,11 @@ export class TailscaleRemoteAccessService {
       }
 
       const serveStatus = await this.readServeStatus();
-      const ownership = inspectServeOwnership(serveStatus, CONFIG.PORT);
+      const ownership = inspectServeOwnership(
+        serveStatus,
+        CONFIG.PORT,
+        config.servePort,
+      );
 
       if (ownership.configured && !ownership.managedByMira) {
         return {
@@ -386,7 +429,7 @@ export class TailscaleRemoteAccessService {
             state: "serve_conflict",
             serveConfigured: true,
             error:
-              "An existing Tailscale Serve configuration is present and is not exclusively managed by Mira",
+              "An existing Tailscale Serve, Funnel, Service, or mixed endpoint configuration is not exclusively managed by Mira",
           }),
         };
       }
@@ -474,12 +517,16 @@ export class TailscaleRemoteAccessService {
     }
 
     const serveStatus = await this.readServeStatus();
-    const ownership = inspectServeOwnership(serveStatus, CONFIG.PORT);
+    const ownership = inspectServeOwnership(
+      serveStatus,
+      CONFIG.PORT,
+      currentConfig.servePort,
+    );
 
     if (ownership.configured && !ownership.managedByMira) {
       throw new TailscaleRemoteAccessError(
         "TAILSCALE_SERVE_CONFLICT",
-        "Mira did not change Tailscale Serve because another or mixed configuration already exists",
+        "Mira did not change Tailscale because a Serve, Funnel, Service, or mixed endpoint configuration already exists",
       );
     }
 
