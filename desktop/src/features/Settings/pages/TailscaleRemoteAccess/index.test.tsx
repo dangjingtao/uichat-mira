@@ -101,15 +101,19 @@ describe("TailscaleRemoteAccessSettings", () => {
     expect(
       screen.getByText("https://studio-pc.real-tailnet.ts.net"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("https://mira-desktop.example.ts.net")).not.toBeInTheDocument();
-    expect(screen.getByText("还没有通过 mobile 配对协议登记的设备。")).toBeInTheDocument();
+    expect(
+      screen.queryByText("https://mira-desktop.example.ts.net"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("还没有通过 mobile 配对协议登记的设备。"),
+    ).toBeInTheDocument();
     expect(apiMocks.get).toHaveBeenCalledTimes(1);
   });
 
   it("checks the backend and saves an enabled Serve draft", async () => {
     render(<TailscaleRemoteAccessSettings />);
 
-    await screen.findByText("已连接");
+    expect(await screen.findAllByText("已连接")).toHaveLength(2);
 
     await userEvent.click(
       screen.getByRole("button", { name: "检查连接" }),
@@ -132,7 +136,7 @@ describe("TailscaleRemoteAccessSettings", () => {
         "远程连接设置已保存",
       );
     });
-    expect(await screen.findByText("可访问")).toBeInTheDocument();
+    expect(await screen.findAllByText("可访问")).toHaveLength(2);
   });
 
   it("opens help with the explicit private-network and authentication boundary", async () => {
