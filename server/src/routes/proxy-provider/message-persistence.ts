@@ -1,3 +1,4 @@
+import { memoryService } from "@/memory/memory.service.js";
 import { threadService } from "@/services/thread.service.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.service/index.js";
 import {
@@ -173,6 +174,10 @@ const shouldClearStaleApprovalPlaceholder = (
   );
 };
 
+const isRagAssistantMessage = (
+  metadata: Record<string, unknown> | undefined,
+) => Boolean(metadata?.rag && typeof metadata.rag === "object");
+
 export const persistAssistantMessage = ({
   threadId,
   userId,
@@ -208,7 +213,7 @@ export const persistAssistantMessage = ({
     return;
   }
 
-  threadService.createMessage(threadId, userId, {
+  const persisted = threadService.createMessage(threadId, userId, {
     id: assistantMessageId,
     parentId,
     role: "assistant",
@@ -216,6 +221,33 @@ export const persistAssistantMessage = ({
     parts: normalizedParts,
     metadata,
   });
+
+  if (!isRagAssistantMessage(metadata) && parentId) {
+    const userMessage = threadService.getMessageById(parentId, userId);
+    if (userMessage?.role === "user" && userMessage.content.trim()) {
+      void memoryService
+        .commitTurn({
+          userId,
+          source: {
+            threadId,
+            userMessageId: userMessage.id,
+            assistantMessageId: persisted.id,
+          },
+          userText: userMessage.content,
+          assistantText: persisted.content,
+        })
+        .catch((error: unknown) => {
+          console.warn("[memory] failed to consolidate committed turn", {
+            threadId,
+            userMessageId: userMessage.id,
+            assistantMessageId: persisted.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+  }
+
+  return persisted;
 };
 
 export const generateThreadTitleFromMessages = async ({
