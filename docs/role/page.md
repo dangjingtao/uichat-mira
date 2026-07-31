@@ -1,162 +1,163 @@
-# Role 页面设计
+---
+status: current
+owner: role / frontend
+last_verified: 2026-08-01
+layer: wiki
+module: Role
+feature: Workbench
+doc_type: current-contract
+canonical: true
+related:
+  - ../ROLE_CURRENT_TRUTH.md
+  - README.md
+  - role-api.md
+  - preview-and-media.md
+---
 
-Layer: raw-source
-Module: Role
-Feature: RolePage
-Doc Type: current-contract
+# Role 工作台
 
-Status: Current
-Owner: role / frontend
-Last verified: 2026-06-25
+## 文档范围
 
-## 单点真相范围
+本页说明设置页 Role Workbench 的字段、保存行为和用户可见操作。真实请求注入见 [[role/runtime]]。
 
-这页说明 Role 设置页本身负责什么，不负责什么。
+## 当前入口
 
-对应源码目录：
+```text
+Settings
+→ Roles / Personas
+```
 
-- `desktop/src/features/Settings/pages/Personas`
-
-## 适合什么时候读
-
-这些场景建议先看这页：
-
-- 想改角色工作台页面
-- 想确认某个字段是“角色素材”还是“请求编排结果”
-- 想决定某个逻辑该写在页面层还是注入层
-
-## 页面定位
-
-Role 页面是角色 / 提示词素材工作台，用于定义可复用的 prompt prototype。
-
-它的职责是编辑“角色素材”，不是决定最终请求如何拼装。
-
-最终 prompt 编排策略应放在独立的 prompt injection / request builder 层。
-
-## 页面职责
-
-Role 页面负责：
-
-- 创建角色
-- 编辑角色字段
-- 删除角色
-- 预览角色文本素材
-- 维护头像、标签、状态
-
-Role 页面不负责：
-
-- 决定最终请求里的 system prompt 排序
-- 把角色直接插进聊天消息列表
-- 决定 provider-specific 请求格式
-
-## 目录结构
+源码：
 
 ```text
 desktop/src/features/Settings/pages/Personas/
-  components/
-    RoleAvatar.tsx
-    RoleCard.tsx
-    RoleEditor.tsx
-    RoleFieldDrawer.tsx
-    RoleList.tsx
-    RolePreviewDrawer.tsx
-    RoleSectionTitle.tsx
-  hooks/
-    useRoles.ts
-  i18n/
-    en-US.ts
-    zh-CN.ts
-    index.ts
-    useRoleTranslation.ts
-  constants.ts
-  types.ts
-  utils.ts
-  index.tsx
 ```
 
-## 字段语义
+## 当前对象
 
-| 字段 | 含义 | 作用 |
+| 字段 | 工作台用途 | 是否进入真实 Role Prompt |
 | --- | --- | --- |
-| `name` | 角色名称 | 列表标题、Chat 标签、后续 prompt 标识 |
-| `summary` | 一句话简介 | 列表副标题、搜索摘要、tooltip |
-| `avatarId` | 头像 ID | Chat 助手头像与角色标签头像 |
-| `status` | `active` / `draft` | 控制角色是否可被 Chat 选择 |
-| `tags` | 标签数组 | 搜索、筛选、辅助识别 |
-| `prompt.description` | 角色描述 | 身份、背景、定位 |
-| `prompt.worldview` | 世界观 | 判断方式、价值基底 |
-| `prompt.persona` | 人格核心 | 稳定行为和口吻 |
-| `prompt.scenario` | 场景 | 常见工作环境与关系 |
-| `prompt.exampleDialogues` | 示例对话 | 风格示范 |
-| `prompt.style` | 表达风格 | 句长、语气、结构 |
-| `prompt.constraints` | 约束规则 | 硬边界与冲突优先级 |
+| name | 列表、Thread 标签、Role system message 中的角色名 | 是 |
+| summary | 列表摘要、tooltip、Preview 展示 | 否 |
+| avatarId | 设置页和 Chat 助手头像 | 否 |
+| status | draft / active | 否 |
+| tags | 列表识别，最多三个 | 否 |
+| description | 身份与背景 | 是 |
+| worldview | 判断与价值基底 | 是 |
+| persona | 稳定人设 | 是 |
+| scenario | 场景 | 是 |
+| exampleDialogues | 示例对话文本 | 是 |
+| style | 表达风格 | 是 |
+| constraints | 文本约束 | 是 |
+| llmProfile | 可选采样参数 | 独立作为 params，不进入 Prompt 文本 |
 
-## 字段与 Prompt 编排的关系
+`{{user}}` 和 `{{char}}` 当前只是普通文本，不会做变量替换。
 
-页面字段本身不是最终 prompt 文本，更适合视作“可编译素材”。
+## 新建行为
 
-也就是说：
+点击 New 时，页面会立即调用后端创建 Role：
 
-- `description`、`worldview`、`persona` 等字段是结构化输入
-- 最终是输出成一条还是多条注入消息，应由 prompt builder 决定
-- 同一个字段未来可以在不同 generation type 下采用不同模板
+```text
+POST /roles
+status = draft
+```
 
-所以 Role 页面保存的是素材，不是最终聊天请求片段。
+它不是浏览器里的未保存临时对象。离开页面不会自动删除。
 
-## 状态管理
+## 保存行为
 
-当前统一由 `useRoles.ts` 管理：
+### 主保存
 
-- `roles`
-- `selectedRoleId`
-- `draft*`
-- `isEdited`
-- `formErrors`
-- `activeField`
-- `fieldEditorValue`
+主保存提交完整工作台 draft，并固定写入：
 
-保存链路：
+```text
+status = active
+```
 
-1. 页面初始化请求 `GET /roles`
-2. 新建角色调用 `POST /roles`
-3. 编辑保存调用 `PATCH /roles/:id`
-4. 删除调用 `DELETE /roles/:id`
+因此新角色第一次主保存相当于激活。
 
-## 校验约定
+当前 UI 没有完整的下架 / 发布版本管理。
 
-### 硬校验
+### Prompt 字段抽屉
 
-- `name` 必填
-- `name` 最长 50 字符
-- `summary` 最长 120 字符
+字段抽屉中的 Save 只把文本写回页面 draft；仍需点击主保存才会写入后端。
 
-### 软提示
+### LLM Profile 抽屉
 
-- `description`、`persona`、`scenario` 同时为空时，提示“模型可能无法识别该角色”
+LLM Profile Drawer 的 Save 会立即调用 `PATCH /roles/:id`，单独持久化参数。
 
-### `tags`
+这两类“保存”语义不同。
 
-- 最多 3 个
-- `trim` 后过滤空值
+## Reset
 
-## 当前已知边界
+Reset 只恢复当前页面 draft 到最近一次已加载的 Role 数据，不会创建版本，也不会撤销此前已单独保存的 LLM Profile。
 
-下面这些点现在要按真实现状理解：
+## Delete
 
-- 角色与 chat 线程的绑定已经支持 `roleId` 持久化
-- 页面里的 Role Preview 仍更接近“素材预览”，不等于真实 request snapshot
-- 真正的 request-only 注入已经落到线程上下文层，不由页面本身承担
+删除会调用 `DELETE /roles/:id`。
 
-## 后续最值得补什么
+由于 Thread 外键使用 `ON DELETE SET NULL`：
 
-- 把 Preview 从“文本拼接预览”升级为“request messages 调试预览”
-- 支持角色字段编译结果的结构化调试
-- 当角色编译链更完整后，页面可增加“编译后的注入消息预览”
+- Role row 被删除；
+- 已绑定 Thread 的 roleId 变为空；
+- Thread 和 Messages 保留。
 
-## 相关文档
+## 状态
 
-- `README.md`
-- `role-api.md`
-- `chat-integration.md`
-- `prompt-injection-design.md`
+工作台列表读取当前用户全部 Role，包括 active 和 draft。
 
+Chat picker 只读取 active。
+
+工作台普通保存总是 active，因此当前 status 更接近“新建未确认 / 已保存可选”，不是完整发布生命周期。
+
+## 表单约束
+
+### Desktop
+
+- name 必填；
+- name 最长 50；
+- summary 最长 120；
+- Prompt 核心字段全空时只做软提示；
+- LLM Profile 只接受可解析 finite number。
+
+### Backend
+
+- name 空值创建时回退 `Untitled Role`；
+- tags trim、去空并截取前三个；
+- Prompt 缺字段补空字符串，Patch 时 merge；
+- LLM Profile 只保留 number；
+- 没有 name / summary / Prompt 长度限制；
+- 没有 LLM Profile 数值范围限制。
+
+## 当前操作矩阵
+
+| 操作 | 当前状态 |
+| --- | --- |
+| 新建 | 已实现，立即创建 backend draft |
+| 编辑字段 | 已实现 |
+| 保存完整 Role | 已实现，写 active |
+| 单独保存 LLM Profile | 已实现 |
+| Reset 页面 draft | 已实现 |
+| Preview | 已实现，但不是实际请求或模型回复 |
+| 删除 | 已实现，Thread 解除绑定 |
+| 复制 | 未实现 |
+| 导入 | 未实现 |
+| 导出 | 未实现 |
+| 版本历史 | 未实现 |
+| 发布 / 下架流程 | 未完整实现 |
+
+## Starter Role
+
+真实 starter data 由 backend 在 roles 全表为空时写入，内容为英文。
+
+桌面存在本地化 `buildStarterRoles(...)`，当前没有真实调用方，不能以它判断新用户一定获得本地化示例。
+
+## 验证清单
+
+- [ ] 点击 New 后理解它已经写入后端；
+- [ ] Prompt Drawer 修改后点击主保存；
+- [ ] LLM Profile 单独保存后确认其他 draft 是否仍未保存；
+- [ ] active Role 能在 Chat picker 中出现；
+- [ ] 删除 Role 后重要 Thread 仍存在且 roleId 为空；
+- [ ] 不把 Preview 当成模型测试；
+- [ ] 不向用户宣称 Copy / Import 已实现。
