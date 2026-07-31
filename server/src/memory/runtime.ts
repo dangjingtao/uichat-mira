@@ -6,9 +6,7 @@ import type { MemoryConsolidator } from "./types.js";
 
 const memoryRoot = path.resolve(CONFIG.DATABASE_DIR, "memory");
 
-let consolidatorPromise:
-  | Promise<InstanceType<typeof import("./llm-memory.consolidator.js").LlmMemoryConsolidator>>
-  | undefined;
+let consolidatorPromise: Promise<MemoryConsolidator> | undefined;
 
 const lazyConsolidator: MemoryConsolidator = {
   async propose(input) {
