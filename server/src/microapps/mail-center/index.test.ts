@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const imapMockState = vi.hoisted(() => ({
-  fetchRanges: [] as string[],
+  fetchRanges: [] as Array<string | number[]>,
   lockReadOnly: [] as boolean[],
+  searches: [] as Array<{ since: Date; before: Date }>,
 }));
 
 vi.mock("imapflow", () => ({
@@ -20,9 +21,15 @@ vi.mock("imapflow", () => ({
       return { messages: 25, unseen: 0 };
     }
 
-    async *fetch(range: string) {
+    async search(query: { since: Date; before: Date }) {
+      imapMockState.searches.push(query);
+      return [7, 9];
+    }
+
+    async *fetch(range: string | number[]) {
       imapMockState.fetchRanges.push(range);
-      for (let uid = 6; uid <= 25; uid += 1) {
+      const uids = Array.isArray(range) ? range : Array.from({ length: 20 }, (_, index) => index + 6);
+      for (const uid of uids) {
         yield {
           uid,
           envelope: {
@@ -122,6 +129,7 @@ describe("MailCenter queryMail", () => {
   beforeEach(() => {
     imapMockState.fetchRanges.length = 0;
     imapMockState.lockReadOnly.length = 0;
+    imapMockState.searches.length = 0;
     process.env.DATABASE_URL = `file:${createTimestampedTestArtifactPath("db", "mail-query", ".sqlite")}`;
     resetDatabaseClients();
     const sqlite = getSqlite();
@@ -286,5 +294,20 @@ describe("MailCenter queryMail", () => {
     expect(result.syncedCount).toBe(20);
     expect(imapMockState.fetchRanges).toEqual(["6:*"]);
     expect(imapMockState.lockReadOnly).toEqual([true]);
+  });
+
+  it("syncs an explicit calendar range by IMAP UID", async () => {
+    const account = createAccount(1, "account-1");
+    const result = await createMailCenterService().syncInbox(1, account.id, {
+      since: "2026-07-29T16:00:00.000Z",
+      until: "2026-07-30T16:00:00.000Z",
+    });
+
+    expect(result.syncedCount).toBe(2);
+    expect(imapMockState.fetchRanges).toEqual([[7, 9]]);
+    expect(imapMockState.searches[0]).toEqual({
+      since: new Date("2026-07-29T16:00:00.000Z"),
+      before: new Date("2026-07-30T16:00:00.000Z"),
+    });
   });
 });

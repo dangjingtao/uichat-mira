@@ -7,10 +7,15 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({ i18n: { language: "zh-CN" } }),
 }));
 
+vi.mock("@/app/providers/AuthProvider", () => ({
+  useAuth: () => ({ session: { user: { username: "Tomz" } } }),
+}));
+
 vi.mock("./api/dashboard-api", () => ({
   getDashboardOverview: vi.fn(() => new Promise(() => undefined)),
   getDashboardWeather: vi.fn(() => new Promise(() => undefined)),
   getDashboardNews: vi.fn(() => new Promise(() => undefined)),
+  getDashboardMail: vi.fn(() => new Promise(() => undefined)),
 }));
 
 describe("DashboardPage", () => {
@@ -23,8 +28,10 @@ describe("DashboardPage", () => {
     expect(container.querySelector(".stable-scrollbar")).toBeInTheDocument();
     expect(container.querySelector(".max-w-\\[1180px\\]")).toBeInTheDocument();
     expect(container.querySelector(".grid.items-stretch")).toBeInTheDocument();
-    expect(container.querySelector(".md\\:grid-cols-3")).toBeInTheDocument();
-    expect(container.querySelector(".md\\:grid-rows-\\[320px_auto\\]")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("工作台加载中")).toHaveLength(4);
+    expect(container.querySelector(".md\\:grid-cols-\\[minmax\\(250px\\,0\\.9fr\\)_minmax\\(0\\,2fr\\)\\]")).toBeInTheDocument();
+    expect(container.querySelector('[class*="2xl:grid-cols"]')).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText("工作台加载中")).toHaveLength(3);
+    expect(screen.getByLabelText("工作台摘要")).toHaveTextContent("Tomz");
+    expect(screen.getByLabelText("洞见微应用待接入")).toBeInTheDocument();
   });
 });

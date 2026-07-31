@@ -104,6 +104,11 @@ export type MailQueryResult = {
   nextCursor: string | null;
 };
 
+export type MailSyncRange = {
+  since: string;
+  until: string;
+};
+
 type ParsedMailLike = {
   from?: { value?: MessageAddressObject[] };
   to?: { value?: MessageAddressObject[] };
@@ -274,7 +279,13 @@ export const createMailCenterService = () => ({
       for (const selected of selectedAccounts) {
         if (requestedSync === "if-stale" && !isStale(selected.lastSyncedAt)) continue;
         try {
-          const result = await this.syncInbox(input.userId, selected.id);
+          const result = await this.syncInbox(
+            input.userId,
+            selected.id,
+            input.since && input.until
+              ? { since: input.since, until: input.until }
+              : undefined,
+          );
           sync.syncedCount += result.syncedCount;
           sync.lastSyncedAt = result.lastSyncedAt;
         } catch {
@@ -516,7 +527,7 @@ export const createMailCenterService = () => ({
     };
   },
 
-  async syncInbox(userId: number, accountId: string) {
+  async syncInbox(userId: number, accountId: string, range?: MailSyncRange) {
     const account = mailAccountsRepository.getByIdForUser(accountId, userId);
     if (!account) {
       throw new Error(`Mail account not found: ${accountId}`);
@@ -566,9 +577,17 @@ export const createMailCenterService = () => ({
           rawHeaders: Record<string, string>;
         }> = [];
 
-        if (messageCount > 0) {
+        const matchingUids = range
+          ? await client.search(
+              { since: new Date(range.since), before: new Date(range.until) },
+              { uid: true },
+            )
+          : null;
+        const fetchRange = range ? matchingUids || [] : `${startSeq}:*`;
+
+        if (messageCount > 0 && (typeof fetchRange === "string" || fetchRange.length > 0)) {
           for await (const message of client.fetch(
-            `${startSeq}:*`,
+            fetchRange,
             {
               uid: true,
               envelope: true,
@@ -576,7 +595,7 @@ export const createMailCenterService = () => ({
               internalDate: true,
               source: true,
             },
-            { uid: false },
+            { uid: Boolean(range) },
           )) {
             const parsed = message.source
               ? ((await simpleParser(message.source)) as ParsedMailLike)

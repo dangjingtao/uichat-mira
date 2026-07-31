@@ -48,6 +48,7 @@
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "fast-glob": "^3.3.3",
+    "fast-xml-parser": "^5.10.1",
     "fastify": "^4.28.1",
     "iconv-lite": "^0.7.2",
     "imapflow": "^1.4.6",

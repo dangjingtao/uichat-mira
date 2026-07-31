@@ -1,5 +1,5 @@
 import { get } from "@/shared/lib/request";
-import type { ClockWeatherData, DashboardOverview, NewsData } from "../types/dashboard-types";
+import type { ClockWeatherData, DashboardOverview, MailData, NewsData } from "../types/dashboard-types";
 
 export function getDashboardOverview() {
   return get<DashboardOverview>("/dashboard/overview");
@@ -12,4 +12,9 @@ export function getDashboardWeather() {
 export function getDashboardNews(language?: string) {
   const suffix = language ? `?language=${encodeURIComponent(language)}` : "";
   return get<NewsData>(`/dashboard/news${suffix}`);
+}
+
+export function getDashboardMail(language?: string) {
+  const suffix = language ? `?language=${encodeURIComponent(language)}` : "";
+  return get<MailData>(`/dashboard/mail${suffix}`);
 }

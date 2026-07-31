@@ -1,9 +1,9 @@
 import { Streamdown } from "streamdown";
 import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
+import { createMathPlugin } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { memo, type ComponentProps } from "react";
-// import "katex/dist/katex.min.css";
+import "katex/dist/katex.min.css";
 
 type MarkdownTextProps = Omit<ComponentProps<typeof Streamdown>, "children"> & {
   children?: string;
@@ -17,7 +17,8 @@ const defaultMarkdownClassName =
   "[&_li]:text-text-primary [&_blockquote]:text-text-secondary";
 
 const basicPlugins = {};
-const fullPlugins = { code, math, mermaid };
+const latexMath = createMathPlugin({ singleDollarTextMath: true });
+const fullPlugins = { code, math: latexMath, mermaid };
 const INTERNAL_SKILL_REPORT_MARKER =
   /<!--mira-skill-report:[a-zA-Z0-9_-]+:(?:pdf|html)-->/g;
 

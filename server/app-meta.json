@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.99.4",
+  "version": "0.99.6",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
@@ -36,13 +36,23 @@
       "branch": "dev",
       "versions": [
         {
+          "version": "0.99.6",
+          "commit": {
+            "hash": "7466a8631aef8fd046396a2b6c5daa5afadd43ab",
+            "shortHash": "7466a86",
+            "message": "docs(role): establish workbench and runtime truth",
+            "author": "DangJingtao",
+            "date": "2026-08-01T04:13:12+08:00"
+          }
+        },
+        {
           "version": "0.99.4",
           "commit": {
-            "hash": "8da2012589f07ac517d234af94ae69d82c9a667f",
-            "shortHash": "8da2012",
-            "message": "fix(agent): make Planner prefer bounded SubAgent delegation",
-            "author": "DangJingtao",
-            "date": "2026-07-27T16:22:38+08:00"
+            "hash": "f33a581e06ab0765d9df1a0292bf16e077a008b3",
+            "shortHash": "f33a581",
+            "message": "Merge branch 'dev' of https://github.com/dangjingtao/uichat-mira into dev",
+            "author": "Tomz",
+            "date": "2026-07-28T16:33:47+08:00"
           }
         },
         {

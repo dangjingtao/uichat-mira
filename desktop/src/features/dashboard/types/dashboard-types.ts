@@ -1,10 +1,7 @@
 export type DashboardWidgetType =
   | "clock-weather"
   | "news"
-  | "mail"
-  | "project-status"
-  | "countdown"
-  | "recent-artifacts";
+  | "mail";
 
 export type DashboardWidgetSize = "small" | "medium" | "large";
 export type ClockWeatherStatus = "loading" | "ready" | "unavailable";
@@ -23,11 +20,6 @@ export interface DashboardOverview {
   widgets: DashboardWidget[];
 }
 
-export interface DemoData {
-  demo: true;
-  sourceLabel: string;
-}
-
 export interface ClockWeatherData {
   demo: false;
   sourceLabel: "IP 定位 + Open-Meteo";
@@ -36,19 +28,19 @@ export interface ClockWeatherData {
   dateLabel: string;
   locationLabel: string;
   weatherAvailable: boolean;
+  weatherCode: number | null;
+  isDay: boolean | null;
   weather: string;
   temperature: string;
   forecast: string;
 }
 
 export interface NewsData { demo: false; sourceLabel: "NewsHub"; status: "loading" | "empty" | "ready" | "unavailable"; items: Array<{ summary: string; category: string; sourceName: string; publishedAt: string; url: string }>; }
-export interface MailData extends DemoData { unreadCount: number; items: Array<{ sender: string; subject: string; preview: string; receivedAt: string }>; }
-export interface ProjectStatusData extends DemoData { items: Array<{ name: string; status: string; detail: string }>; }
-export interface CountdownData extends DemoData { items: Array<{ name: string; targetAt: string; daysLeft: number }>; }
-export interface RecentArtifactsData extends DemoData { items: Array<{ name: string; kind: string; deliveredAt: string; detail: string }>; }
-
+export type MailPriority = "urgent" | "high" | "normal";
+export interface MailAttentionItem { id: string; sender: string; subject: string; receivedAt: string; content: string; priority: MailPriority; attentionReason: string; suggestedNextStep: string; }
+export interface MailData { demo: false; sourceLabel: "邮件中心"; status: "loading" | "empty" | "ready" | "unavailable"; totalToday: number; attentionCount: number; items: MailAttentionItem[]; }
 export const dashboardWidgetTypes: DashboardWidgetType[] = [
-  "clock-weather", "news", "mail", "project-status", "countdown", "recent-artifacts",
+  "clock-weather", "news", "mail",
 ];
 
 export function isDashboardWidgetType(value: string): value is DashboardWidgetType {

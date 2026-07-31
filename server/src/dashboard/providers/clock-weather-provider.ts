@@ -12,6 +12,7 @@ type OpenMeteoResponse = {
   current?: {
     temperature_2m?: number;
     weather_code?: number;
+    is_day?: number;
   };
   daily?: {
     temperature_2m_min?: number[];
@@ -21,7 +22,7 @@ type OpenMeteoResponse = {
 
 type WeatherSnapshot = Pick<
   ClockWeatherData,
-  "locationLabel" | "weatherAvailable" | "weather" | "temperature" | "forecast"
+  "locationLabel" | "weatherAvailable" | "weatherCode" | "isDay" | "weather" | "temperature" | "forecast"
 >;
 
 const WEATHER_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -63,6 +64,8 @@ let weatherRequest: Promise<WeatherSnapshot> | null = null;
 const unavailableSnapshot: WeatherSnapshot = {
   locationLabel: "位置不可用",
   weatherAvailable: false,
+  weatherCode: null,
+  isDay: null,
   weather: "天气不可用",
   temperature: "--",
   forecast: "暂时无法获取天气数据",
@@ -90,6 +93,8 @@ export const getClockWeatherLoadingData = (now: Date): ClockWeatherData =>
   createData(now, {
     locationLabel: "正在定位",
     weatherAvailable: false,
+    weatherCode: null,
+    isDay: null,
     weather: "天气加载中",
     temperature: "--",
     forecast: "正在获取当前位置天气",
@@ -105,7 +110,7 @@ const fetchWeatherSnapshot = async (): Promise<WeatherSnapshot> => {
     const params = new URLSearchParams({
       latitude: String(location.latitude),
       longitude: String(location.longitude),
-      current: "temperature_2m,weather_code",
+      current: "temperature_2m,weather_code,is_day",
       daily: "temperature_2m_min,temperature_2m_max",
       forecast_days: "1",
       timezone: "auto",
@@ -117,15 +122,18 @@ const fetchWeatherSnapshot = async (): Promise<WeatherSnapshot> => {
     );
     const currentTemperature = weather.current?.temperature_2m;
     const weatherCode = weather.current?.weather_code;
+    const isDay = weather.current?.is_day;
     const minTemperature = weather.daily?.temperature_2m_min?.[0];
     const maxTemperature = weather.daily?.temperature_2m_max?.[0];
-    if (![currentTemperature, weatherCode, minTemperature, maxTemperature].every((value) => typeof value === "number")) {
+    if (![currentTemperature, weatherCode, isDay, minTemperature, maxTemperature].every((value) => typeof value === "number")) {
       throw new Error("Weather data is incomplete");
     }
 
     return {
       locationLabel: location.city?.trim() || "当前位置",
       weatherAvailable: true,
+      weatherCode: weatherCode as number,
+      isDay: isDay === 1,
       weather: WEATHER_LABELS[weatherCode as number] ?? "天气",
       temperature: `${Math.round(currentTemperature as number)}°C`,
       forecast: `今日 ${Math.round(minTemperature as number)}°C - ${Math.round(maxTemperature as number)}°C`,

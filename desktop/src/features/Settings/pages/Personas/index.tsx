@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
+import Card from "@/shared/ui/Card";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import RoleEditor from "./components/RoleEditor";
 import RoleFieldDrawer from "./components/RoleFieldDrawer";
@@ -83,7 +84,10 @@ export default function RoleSettings() {
         description={t("page.description")}
         contentClassName="pt-6"
       >
-        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[280px_minmax(0,1fr)] gap-3">
+        <Card
+          padding="none"
+          className="grid min-h-0 min-w-0 flex-1 grid-cols-[280px_minmax(0,1fr)] overflow-hidden"
+        >
           <RoleList
             roles={roles}
             isLoading={isLoading}
@@ -117,7 +121,7 @@ export default function RoleSettings() {
             onReset={resetDraft}
             onDelete={handleDelete}
           />
-        </div>
+        </Card>
       </SettingsPageLayout>
 
       <RolePreviewDrawer

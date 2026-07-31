@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMcpMarketplaceRepository } from "@/db/repositories/mcp-marketplace.repository.js";
 import {
   createMcpMarketplaceCatalog,
@@ -240,10 +240,12 @@ describe("MCP marketplace catalog", () => {
     expect(
       repository.list(MCP_MARKETPLACE_SOURCE_URL, { limit: 20 }).servers[0]?.id,
     ).toBe("retained");
+    let failedRequests = 0;
     const failedCatalog = createMcpMarketplaceCatalog({
       repository,
       now: () => new Date("2026-07-31T12:00:00.000Z"),
       fetchPage: async () => {
+        failedRequests += 1;
         throw new Error("registry unavailable");
       },
     });
@@ -251,11 +253,100 @@ describe("MCP marketplace catalog", () => {
     expect(failedCatalog.getStatus()).toMatchObject({
       status: "failed",
       lastError: "registry unavailable",
+      nextAutoSyncAt: "2026-07-31T12:01:00.000Z",
     });
     expect(
       repository.list(MCP_MARKETPLACE_SOURCE_URL, { limit: 20 }).servers[0]?.id,
     ).toBe("retained");
     expect(failedCatalog.list({ limit: 20 }).servers[0]?.id).toBe("retained");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(failedRequests).toBe(1);
+
+    await failedCatalog.requestSync("incremental").task;
+    expect(failedRequests).toBe(2);
+    expect(failedCatalog.getStatus().nextAutoSyncAt).toBe(
+      "2026-07-31T12:02:00.000Z",
+    );
+    sqlite.close();
+  });
+
+  it("retries automatic sync failures with exponential backoff", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-01T00:00:00.000Z"));
+    const sqlite = new Database(":memory:");
+    try {
+      let requests = 0;
+      const catalog = createMcpMarketplaceCatalog({
+        repository: createMcpMarketplaceRepository(sqlite),
+        now: () => new Date(Date.now()),
+        fetchPage: async () => {
+          requests += 1;
+          if (requests < 3) throw new Error("registry unavailable");
+          return { entries: [entry("recovered")], nextCursor: null };
+        },
+      });
+      const stopAutoSync = catalog.startAutoSync();
+      try {
+        await catalog.requestSync("full").task;
+        expect(requests).toBe(1);
+        expect(catalog.getStatus().nextAutoSyncAt).toBe(
+          "2026-08-01T00:01:00.000Z",
+        );
+
+        await vi.advanceTimersByTimeAsync(60 * 1000);
+        expect(requests).toBe(2);
+        expect(catalog.getStatus().nextAutoSyncAt).toBe(
+          "2026-08-01T00:03:00.000Z",
+        );
+
+        await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+        expect(requests).toBe(3);
+        expect(catalog.getStatus()).toMatchObject({
+          status: "idle",
+          updatedCount: 1,
+          nextAutoSyncAt: "2026-08-01T06:03:00.000Z",
+        });
+      } finally {
+        stopAutoSync();
+      }
+    } finally {
+      sqlite.close();
+      vi.useRealTimers();
+    }
+  });
+
+  it("allows one retry after restarting with a persisted failure state", async () => {
+    const sqlite = new Database(":memory:");
+    const repository = createMcpMarketplaceRepository(sqlite);
+    repository.setSyncState({
+      sourceUrl: MCP_MARKETPLACE_SOURCE_URL,
+      status: "failed",
+      mode: "full",
+      lastAttemptAt: "2026-07-31T23:00:00.000Z",
+      lastSuccessfulSyncAt: null,
+      lastFullSyncAt: null,
+      watermark: null,
+      updatedCount: 0,
+      lastError: "previous process failed",
+    });
+    let requests = 0;
+    const catalog = createMcpMarketplaceCatalog({
+      repository,
+      now: () => new Date("2026-08-01T00:00:00.000Z"),
+      fetchPage: async () => {
+        requests += 1;
+        return { entries: [entry("recovered-after-restart")], nextCursor: null };
+      },
+    });
+
+    catalog.list({ limit: 20 });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(requests).toBe(1);
+    expect(catalog.getStatus().status).toBe("idle");
+    expect(catalog.list({ limit: 20 }).servers[0]?.id).toBe(
+      "recovered-after-restart",
+    );
     sqlite.close();
   });
 

@@ -37,6 +37,7 @@ import {
 } from "@/microapps/image-generation/index.js";
 import { createMailCenterService } from "@/microapps/mail-center/index.js";
 import { createNewsHubService } from "@/microapps/news-hub/index.js";
+import { resetDashboardNewsSummaryCache } from "@/dashboard/dashboard-service.js";
 import {
   createCodeGraphStudioService,
   setActiveCodeGraphStudioService,
@@ -93,6 +94,7 @@ import { mailAccountsRepository } from "@/db/repositories/mail-accounts.reposito
 import { mailFoldersRepository } from "@/db/repositories/mail-folders.repository.js";
 import { mailMessagesRepository } from "@/db/repositories/mail-messages.repository.js";
 import { newsHubSettingsRepository } from "@/db/repositories/news-hub-settings.repository.js";
+import { newsFeedSubscriptionsRepository } from "@/db/repositories/news-feed-subscriptions.repository.js";
 import { comfyUiStudioRepository } from "@/db/repositories/comfyui-studio.repository.js";
 import { microAppsRepository } from "@/db/repositories/micro-apps.repository.js";
 import { evolvingKnowledgeRepository } from "@/db/repositories/evolving-knowledge.repository.js";
@@ -540,7 +542,9 @@ const computerUseRuntimeService = {
 };
 
 const mailCenterService = createMailCenterService();
-const newsHubService = createNewsHubService();
+const newsHubService = createNewsHubService({
+  onContentChanged: resetDashboardNewsSummaryCache,
+});
 const codeGraphStudioService = createCodeGraphStudioService({
   getCapabilityRegistrationState: () =>
     Boolean(getCapabilityImplementation("codebase_explore")),
@@ -756,7 +760,7 @@ const setupRoutes = async () => {
   await app.register(agentRoute);
   await app.register(mcpRoutes);
   await app.register(webbridgeRoute);
-  await app.register(dashboardController, { newsHubService });
+  await app.register(dashboardController, { newsHubService, mailCenterService });
 };
 
 const setupDatabase = async () => {
@@ -811,6 +815,7 @@ const setupDatabase = async () => {
   mailFoldersRepository.initialize();
   mailMessagesRepository.initialize();
   newsHubSettingsRepository.initialize();
+  newsFeedSubscriptionsRepository.initialize();
   newsItemsRepository.initialize();
   ttsProviderConfigsRepository.initialize();
   ttsSynthesisJobsRepository.initialize();

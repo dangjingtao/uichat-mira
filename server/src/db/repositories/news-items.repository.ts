@@ -52,6 +52,16 @@ type SourceStatsRow = {
 
 const normalizeText = (value: string) => value.trim();
 
+const normalizePublishedAt = (value: string | null | undefined): string | null => {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+};
+
 const parseJson = <T>(value: string, fallback: T): T => {
   try {
     return JSON.parse(value) as T;
@@ -71,7 +81,7 @@ const toRecord = (row: typeof newsItems.$inferSelect): NewsItemRecord => ({
   contentText: normalizeText(row.contentText),
   url: normalizeText(row.url),
   author: row.author ? normalizeText(row.author) : null,
-  publishedAt: row.publishedAt ?? null,
+  publishedAt: normalizePublishedAt(row.publishedAt),
   ingestedAt: row.ingestedAt,
   lang: normalizeText(row.lang),
   topic: normalizeText(row.topic),
@@ -125,6 +135,22 @@ const ensureTable = () => {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_news_items_source_external
     ON news_items(source_key, external_id)
   `);
+
+  const legacyPublishedDates = sqlite
+    .prepare("SELECT id, published_at FROM news_items WHERE published_at IS NOT NULL")
+    .all() as Array<{ id: string; published_at: string }>;
+  const updatePublishedAt = sqlite.prepare(
+    "UPDATE news_items SET published_at = ? WHERE id = ?",
+  );
+  const migratePublishedDates = sqlite.transaction(() => {
+    for (const row of legacyPublishedDates) {
+      const publishedAt = normalizePublishedAt(row.published_at);
+      if (publishedAt !== row.published_at) {
+        updatePublishedAt.run(publishedAt, row.id);
+      }
+    }
+  });
+  migratePublishedDates();
 };
 
 export const newsItemsRepository = {
@@ -159,7 +185,7 @@ export const newsItemsRepository = {
         contentText: normalizeText(item.contentText),
         url: normalizeText(item.url),
         author: item.author ? normalizeText(item.author) : null,
-        publishedAt: item.publishedAt ?? null,
+        publishedAt: normalizePublishedAt(item.publishedAt),
         ingestedAt: item.ingestedAt ?? nowIso(),
         lang: normalizeText(item.lang),
         topic: normalizeText(item.topic),
@@ -310,6 +336,19 @@ export const newsItemsRepository = {
       .from(newsItems)
       .groupBy(newsItems.sourceKey)
       .all() as SourceStatsRow[];
+  },
+
+  deleteBySourceKey(sourceKey: string) {
+    const normalized = sourceKey.trim();
+    if (!normalized) return { deletedCount: 0 };
+    const rows = getDb()
+      .select({ id: newsItems.id })
+      .from(newsItems)
+      .where(eq(newsItems.sourceKey, normalized))
+      .all();
+    newsItemsVectorRepository.deleteByNewsItemIds(rows.map((row) => row.id));
+    getDb().delete(newsItems).where(eq(newsItems.sourceKey, normalized)).run();
+    return { deletedCount: rows.length };
   },
 
   deleteBySourceKeysExcluding(sourceKeys: string[]) {

@@ -389,4 +389,13 @@ export const newsHubSettingsRepository = {
         updatedAt: now,
       });
   },
+
+  deleteSourceState(sourceKey: string) {
+    ensureSourceStatesTable();
+    return {
+      deletedCount: getSqlite()
+        .prepare("DELETE FROM news_hub_source_states WHERE source_key = ?")
+        .run(sourceKey.trim()).changes,
+    };
+  },
 };

@@ -26,6 +26,12 @@ vi.mock("@/features/Settings/pages/About/index", () => ({
 vi.mock("@/features/Settings/pages/General/index", () => ({
   default: () => null,
 }));
+vi.mock("@/features/Settings/pages/Personalization/index", () => ({
+  default: () => <div data-testid="personalization-page">personalization-page</div>,
+}));
+vi.mock("@/features/Settings/pages/TailscaleRemoteAccess/index", () => ({
+  default: () => <div data-testid="tailscale-remote-access-page">tailscale-remote-access-page</div>,
+}));
 vi.mock("@/features/Settings/pages/Account/index", () => ({
   default: () => null,
 }));
@@ -138,6 +144,57 @@ describe("settings routes", () => {
 
     expect(
       screen.getByText("settings.navigation.mcp:/settings/mcp:basic:30:exact:false"),
+    ).toBeInTheDocument();
+  });
+
+  it("includes personalization below general and mounts its page", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(
+        "settings.navigation.personalization:/settings/personalization:general:20:exact:false",
+      ),
+    ).toBeInTheDocument();
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/settings",
+          children: settingsRoutes,
+        },
+      ],
+      { initialEntries: ["/settings/personalization"] },
+    );
+
+    render(<RouterProvider router={router} />);
+    expect(screen.getByTestId("personalization-page")).toBeInTheDocument();
+  });
+
+  it("includes Tailscale remote access in the general group and mounts its page", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(
+        "settings.navigation.tailscaleRemoteAccess:/settings/tailscale-remote-access:general:30:exact:false",
+      ),
+    ).toBeInTheDocument();
+
+    const router = createMemoryRouter(
+      [{ path: "/settings", children: settingsRoutes }],
+      { initialEntries: ["/settings/tailscale-remote-access"] },
+    );
+
+    render(<RouterProvider router={router} />);
+    expect(
+      screen.getByTestId("tailscale-remote-access-page"),
     ).toBeInTheDocument();
   });
 

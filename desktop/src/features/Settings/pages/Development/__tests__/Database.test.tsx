@@ -47,7 +47,7 @@ describe("DevelopmentDatabasePage", () => {
     expect(screen.getByTestId("development-page-skeleton")).toBeInTheDocument();
   });
 
-  it("renders backend, sqlite, and vector runtime cards", () => {
+  it("renders backend, sqlite, and vector states as one divided settings section", () => {
     render(<DevelopmentDatabasePage />);
 
     expect(
@@ -62,5 +62,13 @@ describe("DevelopmentDatabasePage", () => {
     expect(screen.getByText("backend ok")).toBeInTheDocument();
     expect(screen.getByText("sqlite ok")).toBeInTheDocument();
     expect(screen.getByText("sqlite-vec missing")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("database-status-list").querySelector(".divide-y"),
+    ).not.toBeNull();
+    expect(screen.getByTestId("database-status-backend")).toBeInTheDocument();
+    expect(screen.getByTestId("database-status-sqlite")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("database-status-sqlite-vec"),
+    ).toBeInTheDocument();
   });
 });

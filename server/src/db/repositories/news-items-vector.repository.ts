@@ -82,4 +82,16 @@ export const newsItemsVectorRepository = {
         }
       });
   },
+
+  deleteByNewsItemIds(newsItemIds: string[]) {
+    const ids = newsItemIds.map((id) => id.trim()).filter(Boolean);
+    if (ids.length === 0) return { deletedCount: 0 };
+    const statement = getSqlite().prepare("DELETE FROM news_item_embeddings WHERE news_item_id = ?");
+    const transaction = getSqlite().transaction((values: string[]) => {
+      let deletedCount = 0;
+      for (const id of values) deletedCount += statement.run(id).changes;
+      return deletedCount;
+    });
+    return { deletedCount: transaction(ids) };
+  },
 };

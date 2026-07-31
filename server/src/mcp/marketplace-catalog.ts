@@ -14,6 +14,8 @@ import {
 export const MCP_MARKETPLACE_SOURCE_URL =
   "https://registry.modelcontextprotocol.io/v0.1/servers";
 const AUTO_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const AUTO_SYNC_RETRY_BASE_MS = 60 * 1000;
+const AUTO_SYNC_RETRY_MAX_MS = AUTO_SYNC_INTERVAL_MS;
 const FULL_SYNC_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 const INCREMENTAL_OVERLAP_MS = 5 * 60 * 1000;
 const CATEGORY_RULE_VERSION = 1;
@@ -99,17 +101,56 @@ export const createMcpMarketplaceCatalog = (options?: {
   const sourceUrl = options?.sourceUrl ?? MCP_MARKETPLACE_SOURCE_URL;
   repository.initialize();
   let syncInFlight: Promise<MarketplaceSyncState> | null = null;
+  let autoSyncEnabled = false;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let retryAtMs: number | null = null;
+  let consecutiveFailures = 0;
+  let hasStartedSync = false;
   const searchesInFlight = new Map<string, Promise<void>>();
   const searchesCompletedAt = new Map<string, number>();
 
   const getStatus = () => {
     const state = repository.getSyncState(sourceUrl);
+    const nextAutoSyncAt =
+      state.status === "failed" && retryAtMs !== null
+        ? new Date(retryAtMs).toISOString()
+        : state.lastSuccessfulSyncAt
+          ? new Date(
+              Date.parse(state.lastSuccessfulSyncAt) + AUTO_SYNC_INTERVAL_MS,
+            ).toISOString()
+          : null;
     return {
       ...state,
-      nextAutoSyncAt: state.lastSuccessfulSyncAt
-        ? new Date(Date.parse(state.lastSuccessfulSyncAt) + AUTO_SYNC_INTERVAL_MS).toISOString()
-        : null,
+      nextAutoSyncAt,
     };
+  };
+
+  const clearRetryTimer = () => {
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = null;
+  };
+
+  const getRetryDelay = () =>
+    Math.min(
+      AUTO_SYNC_RETRY_BASE_MS * 2 ** Math.max(0, consecutiveFailures - 1),
+      AUTO_SYNC_RETRY_MAX_MS,
+    );
+
+  const armRetryTimer = (mode: MarketplaceSyncMode) => {
+    clearRetryTimer();
+    if (!autoSyncEnabled || retryAtMs === null) return;
+    const delay = Math.max(0, retryAtMs - now().getTime());
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      retryAtMs = null;
+      void startSync(mode).catch(() => undefined);
+    }, delay);
+    retryTimer.unref();
+  };
+
+  const scheduleRetry = (mode: MarketplaceSyncMode) => {
+    retryAtMs = now().getTime() + getRetryDelay();
+    armRetryTimer(mode);
   };
 
   const runSync = async (requestedMode?: MarketplaceSyncMode) => {
@@ -162,8 +203,12 @@ export const createMcpMarketplaceCatalog = (options?: {
         lastError: null,
       };
       repository.setSyncState(nextState);
+      consecutiveFailures = 0;
+      retryAtMs = null;
+      clearRetryTimer();
       return nextState;
     } catch (error) {
+      consecutiveFailures += 1;
       const failedState: MarketplaceSyncState = {
         ...repository.getSyncState(sourceUrl),
         sourceUrl,
@@ -173,12 +218,16 @@ export const createMcpMarketplaceCatalog = (options?: {
         lastError: sanitizeError(error),
       };
       repository.setSyncState(failedState);
+      scheduleRetry(mode);
       return failedState;
     }
   };
 
   const startSync = (mode?: MarketplaceSyncMode) => {
     if (syncInFlight) return syncInFlight;
+    hasStartedSync = true;
+    retryAtMs = null;
+    clearRetryTimer();
     syncInFlight = runSync(mode).finally(() => {
       syncInFlight = null;
     });
@@ -187,6 +236,7 @@ export const createMcpMarketplaceCatalog = (options?: {
 
   const maybeStartSync = () => {
     const state = repository.getSyncState(sourceUrl);
+    if (state.status === "failed" && hasStartedSync) return;
     const timestamp = now().getTime();
     if (
       repository.countVisible(sourceUrl) === 0 ||
@@ -263,9 +313,18 @@ export const createMcpMarketplaceCatalog = (options?: {
       return { task, status: getStatus() };
     },
     startAutoSync() {
+      autoSyncEnabled = true;
       const timer = setInterval(maybeStartSync, AUTO_SYNC_INTERVAL_MS);
       timer.unref();
-      return () => clearInterval(timer);
+      const state = repository.getSyncState(sourceUrl);
+      if (state.status === "failed" && retryAtMs !== null && state.mode) {
+        armRetryTimer(state.mode);
+      }
+      return () => {
+        autoSyncEnabled = false;
+        clearInterval(timer);
+        clearRetryTimer();
+      };
     },
   };
 };

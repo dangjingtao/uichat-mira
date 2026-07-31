@@ -87,6 +87,7 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 
 ## 当前模块入口
 
+- [[dashboard/README]]：Mira 工作台天气 Widget 数据契约；
 - [[PROVIDER_CURRENT_TRUTH]]：Provider、模型角色与调用总真相；
 - [[provider/FIRST_MODEL_SETUP]]：第一次模型配置；
 - [[provider/README]]：Provider 模块阅读入口；

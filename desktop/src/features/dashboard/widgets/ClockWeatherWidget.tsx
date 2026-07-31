@@ -1,30 +1,60 @@
-import { CloudOff, CloudSun, Clock3, LoaderCircle, MapPin } from "lucide-react";
+import { useEffect, useState } from "react";
+import { LoaderCircle, MapPin } from "lucide-react";
 import type { ClockWeatherData, DashboardWidget } from "../types/dashboard-types";
+import { WeatherIcon } from "../components/WeatherIcon";
 import { WidgetCard } from "../components/WidgetCard";
 export function ClockWeatherWidget({ widget }: { widget: DashboardWidget<ClockWeatherData> }) {
   const d = widget.data;
-  const WeatherIcon = d.status === "loading" ? LoaderCircle : d.weatherAvailable ? CloudSun : CloudOff;
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const nextNow = new Date();
+      setNow(nextNow);
+      timer = setTimeout(tick, 1000 - nextNow.getMilliseconds());
+    };
+
+    tick();
+    return () => clearTimeout(timer);
+  }, []);
+
+  const localTime = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+  const dateLabel = now.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
 
   return (
-    <WidgetCard widget={widget} showDemoLabel={false}>
-      <div className="flex items-center justify-between">
+    <WidgetCard
+      widget={widget}
+      showDemoLabel={false}
+      showHeader={false}
+      showFooter={false}
+      className="md:col-start-1 md:row-start-1"
+    >
+      <div className="flex flex-1 flex-col">
         <div>
-          <div className="text-4xl font-semibold text-text-primary">{d.localTime}</div>
-          <div className="mt-1 text-xs text-text-secondary">{d.dateLabel}</div>
+          <time className="block font-serif text-[clamp(2.8rem,5vw,4.5rem)] font-medium leading-none tabular-nums tracking-[-0.035em] text-text-primary" dateTime={now.toISOString()}>{localTime}</time>
+          <div className="mt-3 text-sm font-medium text-text-primary">{dateLabel}</div>
+          <div className="mt-3 flex items-center gap-2 text-xs text-text-tertiary">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{d.locationLabel}</span>
+          </div>
         </div>
-        <Clock3 className="h-8 w-8 text-primary" />
-      </div>
-      <div className="mt-6 flex items-center gap-3">
-        <WeatherIcon className={`h-6 w-6 ${d.status === "loading" ? "animate-spin text-text-tertiary" : d.weatherAvailable ? "text-warning" : "text-text-tertiary"}`} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 font-medium text-text-primary">
-            <span>{d.weather} · {d.temperature}</span>
+        <div className="mt-auto border-t border-border pt-5">
+          <div className="flex items-center gap-4">
+            {d.status === "loading" ? <LoaderCircle className="h-10 w-10 shrink-0 animate-spin text-text-tertiary" aria-label="天气加载中" /> : <WeatherIcon weatherCode={d.weatherCode} isDay={d.isDay} />}
+            <div className="min-w-0">
+              <div className="text-sm text-text-secondary">{d.weather}</div>
+              <div className="mt-1 font-serif text-3xl font-bold leading-none text-text-primary">{d.temperature}</div>
+            </div>
           </div>
-          <div className="mt-1 flex min-w-0 items-center gap-2 whitespace-nowrap text-xs text-text-secondary">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span className="min-w-0 truncate">{d.locationLabel}</span>
-            <span className="shrink-0">{d.forecast}</span>
-          </div>
+          {d.forecast ? <div className="mt-4 text-xs leading-5 text-text-tertiary">{d.forecast}</div> : null}
         </div>
       </div>
     </WidgetCard>

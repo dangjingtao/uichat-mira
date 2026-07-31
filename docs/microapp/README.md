@@ -81,6 +81,16 @@ evolving_knowledge
 - [[microapp/tts-studio-runtime-notes]]：Windows、Piper、GPT-SoVITS、API Provider；
 - [[microapp/gpt-sovits-microapp-poc]]：当前 GPT-SoVITS bridge 细节。
 
+### Mail Center / 工作台邮件摘要
+
+- Mail Center 保存本地邮箱账号配置，通过 SMTP 发送测试邮件，通过 IMAP 拉取并缓存真实收件箱邮件；
+- Mira 工作台按上海自然日同步各账号邮件并生成关注摘要，邮件轮播展示关注数量、内容摘要、量化优先级、关注原因和建议下一步；
+- 邮件优先级由服务端按 0–100 分统一计算，不直接采用模型给出的等级。24 小时内截止、明确行动要求、工作阻塞、安全或法律风险、财务影响、直接点名、邮箱星标和未读状态加分，群发营销和纯通知扣分；25 分进入关注列表，50 分为高优先级，75 分为紧急；
+- 模型只提取内容摘要和评分信号，邮件中心保存的未读、星标状态由服务端直接计分；
+- `GET /dashboard/mail` 按用户、日期和语言缓存邮件摘要 1 小时。缓存有效期内不访问 IMAP，也不重复调用 Task Model；缓存到期后的首次访问执行一次当日范围的只读 IMAP 同步；
+- 邮件状态指纹未变化时复用既有分析并续期缓存；相同缓存键的并发请求共用一次刷新。结果按分数降序排列，同分按收件时间倒序排列；
+- 该接口不发送邮件，也不改变远端已读或星标状态。
+
 ### GitHub
 
 - [[microapp/github-capability-design]]：连接入口、仓库边界和四个领域工具。

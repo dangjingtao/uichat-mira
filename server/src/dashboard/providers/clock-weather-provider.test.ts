@@ -10,7 +10,7 @@ describe("clockWeatherProvider", () => {
   it("combines IP location with Open-Meteo current and daily weather", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, city: "Shanghai", latitude: 31.23, longitude: 121.47 }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ current: { temperature_2m: 26.4, weather_code: 1 }, daily: { temperature_2m_min: [22.1], temperature_2m_max: [29.8] } }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ current: { temperature_2m: 26.4, weather_code: 1, is_day: 1 }, daily: { temperature_2m_min: [22.1], temperature_2m_max: [29.8] } }) });
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await clockWeatherProvider.getData(new Date("2026-07-28T03:12:00.000Z"));
@@ -20,6 +20,8 @@ describe("clockWeatherProvider", () => {
       sourceLabel: "IP 定位 + Open-Meteo",
       locationLabel: "Shanghai",
       weatherAvailable: true,
+      weatherCode: 1,
+      isDay: true,
       weather: "大致晴",
       temperature: "26°C",
       forecast: "今日 22°C - 30°C",
@@ -46,7 +48,7 @@ describe("clockWeatherProvider", () => {
   it("reuses the weather result for fifteen minutes", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, city: "Shanghai", latitude: 31.23, longitude: 121.47 }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ current: { temperature_2m: 26.4, weather_code: 1 }, daily: { temperature_2m_min: [22.1], temperature_2m_max: [29.8] } }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ current: { temperature_2m: 26.4, weather_code: 1, is_day: 1 }, daily: { temperature_2m_min: [22.1], temperature_2m_max: [29.8] } }) });
     vi.stubGlobal("fetch", fetchMock);
     const firstRequest = new Date("2026-07-28T03:12:00.000Z");
 

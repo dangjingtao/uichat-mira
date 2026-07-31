@@ -61,6 +61,29 @@ describe("MarkdownText", () => {
     );
   });
 
+  it("enables LaTeX rendering for full markdown", () => {
+    render(<MarkdownText>{"Inline $x^2$ and block $$y^2$$"}</MarkdownText>);
+
+    expect(streamdownPropsSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        plugins: expect.objectContaining({
+          math: expect.objectContaining({
+            name: "katex",
+            type: "math",
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("keeps optional plugins disabled for basic markdown", () => {
+    render(<MarkdownText features="basic">{"$x^2$"}</MarkdownText>);
+
+    expect(streamdownPropsSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ plugins: {} }),
+    );
+  });
+
   it("does not rerender unchanged markdown", () => {
     const { rerender } = render(<MarkdownText>stable</MarkdownText>);
 

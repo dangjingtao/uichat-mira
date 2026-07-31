@@ -83,7 +83,18 @@ describe("BaseInformationPanel", () => {
     expect(screen.getByText("commit-0")).toBeInTheDocument();
     expect(screen.getByText("commit-4")).toBeInTheDocument();
     expect(screen.queryByText("commit-5")).not.toBeInTheDocument();
-    expect(screen.getByTestId("git-current-branch")).toHaveClass("justify-self-end");
+    expect(screen.getByTestId("git-current-branch")).toHaveTextContent(
+      "codex/feature-test",
+    );
+    expect(
+      screen.getByTestId("git-current-branch").firstElementChild,
+    ).toHaveClass(
+      "rounded-full",
+      "text-primary",
+    );
+    expect(
+      screen.queryByText("settings.about.currentBranch"),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("git-version-list")).toHaveClass(
       "overflow-hidden",
       "rounded-ui-panel",
@@ -111,6 +122,14 @@ describe("BaseInformationPanel", () => {
     );
     expect(container.querySelectorAll("section")).toHaveLength(2);
     expect(container.querySelectorAll("section section")).toHaveLength(0);
+    expect(container.querySelectorAll("section")[0]).toHaveAttribute(
+      "data-testid",
+      "base-information-links",
+    );
+    expect(container.querySelectorAll("section")[1]).toHaveAttribute(
+      "data-testid",
+      "git-version-list",
+    );
 
     await userEvent.click(screen.getByText("MIT License"));
     expect(uiMocks.modalShow).toHaveBeenCalledWith(

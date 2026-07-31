@@ -166,6 +166,55 @@ describe("useToolsWorkbench", () => {
     });
   });
 
+  it("selects the first displayed group instead of the alphabetically first tool", async () => {
+    const createTool = (
+      id: string,
+      title: string,
+      groupId: string,
+      groupLabel: string,
+      groupOrder: number,
+    ) => ({
+      id,
+      title,
+      description: "",
+      domain: groupId,
+      source: "internal",
+      mode: "sync",
+      inputSchema: {},
+      tags: [],
+      capabilities: {
+        sideEffect: "none",
+        requiresApproval: false,
+      },
+      workbench: {
+        groupId,
+        groupLabel,
+        groupDescription: groupLabel,
+        groupOrder,
+        icon: "wrench",
+      },
+    });
+    getMcpToolsMock.mockResolvedValueOnce([
+      createTool("ask_external_expert", "Ask External Expert", "external_expert", "问策", 70),
+      createTool("read_open", "Read Open", "read", "阅读", 10),
+    ]);
+
+    const useToolsWorkbench = await importHook();
+    const { result } = renderHook(() => useToolsWorkbench());
+
+    await waitFor(() => {
+      expect(result.current.tools).toHaveLength(2);
+    }, { timeout: 3000 });
+
+    expect(result.current.groupSummaries.map((group) => group.id)).toEqual([
+      "read",
+      "external_expert",
+    ]);
+    expect(result.current.activeGroupId).toBe("read");
+    expect(result.current.selectedTool?.id).toBe("read_open");
+    expect(result.current.filteredTools.map((tool) => tool.id)).toEqual(["read_open"]);
+  });
+
   it("groups and filters tools by capability ownership instead of runtime domain", async () => {
     const createBrowserTool = (
       id: string,

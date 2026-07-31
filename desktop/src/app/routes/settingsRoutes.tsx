@@ -12,7 +12,9 @@ import {
   Info,
   LibraryBig,
   ListChecks,
+  Network,
   PanelsTopLeft,
+  SlidersHorizontal,
   Sparkles,
   ShieldCheck,
   Wrench,
@@ -20,6 +22,8 @@ import {
 } from "lucide-react";
 import About from "@/features/Settings/pages/About/index";
 import GeneralSettings from "@/features/Settings/pages/General/index";
+import PersonalizationSettings from "@/features/Settings/pages/Personalization/index";
+import TailscaleRemoteAccessSettings from "@/features/Settings/pages/TailscaleRemoteAccess/index";
 import AccountSettings from "@/features/Settings/pages/Account/index";
 import KnowledgeBaseSettings from "@/features/Settings/pages/KnowledgeBase/index";
 import KnowledgeBaseAddWizard from "@/features/Settings/pages/KnowledgeBase/Add";
@@ -91,6 +95,26 @@ const settingsRouteTree: SettingsRouteConfig[] = [
     path: "general",
     element: <GeneralSettings />,
     nav: { labelKey: "settings.navigation.general", icon: Bolt, group: "general", order: 10 },
+  },
+  {
+    path: "personalization",
+    element: <PersonalizationSettings />,
+    nav: {
+      labelKey: "settings.navigation.personalization",
+      icon: SlidersHorizontal,
+      group: "general",
+      order: 20,
+    },
+  },
+  {
+    path: "tailscale-remote-access",
+    element: <TailscaleRemoteAccessSettings />,
+    nav: {
+      labelKey: "settings.navigation.tailscaleRemoteAccess",
+      icon: Network,
+      group: "general",
+      order: 30,
+    },
   },
   {
     path: "model-setting",

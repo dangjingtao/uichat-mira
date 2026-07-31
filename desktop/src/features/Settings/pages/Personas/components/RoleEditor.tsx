@@ -10,7 +10,6 @@ import type { AvatarPickerOption } from "@/shared/ui/AvatarPicker";
 import AvatarPicker from "@/shared/ui/AvatarPicker";
 import Badge from "@/shared/ui/Badge";
 import { Button, IconButton } from "@/shared/ui/Button";
-import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
 import TagInput from "@/shared/ui/TagInput";
 import type { RoleField, RoleRecord } from "../types";
@@ -123,9 +122,9 @@ export default function RoleEditor({
   const { t: globalT } = useTranslation();
 
   return (
-    <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden p-0">
+    <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="border-b border-border px-3.5 py-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex min-h-9 items-center justify-between gap-3">
           <RoleSectionTitle
             icon={UserRoundPen}
             title={t("editor.title")}
@@ -235,6 +234,6 @@ export default function RoleEditor({
         </div>
 
       </div>
-    </Card>
+    </div>
   );
 }

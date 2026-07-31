@@ -590,6 +590,12 @@ message.destroy();
 
 用于聊天长回复、知识说明、评测结果摘要、工具调用结果说明等文档型内容。
 
+### MarkdownText
+
+- `features="full"`（默认）启用代码、Mermaid 与 KaTeX；LaTeX 支持 `$...$` 行内公式和 `$$...$$` 块级公式。
+- `features="basic"` 不加载上述可选解析插件，适合只需要基础 Markdown 的内容。
+- KaTeX 样式由组件统一引入，业务组件不要重复加载或自行拼装公式 HTML。
+
 ## StreamingTextRenderer
 
 用于把持续增长的完整文本转换为按帧追赶的可见文本，不自行添加 DOM 容器，也不绑定 Markdown、聊天状态或传输协议。

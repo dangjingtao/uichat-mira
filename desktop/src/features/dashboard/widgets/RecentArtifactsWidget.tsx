@@ -1,4 +1,0 @@
-import { FileCheck2 } from "lucide-react";
-import type { DashboardWidget, RecentArtifactsData } from "../types/dashboard-types";
-import { WidgetCard } from "../components/WidgetCard";
-export function RecentArtifactsWidget({ widget }: { widget: DashboardWidget<RecentArtifactsData> }) { return <WidgetCard widget={widget}><div className="space-y-4">{widget.data.items.map((item) => <div key={item.name} className="flex gap-3"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-success" /><div className="min-w-0"><div className="flex flex-wrap justify-between gap-2"><span className="text-sm font-medium text-text-primary">{item.name}</span><span className="text-[11px] text-text-tertiary">{item.deliveredAt}</span></div><div className="mt-1 text-xs text-text-secondary">{item.kind} · {item.detail}</div></div></div>)}</div></WidgetCard>; }
