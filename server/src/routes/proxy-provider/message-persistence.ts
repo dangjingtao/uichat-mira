@@ -174,9 +174,20 @@ const shouldClearStaleApprovalPlaceholder = (
   );
 };
 
-const isRagAssistantMessage = (
+const shouldCommitMemory = (
   metadata: Record<string, unknown> | undefined,
-) => Boolean(metadata?.rag && typeof metadata.rag === "object");
+) => {
+  if (metadata?.rag && typeof metadata.rag === "object") {
+    return false;
+  }
+
+  if (metadata?.agent && typeof metadata.agent === "object") {
+    const status = (metadata.agent as { status?: unknown }).status;
+    return status === "completed";
+  }
+
+  return true;
+};
 
 export const persistAssistantMessage = ({
   threadId,
@@ -222,7 +233,7 @@ export const persistAssistantMessage = ({
     metadata,
   });
 
-  if (!isRagAssistantMessage(metadata) && parentId) {
+  if (shouldCommitMemory(metadata) && parentId) {
     const userMessage = threadService.getMessageById(parentId, userId);
     if (userMessage?.role === "user" && userMessage.content.trim()) {
       void memoryService
