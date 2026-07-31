@@ -21,6 +21,23 @@ const assertObject = (
   return value as Record<string, unknown>;
 };
 
+const asSchemaObject = (value: unknown): JsonSchema | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as JsonSchema)
+    : undefined;
+
+const getStringDiscriminatorValues = (schema: JsonSchema | undefined) => {
+  if (!schema) return [];
+  const values: string[] = [];
+  if (typeof schema.const === "string") values.push(schema.const);
+  if (Array.isArray(schema.enum)) {
+    for (const value of schema.enum) {
+      if (typeof value === "string") values.push(value);
+    }
+  }
+  return [...new Set(values)];
+};
+
 const validatePrimitiveType = (
   value: unknown,
   expectedType: string,
@@ -57,23 +74,66 @@ const validatePrimitiveType = (
   }
 };
 
-const validateAgainstSchema = (
+const validateDiscriminatedOneOf = (
+  value: unknown,
+  candidates: unknown[],
+  pathSegments: string[],
+) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const objectValue = value as Record<string, unknown>;
+  const operation = objectValue.operation;
+  if (typeof operation !== "string") return false;
+
+  const declaredOperations: string[] = [];
+  const matchingCandidates: JsonSchema[] = [];
+
+  for (const candidate of candidates) {
+    const candidateSchema = asSchemaObject(candidate);
+    const properties = asSchemaObject(candidateSchema?.properties);
+    const operationSchema = asSchemaObject(properties?.operation);
+    const operationValues = getStringDiscriminatorValues(operationSchema);
+    declaredOperations.push(...operationValues);
+    if (operationValues.includes(operation)) {
+      matchingCandidates.push(candidateSchema!);
+    }
+  }
+
+  const uniqueOperations = [...new Set(declaredOperations)];
+  if (uniqueOperations.length === 0) return false;
+
+  if (matchingCandidates.length === 0) {
+    throw mcpBadRequest(
+      `${describePath([...pathSegments, "operation"])} must be one of: ${uniqueOperations.join(", ")}`,
+    );
+  }
+
+  if (matchingCandidates.length !== 1) return false;
+  validateAgainstSchema(value, matchingCandidates[0], pathSegments);
+  return true;
+};
+
+function validateAgainstSchema(
   value: unknown,
   schema: JsonSchema,
   pathSegments: string[],
-) => {
+) {
   if (Array.isArray(schema.oneOf)) {
-    const errors: unknown[] = [];
+    if (validateDiscriminatedOneOf(value, schema.oneOf, pathSegments)) {
+      return;
+    }
+
     let matches = 0;
     for (const candidate of schema.oneOf) {
-      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
-        continue;
-      }
+      const candidateSchema = asSchemaObject(candidate);
+      if (!candidateSchema) continue;
       try {
-        validateAgainstSchema(value, candidate as JsonSchema, pathSegments);
+        validateAgainstSchema(value, candidateSchema, pathSegments);
         matches += 1;
-      } catch (error) {
-        errors.push(error);
+      } catch {
+        // Generic oneOf validation only needs the match count.
       }
     }
     if (matches !== 1) {
@@ -142,12 +202,18 @@ const validateAgainstSchema = (
     validatePrimitiveType(value, schemaType, pathSegments);
   }
 
+  if (schema.const !== undefined && schema.const !== value) {
+    throw mcpBadRequest(
+      `${describePath(pathSegments)} must equal ${String(schema.const)}`,
+    );
+  }
+
   if (Array.isArray(schema.enum) && !schema.enum.some((entry) => entry === value)) {
     throw mcpBadRequest(
       `${describePath(pathSegments)} must be one of: ${schema.enum.map(String).join(", ")}`,
     );
   }
-};
+}
 
 export const validateInvocationArgs = (
   args: Record<string, unknown>,
