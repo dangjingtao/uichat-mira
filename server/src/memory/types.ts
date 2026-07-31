@@ -68,6 +68,11 @@ export interface MemoryConsolidator {
   propose(input: ConsolidationInput): Promise<MemoryPatchProposal[]>;
 }
 
+export interface MemoryTurnLedger {
+  has(userId: number, source: MemorySource): Promise<boolean>;
+  mark(userId: number, source: MemorySource): Promise<void>;
+}
+
 export interface MemoryContextSnapshot {
   content: string;
   updatedAt: string | null;
