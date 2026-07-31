@@ -1,102 +1,146 @@
-# 角色系统总览
+---
+status: current
+owner: role
+last_verified: 2026-08-01
+layer: wiki
+module: Role
+feature: Overview
+doc_type: overview
+canonical: true
+related:
+  - ../ROLE_CURRENT_TRUTH.md
+  - page.md
+  - role-api.md
+  - runtime.md
+  - preview-and-media.md
+  - ../CHAT_CURRENT_TRUTH.md
+  - ../archive/role/README.md
+---
 
-Layer: raw-source
-Module: Role
-Feature: Overview
-Doc Type: current-contract
+# Role 模块总览
 
-Status: Current
-Owner: role
-Last verified: 2026-06-25
+> 本目录说明 Role 的数据、工作台、Thread 绑定、请求注入和媒体联动。当前单点真相以 [[ROLE_CURRENT_TRUTH]] 为准。
 
-## 单点真相范围
+## 推荐阅读顺序
 
-这页文档统一说明：
+1. [[ROLE_CURRENT_TRUTH]]：Role 当前总真相与已知偏差；
+2. [[role/page]]：工作台字段与保存语义；
+3. [[role/role-api]]：CRUD、状态、归属和字段约束；
+4. [[role/runtime]]：Thread 绑定、Request Context 与三条 Chat 路径；
+5. [[role/preview-and-media]]：Preview、头像、TTS 与 Image 联动；
+6. [[archive/role/README]]：六月迁移、设计与恢复记录。
 
-- 当前项目里 `Role` 的具体含义
-- role 文档如何拆分到 page、API、chat integration、prompt injection
-- 角色编辑和角色使用分别归哪一层负责
+## 当前定义
 
-相关概念：
-
-- [[CONCEPT_ROLE_SYSTEM]]
-- [[CONCEPT_UCHAT]]
-- [[AREA_MAP_ROLE]]
-
-当前项目里的 `Role` 不是聊天消息本身，也不是 provider adapter。它是：
-
-- 一组可编辑、可复用、可持久化的角色提示词素材
-- Chat 请求构建前的上游输入
-- Chat UI 中可绑定到线程或欢迎态的上下文配置
-
-本目录统一维护角色（Role / Persona / Prompt Prototype）相关设计与接口约定。
-
-## 阅读顺序
-
-1. `page.md`  
-   角色工作台的页面职责、字段语义、状态约定
-2. `role-api.md`  
-   角色 CRUD 接口、数据模型、Swagger 范围
-3. `chat-integration.md`  
-   角色如何接入聊天界面、哪些状态只存在前端
-4. `prompt-injection-design.md`  
-   角色如何参与请求编排、为什么不直接进入可见聊天消息
-5. `rag-integration-checklist.md`  
-   角色接入 RAG 聊天时的执行清单、边界和验收项
-
-## 当前边界
-
-当前角色功能分成三层：
-
-- 设置页角色工作台  
-  负责角色素材的创建、编辑、预览、删除
-- Chat 界面角色选择  
-  负责把某个已配置角色绑定到当前欢迎态或当前线程的前端交互态
-- Prompt Injection 设计  
-  已通过线程级 request-only 注入层接到 chat 发送主链路第一版
-
-## 相关源码
-
-### 设置页
+Role 是一份用户级可复用配置：
 
 ```text
-desktop/src/features/Settings/pages/Personas
-desktop/src/shared/api/roles.ts
-server/src/routes/role
-server/src/services/role.service.ts
-server/src/db/role.db.ts
+Role Prompt Fields
++ Optional Sampling Params
++ UI Metadata
 ```
 
-### Chat 接入
+Thread 只保存 `roleId`。发送时后端读取最新 Role，并生成 request-only system message。
+
+Role 不是：
+
+- 可见聊天消息；
+- 专业事实库；
+- 长期记忆；
+- Skill 或 Tool Policy；
+- Provider / Model 绑定；
+- 动态关系成长状态。
+
+## 当前对象链
 
 ```text
+Role Workbench
+→ Role API / SQLite
+→ Welcome draftRoleId 或 Thread.roleId
+→ thread-request-context Role resolver
+→ Normal Chat | RAG Generate | Agent Runtime
+→ Optional post-answer TTS / Image
+```
+
+## 当前成立的能力
+
+- 用户级 Role CRUD；
+- active / draft 状态；
+- 七个 Prompt 字段；
+- 六个可选 LLM Profile 数值参数；
+- 内置头像与最多三个 Tags；
+- Welcome 状态选择和首次 Thread 持久化；
+- 已有 Thread 切换与解绑；
+- Role Prompt request-only 注入；
+- Normal、RAG Generate 与 Agent 输入使用 Role Prompt；
+- 删除 Role 后 Thread 解除绑定并保留对话；
+- Role 头像、标签与 replying label；
+- 回答成功后的 TTS / Image 产品联动。
+
+## 必须分开的事实
+
+```text
+summary / tags / avatar
+!= Role Prompt
+
+Role LLM Profile
+!= Role 专属模型
+
+active
+!= 已经行为验收
+
+Preview
+!= 真实 Request
+!= 真实模型回复
+
+Role Prompt 在 RAG 生效
+!= Role LLM Profile 在 RAG 生效
+```
+
+## 当前高价值边界
+
+- Chat picker 只列 active Role，但后端注入不检查 status；
+- 主保存把 Role 设为 active，UI 没有完整下架流程；
+- Prompt Drawer 保存到本地 draft，LLM Profile Drawer 独立写后端；
+- `{{user}} / {{char}}` 不做模板变量替换；
+- LLM Profile 没有统一范围校验；
+- 选择 Role 且未绑定知识库时会自动打开 Image 开关；
+- Starter Role 只在整张表为空时初始化，不是 per-user seed；
+- 当前没有 Copy、Import、Export、Version 或 Role snapshot。
+
+详细原因、范围和严重度见 [[ROLE_CURRENT_TRUTH]]。
+
+## 源码入口
+
+### Backend
+
+```text
+server/src/db/role.db.ts
+server/src/db/repositories/role.repository.ts
+server/src/services/role.service.ts
+server/src/routes/role/
+server/src/services/shared-nodes/thread-request-context-role.resolver.ts
+server/src/routes/proxy-provider/chat.routes.ts
+```
+
+### Desktop
+
+```text
+desktop/src/features/Settings/pages/Personas/
+desktop/src/shared/api/roles.ts
 desktop/src/features/chat/components/UChatThread.tsx
 desktop/src/features/chat/components/roleChatState.ts
-desktop/src/features/chat/core/runtimePolicies.ts
-desktop/src/shared/uchat/ui/UChatThreadView.tsx
+desktop/src/features/chat/adapters/chatMediaOrchestration.ts
 ```
 
-### Prompt Injection
+## 历史资料
 
-```text
-desktop/src/shared/utils/prompt-injection
-desktop/src/features/chat/core/protocol.ts
-server/src/routes/proxy-provider/chat.routes.ts
-server/src/services/provider-proxy.message-protocol.ts
-server/src/services/provider-proxy.service/chat-adapters.ts
-```
+以下内容已退出当前解释权：
 
-## 当前状态摘要
+- 2026-06-25 Prompt Injection 设计；
+- Role 主链迁移清单；
+- Role + RAG 接入清单；
+- 蓝屏恢复回归清单；
+- 旧 Role 总览、页面和 API 说明。
 
-- Role CRUD：已接真实后端
-- Role API：已接 Swagger
-- Chat 角色选择：已接到 UI 交互层
-- 聊天头像 / 回复中状态：已支持跟随角色变化
-- Role Prompt 注入：第一版已正式接入主链路，但完整编排层还未完全收敛
-
-## 重要原则
-
-- Role 不是线程消息
-- Role 不应直接写进 provider adapter
-- Role prompt 的长期编排应收敛到统一 request assembly 层
-- 当前后端允许承担线程级 request-only 包裹，但不应演化成直接理解 Role 领域对象的 provider adapter
+原文见 [[archive/role/README]]。
