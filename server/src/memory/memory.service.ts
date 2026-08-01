@@ -116,9 +116,11 @@ export class MemoryService {
     return this.readOverview(userId);
   }
 
-  async setEnabled(userId: number, enabled: boolean): Promise<MemoryOverview> {
-    await this.repository.updateSettings(userId, { enabled });
-    return this.readOverview(userId);
+  setEnabled(userId: number, enabled: boolean): Promise<MemoryOverview> {
+    return this.runCommitSerialized(userId, async () => {
+      await this.repository.updateSettings(userId, { enabled });
+      return this.readOverview(userId);
+    });
   }
 
   buildContextSync(userId: number): MemoryContextSnapshot {
