@@ -111,7 +111,7 @@ describe("mcp schema validation", () => {
     ).toThrow("args.sessionMode must be one of: ephemeral, persistent");
   });
 
-  it("preserves the selected operation variant error", () => {
+  it("preserves the selected operation variant missing-field error", () => {
     expect(() =>
       validateInvocationArgs(
         {
@@ -124,6 +124,58 @@ describe("mcp schema validation", () => {
     ).toThrow("args.content is required");
   });
 
+  it("preserves the selected operation variant extra-field error", () => {
+    expect(() =>
+      validateInvocationArgs(
+        {
+          operation: "get",
+          repository: "dangjingtao/uichat-mira",
+          content: "not valid for get",
+        },
+        repositorySchema,
+      ),
+    ).toThrow("args.content is not allowed");
+  });
+
+  it("preserves the selected operation variant type error", () => {
+    expect(() =>
+      validateInvocationArgs(
+        {
+          operation: "write_file",
+          repository: "dangjingtao/uichat-mira",
+          path: "README.md",
+          content: 42,
+          commitMessage: "docs: update readme",
+          branch: "fix/readme",
+        } as unknown as Record<string, unknown>,
+        repositorySchema,
+      ),
+    ).toThrow("args.content must be a string");
+  });
+
+  it("reports a missing discriminator directly", () => {
+    expect(() =>
+      validateInvocationArgs(
+        {
+          repository: "dangjingtao/uichat-mira",
+        },
+        repositorySchema,
+      ),
+    ).toThrow("args.operation is required");
+  });
+
+  it("reports a discriminator type mismatch directly", () => {
+    expect(() =>
+      validateInvocationArgs(
+        {
+          operation: 1,
+          repository: "dangjingtao/uichat-mira",
+        } as unknown as Record<string, unknown>,
+        repositorySchema,
+      ),
+    ).toThrow("args.operation must be a string");
+  });
+
   it("reports allowed operations for a discriminated oneOf schema", () => {
     expect(() =>
       validateInvocationArgs(
@@ -134,5 +186,29 @@ describe("mcp schema validation", () => {
         repositorySchema,
       ),
     ).toThrow("args.operation must be one of: get, write_file");
+  });
+
+  it("retains generic oneOf behavior when no operation discriminator exists", () => {
+    expect(() =>
+      validateInvocationArgs(
+        { value: true },
+        {
+          oneOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["value"],
+              properties: { value: { type: "string" } },
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["value"],
+              properties: { value: { type: "integer" } },
+            },
+          ],
+        },
+      ),
+    ).toThrow("args must match exactly one schema variant");
   });
 });
