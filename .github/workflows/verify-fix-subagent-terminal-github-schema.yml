@@ -1,0 +1,44 @@
+name: Verify workspace and GitHub schema fixes
+
+on:
+  push:
+    branches:
+      - fix/subagent-terminal-github-schema
+
+concurrency:
+  group: verify-fix-subagent-terminal-github-schema
+  cancel-in-progress: true
+
+jobs:
+  targeted-verification:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Launcher contract tests
+        run: node --test electron/dev-launcher.test.cjs scripts/tauri-dev-launcher.test.cjs
+
+      - name: Server contract tests
+        working-directory: server
+        run: pnpm exec vitest run src/mcp/core/provider-visible-schema.test.ts src/mcp/core/schema.test.ts src/mcp/workspace.test.ts src/skills/agent/subagent-runtime.exposure.test.ts src/skills/miradocs-skill.test.ts
+
+      - name: Server typecheck
+        run: pnpm --filter @ui-chat-mira/server typecheck
+
+      - name: Tauri unit tests
+        run: cargo test --manifest-path tauri/Cargo.toml
