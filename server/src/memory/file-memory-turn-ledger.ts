@@ -1,14 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { MemorySource, MemoryTurnLedger } from "./types.js";
+import type {
+  ConversationMemorySource,
+  MemoryTurnLedger,
+} from "./types.js";
 
 type ProcessedTurnEntry = {
   key: string;
-  source: MemorySource;
+  source: ConversationMemorySource;
   processedAt: string;
 };
 
-const sourceKey = (source: MemorySource) =>
+const sourceKey = (source: ConversationMemorySource) =>
   `${source.threadId}:${source.userMessageId}:${source.assistantMessageId}`;
 
 const readTextFile = async (filePath: string) => {
@@ -35,7 +38,10 @@ export class FileMemoryTurnLedger implements MemoryTurnLedger {
     );
   }
 
-  async has(userId: number, source: MemorySource): Promise<boolean> {
+  async has(
+    userId: number,
+    source: ConversationMemorySource,
+  ): Promise<boolean> {
     const expectedKey = sourceKey(source);
     const raw = await readTextFile(this.ledgerPath(userId));
 
@@ -53,7 +59,10 @@ export class FileMemoryTurnLedger implements MemoryTurnLedger {
       });
   }
 
-  async mark(userId: number, source: MemorySource): Promise<void> {
+  async mark(
+    userId: number,
+    source: ConversationMemorySource,
+  ): Promise<void> {
     const filePath = this.ledgerPath(userId);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     const entry: ProcessedTurnEntry = {
