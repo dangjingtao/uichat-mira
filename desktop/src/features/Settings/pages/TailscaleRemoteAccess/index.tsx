@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Monitor,
   Network,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Smartphone,
@@ -30,6 +31,7 @@ import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import SectionCard, { SectionCardRow } from "@/shared/ui/SectionCard";
 import TailscaleRemoteAccessGuideDrawer from "./TailscaleRemoteAccessGuideDrawer";
+import RemoteDevicePairingModal from "./RemoteDevicePairingModal";
 import { getTailscaleRemoteAccessCopy } from "./copy";
 
 const statusVariant = (state: TailscaleRemoteRuntimeState) => {
@@ -59,6 +61,7 @@ const readErrorMessage = (error: unknown, fallback: string) =>
 export default function TailscaleRemoteAccessSettings() {
   const { i18n } = useTranslation();
   const copy = getTailscaleRemoteAccessCopy(i18n.resolvedLanguage);
+  const isZh = i18n.resolvedLanguage?.toLowerCase().startsWith("zh") ?? true;
   const [snapshot, setSnapshot] =
     useState<TailscaleRemoteAccessSnapshot | null>(null);
   const [enabled, setEnabled] = useState(false);
@@ -68,10 +71,17 @@ export default function TailscaleRemoteAccessSettings() {
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [pairingOpen, setPairingOpen] = useState(false);
 
   const applySnapshot = (next: TailscaleRemoteAccessSnapshot) => {
     setSnapshot(next);
     setEnabled(next.config.enabled);
+  };
+
+  const refreshSnapshot = async () => {
+    const next = await getTailscaleRemoteAccess();
+    applySnapshot(next);
+    return next;
   };
 
   useEffect(() => {
@@ -111,6 +121,7 @@ export default function TailscaleRemoteAccessSettings() {
     runtime?.state === "ready" ||
     runtime?.state === "unreachable" ||
     runtime?.state === "serve_not_configured";
+  const canPairDevice = runtime?.state === "ready" && !loading && !checking && !saving;
 
   const formattedCheckedAt = useMemo(() => {
     if (!runtime?.checkedAt) {
@@ -157,7 +168,7 @@ export default function TailscaleRemoteAccessSettings() {
       description: name,
       tone: "danger",
       confirmText: copy.devices.revoke,
-      cancelText: i18n.resolvedLanguage?.startsWith("zh") ? "取消" : "Cancel",
+      cancelText: isZh ? "取消" : "Cancel",
       onConfirm: async () => {
         setRevokingDeviceId(id);
         try {
@@ -343,6 +354,24 @@ export default function TailscaleRemoteAccessSettings() {
         <SectionCard
           title={copy.devices.title}
           icon={<Smartphone className="h-4 w-4" />}
+          action={
+            <Button
+              size="xs"
+              variant="secondary"
+              disabled={!canPairDevice}
+              title={
+                canPairDevice
+                  ? undefined
+                  : isZh
+                    ? "Tailscale 远程入口可访问后才能配对"
+                    : "Remote access must be ready before pairing"
+              }
+              onClick={() => setPairingOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {isZh ? "配对新设备" : "Pair device"}
+            </Button>
+          }
           divided={Boolean(snapshot?.pairedDevices.length)}
           contentClassName={
             snapshot?.pairedDevices.length ? undefined : "p-4"
@@ -358,6 +387,13 @@ export default function TailscaleRemoteAccessSettings() {
                   <div className="mt-0.5 text-xs text-text-secondary">
                     {device.platform} · {copy.devices.lastSeen}: {" "}
                     {device.lastSeenAt || copy.devices.neverSeen}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {device.permissions.map((permission) => (
+                      <Badge key={permission} variant="muted" outline>
+                        {permission}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
                 <Button
@@ -441,6 +477,13 @@ export default function TailscaleRemoteAccessSettings() {
       <TailscaleRemoteAccessGuideDrawer
         open={guideOpen}
         onClose={() => setGuideOpen(false)}
+      />
+      <RemoteDevicePairingModal
+        open={pairingOpen}
+        onClose={() => setPairingOpen(false)}
+        onPaired={async () => {
+          await refreshSnapshot();
+        }}
       />
     </>
   );
