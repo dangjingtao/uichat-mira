@@ -1,6 +1,6 @@
 # Chat / Agent 统一记忆系统 V1
 
-Status: Active
+Status: Implemented on feature branch
 Owner: chat / agent / memory
 Last verified: 2026-08-01
 Layer: architecture
@@ -21,9 +21,9 @@ Memory 不属于 Role、RAG、Skill 或微应用。Role 只作为领域模块组
 
 V1 中 RAG 明确不读、不写这套用户长期记忆。知识库线程开启 Agent 时仍按 Agent 路径处理；普通 RAG 路径保持原样。
 
-## 2. 当前代码基础
+## 2. 当前代码基础与落地状态
 
-现有代码已经具备：
+现有代码基础包括：
 
 1. `thread-request-context-memory.resolver.ts`：长期记忆 request-only 注入槽；
 2. `thread-request-context.node.ts`：Chat 与 Agent 共用的请求上下文链；
@@ -32,7 +32,7 @@ V1 中 RAG 明确不读、不写这套用户长期记忆。知识库线程开启
 5. `UI_CHAT_DATABASE_DIR`：Electron 与 Tauri 已统一传入的用户数据目录；
 6. `desktop/src/features/Settings/pages/Personalization/index.tsx`：现有个性化页面已经包含记忆开关、管理抽屉和手工输入区域。
 
-现有记忆 UI 目前是 frontend preview，使用页面本地状态，不读取或修改真实记忆。V1 的 UI 任务是接通现有页面与独立 Memory 模块，不新建记忆页面、不迁移入口、不重做现有视觉结构。
+在 `dev` 基线中，记忆 UI 是使用页面本地状态的 frontend preview。本功能分支已复用原页面和入口，将其接入真实 Memory API、文件存储与 Chat / Agent 生命周期；没有新建记忆页面、迁移入口或重做页面整体视觉结构。
 
 V1 在这些合同上补齐中间层，不修改 Planner、Agent Graph 或 Harness 合同。
 
@@ -56,7 +56,7 @@ V1 在这些合同上补齐中间层，不修改 Planner、Agent Graph 或 Harne
 
 模型推测、心理画像、临时情绪和未经用户确认的信息不得进入长期记忆。Assistant 文本只用于理解上下文，不是用户事实的权威来源。
 
-用户通过现有 Personalization UI 手工新增或修改的记忆属于显式用户输入，应标记为 manual source，不伪造成对话消息来源。
+用户通过现有 Personalization UI 手工新增或修改的记忆属于显式用户输入，标记为 manual source，不伪造成对话消息来源。
 
 ### 3.4 失败不影响聊天
 
@@ -218,7 +218,7 @@ UI 不直接读取或修改 Markdown 文件，也不绕过 Memory Policy 与 jou
 
 ## 8. 并发、原子性与幂等
 
-同一用户的轮次整理和文件修改必须串行执行；不同用户可以并行。
+同一用户的轮次整理和文件修改串行执行；不同用户可以并行。
 
 文件修改步骤：
 
@@ -263,7 +263,24 @@ V1 规则：
 15. 现有管理抽屉可读取、新增、编辑和删除真实记忆；
 16. UI 手工记忆使用 manual source，不伪造消息来源。
 
-## 11. 后续阶段（非 V1）
+## 11. 验证状态
+
+功能分支：`feature/file-memory-kernel`
+
+Draft PR：`#64`
+
+2026-08-01 已通过：
+
+- Branch Policy；
+- Server TypeScript typecheck；
+- Desktop TypeScript typecheck；
+- Memory / Context 定向服务端回归；
+- Personalization 记忆 UI 回归；
+- 既有 Agent Runtime 回归。
+
+尚未执行真实模型质量验收。工程闭环通过不等于记忆提取质量已经达标；真实对话回放与误记、漏记、纠正率评测仍属于后续验收。
+
+## 12. 后续阶段（非 V1）
 
 - 来源消息回看与分支失效；
 - 记忆管理 UI 的筛选、搜索、来源详情和批量操作；
