@@ -1,9 +1,13 @@
 import { FileMemoryRepository } from "./file-memory.repository.js";
 import { validateMemoryPatchProposals } from "./memory-policy.js";
 import type {
+  ConversationMemorySource,
   MemoryApplyResult,
   MemoryConsolidator,
   MemoryContextSnapshot,
+  MemoryKind,
+  MemoryOverview,
+  MemoryOverviewRecord,
   MemoryRecord,
   MemorySource,
   MemoryTurnLedger,
@@ -15,6 +19,11 @@ const EMPTY_APPLY_RESULT: MemoryApplyResult = {
   created: 0,
   replaced: 0,
   deleted: 0,
+};
+const EMPTY_CONTEXT: MemoryContextSnapshot = {
+  content: "",
+  updatedAt: null,
+  recordCount: 0,
 };
 
 const KIND_LABELS = {
@@ -49,6 +58,22 @@ const buildSnapshot = (
   };
 };
 
+const toOverviewRecord = (record: MemoryRecord): MemoryOverviewRecord => ({
+  id: record.id,
+  kind: record.kind,
+  content: record.content,
+  origin: record.sources.some((source) => source.type === "manual")
+    ? "manual"
+    : "conversation",
+  createdAt: record.createdAt,
+  updatedAt: record.updatedAt,
+});
+
+const createManualSource = (): MemorySource => ({
+  type: "manual",
+  operationId: `manual_${crypto.randomUUID()}`,
+});
+
 export class MemoryService {
   private readonly commitQueues = new Map<number, Promise<void>>();
 
@@ -74,7 +99,32 @@ export class MemoryService {
     return current;
   }
 
+  private async readOverview(userId: number): Promise<MemoryOverview> {
+    const [settings, records] = await Promise.all([
+      this.repository.getSettings(userId),
+      this.repository.list(userId),
+    ]);
+    return {
+      enabled: settings.enabled,
+      records: records
+        .map(toOverviewRecord)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    };
+  }
+
+  getOverview(userId: number): Promise<MemoryOverview> {
+    return this.readOverview(userId);
+  }
+
+  async setEnabled(userId: number, enabled: boolean): Promise<MemoryOverview> {
+    await this.repository.updateSettings(userId, { enabled });
+    return this.readOverview(userId);
+  }
+
   buildContextSync(userId: number): MemoryContextSnapshot {
+    if (!this.repository.getSettingsSync(userId).enabled) {
+      return { ...EMPTY_CONTEXT };
+    }
     return buildSnapshot(
       this.repository.listSync(userId),
       this.repository.updatedAtSync(userId),
@@ -82,6 +132,9 @@ export class MemoryService {
   }
 
   async buildContext(userId: number): Promise<MemoryContextSnapshot> {
+    if (!(await this.repository.getSettings(userId)).enabled) {
+      return { ...EMPTY_CONTEXT };
+    }
     return buildSnapshot(
       await this.repository.list(userId),
       await this.repository.updatedAt(userId),
@@ -90,7 +143,7 @@ export class MemoryService {
 
   async commitTurn(input: {
     userId: number;
-    source: MemorySource;
+    source: ConversationMemorySource;
     userText: string;
     assistantText: string;
   }): Promise<MemoryApplyResult> {
@@ -102,6 +155,11 @@ export class MemoryService {
 
     return this.runCommitSerialized(input.userId, async () => {
       if (await this.turnLedger.has(input.userId, input.source)) {
+        return { ...EMPTY_APPLY_RESULT };
+      }
+
+      if (!(await this.repository.getSettings(input.userId)).enabled) {
+        await this.turnLedger.mark(input.userId, input.source);
         return { ...EMPTY_APPLY_RESULT };
       }
 
@@ -125,6 +183,86 @@ export class MemoryService {
 
       await this.turnLedger.mark(input.userId, input.source);
       return result;
+    });
+  }
+
+  async createManual(
+    userId: number,
+    input: { kind: MemoryKind; content: string },
+  ): Promise<MemoryOverview> {
+    return this.runCommitSerialized(userId, async () => {
+      const existing = await this.repository.list(userId);
+      const patches = validateMemoryPatchProposals({
+        existing,
+        source: createManualSource(),
+        proposals: [
+          {
+            operation: "create",
+            kind: input.kind,
+            content: input.content,
+            confidence: 1,
+            reason: "用户通过个性化设置明确新增记忆",
+          },
+        ],
+      });
+      if (patches.length > 0) {
+        await this.repository.apply(userId, patches);
+      }
+      return this.readOverview(userId);
+    });
+  }
+
+  async updateManual(
+    userId: number,
+    id: string,
+    input: { kind: MemoryKind; content: string },
+  ): Promise<MemoryOverview | null> {
+    return this.runCommitSerialized(userId, async () => {
+      const existing = await this.repository.list(userId);
+      if (!existing.some((record) => record.id === id)) return null;
+
+      const patches = validateMemoryPatchProposals({
+        existing,
+        source: createManualSource(),
+        proposals: [
+          {
+            operation: "replace",
+            targetId: id,
+            kind: input.kind,
+            content: input.content,
+            confidence: 1,
+            reason: "用户通过个性化设置明确修改记忆",
+          },
+        ],
+      });
+      if (patches.length > 0) {
+        await this.repository.apply(userId, patches);
+      }
+      return this.readOverview(userId);
+    });
+  }
+
+  async deleteManual(userId: number, id: string): Promise<MemoryOverview | null> {
+    return this.runCommitSerialized(userId, async () => {
+      const existing = await this.repository.list(userId);
+      if (!existing.some((record) => record.id === id)) return null;
+
+      const patches = validateMemoryPatchProposals({
+        existing,
+        source: createManualSource(),
+        proposals: [
+          {
+            operation: "delete",
+            targetId: id,
+            confidence: 1,
+            reason: "用户通过个性化设置明确删除记忆",
+          },
+        ],
+      });
+      if (patches.length > 0) {
+        await this.repository.apply(userId, patches);
+      }
+      return this.readOverview(userId);
     });
   }
 }
