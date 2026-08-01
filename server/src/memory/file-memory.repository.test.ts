@@ -20,6 +20,7 @@ const createRecord = (content: string): MemoryRecord => ({
   content,
   sources: [
     {
+      type: "conversation",
       threadId: "thread-1",
       userMessageId: "user-1",
       assistantMessageId: "assistant-1",
@@ -36,6 +37,20 @@ afterEach(async () => {
 });
 
 describe("FileMemoryRepository", () => {
+  it("persists memory enablement with an enabled-by-default fallback", async () => {
+    const root = await createRoot();
+    const repository = new FileMemoryRepository(root);
+
+    assert.deepEqual(repository.getSettingsSync(1), { enabled: true });
+    assert.deepEqual(await repository.getSettings(1), { enabled: true });
+
+    assert.deepEqual(await repository.updateSettings(1, { enabled: false }), {
+      enabled: false,
+    });
+    assert.deepEqual(repository.getSettingsSync(1), { enabled: false });
+    assert.deepEqual(await repository.getSettings(1), { enabled: false });
+  });
+
   it("creates, replaces and deletes managed blocks without touching manual text", async () => {
     const root = await createRoot();
     const repository = new FileMemoryRepository(root);
@@ -116,6 +131,7 @@ describe("FileMemoryRepository", () => {
       id: "mem_reaffirmed",
       sources: [
         {
+          type: "conversation",
           threadId: "thread-2",
           userMessageId: "user-2",
           assistantMessageId: "assistant-2",
