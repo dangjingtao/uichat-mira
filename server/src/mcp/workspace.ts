@@ -26,8 +26,6 @@ const resolveConfiguredWorkspaceRoot = () => {
 };
 
 const assertWorkspaceDirectory = (targetPath: string) => {
-  fs.mkdirSync(targetPath, { recursive: true });
-
   if (!fs.existsSync(targetPath)) {
     throw mcpBadRequest(`workspace path does not exist: ${targetPath}`);
   }
@@ -55,12 +53,6 @@ export const getWorkspaceSelection = () => {
   const configuredRoot = resolveConfiguredWorkspaceRoot();
   const overrideRoot = resolveWorkspaceRootOverride();
   const activeRoot = overrideRoot ?? selectedWorkspaceRoot ?? configuredRoot;
-
-  // A workspace snapshot is an execution contract, not just a path hint.
-  // Materialize it before Harness or a subAgent hands it to terminal/read tools.
-  if (activeRoot) {
-    assertWorkspaceDirectory(activeRoot);
-  }
 
   return {
     rootPath: activeRoot,
