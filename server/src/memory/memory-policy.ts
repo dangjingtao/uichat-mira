@@ -16,15 +16,26 @@ const RESERVED_MARKERS = ["<!-- mira:memory", "<!-- /mira:memory -->"];
 const normalizeContent = (value: string) =>
   value.trim().toLocaleLowerCase().replaceAll(/\s+/g, " ");
 
+const isSameSource = (left: MemorySource, right: MemorySource) => {
+  if (left.type !== right.type) return false;
+  if (left.type === "manual" && right.type === "manual") {
+    return left.operationId === right.operationId;
+  }
+  if (left.type === "conversation" && right.type === "conversation") {
+    return (
+      left.threadId === right.threadId &&
+      left.userMessageId === right.userMessageId &&
+      left.assistantMessageId === right.assistantMessageId
+    );
+  }
+  return false;
+};
+
 const mergeSources = (sources: MemorySource[], source: MemorySource) => {
   const next = [...sources];
-  const exists = next.some(
-    (item) =>
-      item.threadId === source.threadId &&
-      item.userMessageId === source.userMessageId &&
-      item.assistantMessageId === source.assistantMessageId,
-  );
-  if (!exists) next.push(source);
+  if (!next.some((item) => isSameSource(item, source))) {
+    next.push(source);
+  }
   return next;
 };
 
