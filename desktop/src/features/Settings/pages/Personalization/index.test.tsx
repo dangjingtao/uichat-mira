@@ -37,6 +37,17 @@ beforeEach(() => {
   memoryApi.deleteMemory.mockResolvedValue(emptyOverview);
 });
 
+const waitForMemoryLoaded = async () => {
+  await waitFor(() => {
+    expect(memoryApi.getMemoryOverview).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", {
+        name: "settings.personalization.memory.manage",
+      }),
+    ).toBeEnabled();
+  });
+};
+
 describe("PersonalizationSettings", () => {
   it("loads real memory state and opens the existing memory drawer", async () => {
     render(<PersonalizationSettings />);
@@ -51,10 +62,7 @@ describe("PersonalizationSettings", () => {
       screen.getByLabelText("settings.personalization.aboutYou.nickname"),
     ).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(memoryApi.getMemoryOverview).toHaveBeenCalledTimes(1);
-    });
-
+    await waitForMemoryLoaded();
     await userEvent.click(
       screen.getByRole("button", {
         name: "settings.personalization.memory.manage",
@@ -72,14 +80,12 @@ describe("PersonalizationSettings", () => {
   it("persists the existing memory switch and disables management", async () => {
     render(<PersonalizationSettings />);
 
-    await waitFor(() => {
-      expect(memoryApi.getMemoryOverview).toHaveBeenCalledTimes(1);
+    await waitForMemoryLoaded();
+    const memorySwitch = screen.getByRole("switch", {
+      name: "settings.personalization.memory.enable",
     });
-    await userEvent.click(
-      screen.getByRole("switch", {
-        name: "settings.personalization.memory.enable",
-      }),
-    );
+    expect(memorySwitch).toBeEnabled();
+    await userEvent.click(memorySwitch);
 
     await waitFor(() => {
       expect(memoryApi.updateMemorySettings).toHaveBeenCalledWith(false);
@@ -107,9 +113,7 @@ describe("PersonalizationSettings", () => {
     });
     render(<PersonalizationSettings />);
 
-    await waitFor(() => {
-      expect(memoryApi.getMemoryOverview).toHaveBeenCalledTimes(1);
-    });
+    await waitForMemoryLoaded();
     await userEvent.click(
       screen.getByRole("button", {
         name: "settings.personalization.memory.manage",
