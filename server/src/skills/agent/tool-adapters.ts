@@ -219,8 +219,7 @@ export const createHarnessSkillAgentToolBinding = (input: {
     id: definition.id,
     label: definition.title,
     description: definition.description,
-    inputSchema:
-      definition.inputSchemaByExposure?.agent_intent ?? definition.inputSchema,
+    inputSchema: definition.inputSchema,
     execute: async (args, signal) => {
       const record = await runWithWorkspaceRootOverride(
         input.execution.workspaceRoot,
