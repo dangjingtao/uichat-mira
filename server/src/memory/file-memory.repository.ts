@@ -5,6 +5,7 @@ import type {
   MemoryApplyResult,
   MemoryKind,
   MemoryRecord,
+  MemorySettings,
   MemorySource,
   ValidatedMemoryPatch,
 } from "./types.js";
@@ -12,6 +13,7 @@ import type {
 const MEMORY_BLOCK_START = "<!-- mira:memory";
 const MEMORY_BLOCK_END = "<!-- /mira:memory -->";
 const DEFAULT_DOCUMENT = "# Mira Memory\n\n";
+const DEFAULT_SETTINGS: MemorySettings = { enabled: true };
 const MAX_SYNC_DOCUMENT_BYTES = 256 * 1024;
 
 type ParsedMemoryBlock = {
@@ -36,31 +38,68 @@ const isMemoryKind = (value: unknown): value is MemoryKind =>
   value === "decision" ||
   value === "constraint";
 
-const isMemorySource = (value: unknown): value is MemorySource => {
+const parseMemorySource = (value: unknown): MemorySource | null => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
+    return null;
   }
-  const source = value as Partial<MemorySource>;
-  return (
+
+  const source = value as Record<string, unknown>;
+  if (source.type === "manual") {
+    return typeof source.operationId === "string" && source.operationId.trim()
+      ? { type: "manual", operationId: source.operationId }
+      : null;
+  }
+
+  // Keep compatibility with the first file-memory prototype, whose
+  // conversation sources did not yet include an explicit type discriminator.
+  if (
+    (source.type === "conversation" || source.type === undefined) &&
     typeof source.threadId === "string" &&
     typeof source.userMessageId === "string" &&
     typeof source.assistantMessageId === "string"
-  );
+  ) {
+    return {
+      type: "conversation",
+      threadId: source.threadId,
+      userMessageId: source.userMessageId,
+      assistantMessageId: source.assistantMessageId,
+    };
+  }
+
+  return null;
 };
 
-const isSameSource = (left: MemorySource, right: MemorySource) =>
-  left.threadId === right.threadId &&
-  left.userMessageId === right.userMessageId &&
-  left.assistantMessageId === right.assistantMessageId;
+const parseMemorySources = (value: unknown): MemorySource[] | null => {
+  if (!Array.isArray(value)) return null;
+  const parsed = value.map(parseMemorySource);
+  return parsed.every((source): source is MemorySource => source !== null)
+    ? parsed
+    : null;
+};
+
+const isSameSource = (left: MemorySource, right: MemorySource) => {
+  if (left.type !== right.type) return false;
+  if (left.type === "manual" && right.type === "manual") {
+    return left.operationId === right.operationId;
+  }
+  if (left.type === "conversation" && right.type === "conversation") {
+    return (
+      left.threadId === right.threadId &&
+      left.userMessageId === right.userMessageId &&
+      left.assistantMessageId === right.assistantMessageId
+    );
+  }
+  return false;
+};
 
 const parseMetadata = (raw: string): MemoryBlockMetadata | null => {
   try {
     const parsed = JSON.parse(raw) as Partial<MemoryBlockMetadata>;
+    const sources = parseMemorySources(parsed.sources);
     if (
       typeof parsed.id !== "string" ||
       !isMemoryKind(parsed.kind) ||
-      !Array.isArray(parsed.sources) ||
-      !parsed.sources.every(isMemorySource) ||
+      !sources ||
       typeof parsed.createdAt !== "string" ||
       typeof parsed.updatedAt !== "string"
     ) {
@@ -69,7 +108,7 @@ const parseMetadata = (raw: string): MemoryBlockMetadata | null => {
     return {
       id: parsed.id,
       kind: parsed.kind,
-      sources: parsed.sources,
+      sources,
       createdAt: parsed.createdAt,
       updatedAt: parsed.updatedAt,
     };
@@ -159,6 +198,20 @@ const atomicWrite = async (filePath: string, content: string) => {
   }
 };
 
+const parseSettings = (raw: string): MemorySettings => {
+  try {
+    const parsed = JSON.parse(raw) as Partial<MemorySettings>;
+    return {
+      enabled:
+        typeof parsed.enabled === "boolean"
+          ? parsed.enabled
+          : DEFAULT_SETTINGS.enabled,
+    };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+};
+
 export class FileMemoryRepository {
   private readonly writeQueues = new Map<number, Promise<void>>();
 
@@ -170,6 +223,10 @@ export class FileMemoryRepository {
 
   private memoryPath(userId: number) {
     return path.join(this.userDir(userId), "MEMORY.md");
+  }
+
+  private settingsPath(userId: number) {
+    return path.join(this.userDir(userId), ".meta", "settings.json");
   }
 
   private journalPath(userId: number) {
@@ -191,6 +248,40 @@ export class FileMemoryRepository {
       ),
     );
     return current;
+  }
+
+  getSettingsSync(userId: number): MemorySettings {
+    try {
+      return parseSettings(readFileSync(this.settingsPath(userId), "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return { ...DEFAULT_SETTINGS };
+      }
+      throw error;
+    }
+  }
+
+  async getSettings(userId: number): Promise<MemorySettings> {
+    const raw = await readTextFile(this.settingsPath(userId));
+    return raw ? parseSettings(raw) : { ...DEFAULT_SETTINGS };
+  }
+
+  async updateSettings(
+    userId: number,
+    update: Partial<MemorySettings>,
+  ): Promise<MemorySettings> {
+    return this.runSerialized(userId, async () => {
+      const current = await this.getSettings(userId);
+      const next: MemorySettings = {
+        enabled:
+          typeof update.enabled === "boolean" ? update.enabled : current.enabled,
+      };
+      await atomicWrite(
+        this.settingsPath(userId),
+        `${JSON.stringify(next, null, 2)}\n`,
+      );
+      return next;
+    });
   }
 
   listSync(userId: number): MemoryRecord[] {
@@ -246,6 +337,7 @@ export class FileMemoryRepository {
       .flatMap((line) => {
         try {
           const parsed = JSON.parse(line) as Partial<MemoryTombstone>;
+          const sources = parseMemorySources(parsed.sources) ?? [];
           if (
             typeof parsed.id !== "string" ||
             typeof parsed.content !== "string" ||
@@ -259,11 +351,7 @@ export class FileMemoryRepository {
               id: parsed.id,
               content: parsed.content,
               normalizedContent: parsed.normalizedContent,
-              sources:
-                Array.isArray(parsed.sources) &&
-                parsed.sources.every(isMemorySource)
-                  ? parsed.sources
-                  : [],
+              sources,
               deletedAt: parsed.deletedAt,
             },
           ];
