@@ -53,7 +53,6 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
 
       const snapshot = await tailscaleRemoteAccessService.getSnapshot({
         verifyHealth: true,
-        userId: user.id,
       });
       if (snapshot.runtime.state !== "ready" || !snapshot.runtime.accessUrl) {
         throw badRequest(
