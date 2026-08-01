@@ -33,6 +33,7 @@
 - 默认值明确写出，不隐藏；
 - 阻塞参数仍缺失时，在“需要确认”中集中列出；
 - 不把 Logo、统计、评论等延后参数展开成表单；
+- GitHub 模式的内部 staging 不作为用户参数盘问；
 - 不在草案里声称仓库、构建或部署已经完成。
 
 ## 发布博客或文档
@@ -82,13 +83,22 @@
 ```text
 目标站点：{{targetSite}}
 已完成：{{changeSummary}}
-写入位置：{{paths}}
+本地目标：{{localTarget | 不适用}}
+受管施工现场：{{stagingPath | 不适用}}
+远程写入：{{remotePaths | 不适用}}
 验证结果：{{verificationResults}}
 访问地址：{{urls | 无}}
 版本控制：{{branchCommitPr | 无}}
 远程状态：{{ciDeployment | 未执行}}
 剩余事项：{{remainingItems | 无}}
 ```
+
+规则：
+
+- local 模式填写 `localTarget`；
+- GitHub 模式填写 exact `stagingPath` 和远程分支 / 文件；
+- `Mira BASE` 或 Workspace root 不能冒充站点路径；
+- staging 只证明本地施工现场存在，不证明远程写入或部署完成。
 
 存在部分成功、阻塞或失败时，改用分步状态：
 
@@ -107,6 +117,9 @@ not_run
 
 恢复入口
 {{resumeFrom | 无}}
+
+本地施工现场
+{{stagingPath | 不适用}}
 ```
 
-结果中的“已完成”或 `completed` 只能包含已有回读或运行证据的事项。未执行、失败或无法确认的步骤必须单独列出；恢复入口必须指向第一个未完成步骤，不得要求从头重跑。
+结果中的“已完成”或 `completed` 只能包含已有回读或运行证据的事项。未执行、失败或无法确认的步骤必须单独列出；恢复入口必须指向第一个未完成步骤，并复用已记录的 staging / remote checkpoint，不得要求从头重跑。

@@ -26,8 +26,6 @@ const resolveConfiguredWorkspaceRoot = () => {
 };
 
 const assertWorkspaceDirectory = (targetPath: string) => {
-  fs.mkdirSync(targetPath, { recursive: true });
-
   if (!fs.existsSync(targetPath)) {
     throw mcpBadRequest(`workspace path does not exist: ${targetPath}`);
   }
