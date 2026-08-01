@@ -95,7 +95,10 @@ Authorization: Bearer <desktop user jwt>
 ### 3.4 Mobile 领取凭证
 
 ```http
-GET /remote/pairing/claims/:claimId?token=<pollToken>
+POST /remote/pairing/claims/:claimId/poll
+Content-Type: application/json
+
+{ "pollToken": "<one-time poll token>" }
 ```
 
 批准后，Host 只返回一次完整 device credential；返回后立即清除服务器中的可解密副本，只保留 SHA-256 哈希。mobile 必须把凭证保存到系统安全存储。
