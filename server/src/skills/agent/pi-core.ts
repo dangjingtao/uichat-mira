@@ -7,6 +7,7 @@ import {
   type AgentToolResult,
 } from "@earendil-works/pi-agent-core";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
+import { createProviderVisibleInputSchema } from "@/mcp/core/provider-visible-schema.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
 import { resolveAgentTaskProvider } from "@/services/provider-proxy.service/resolution.js";
 import type {
@@ -193,104 +194,13 @@ const normalizeCompletionRequirements = (
   return requirements;
 };
 
-const hasSchemaComposition = (schema: unknown) => {
-  const record = asRecord(schema);
-  return Boolean(
-    record &&
-      (Array.isArray(record.oneOf) ||
-        Array.isArray(record.anyOf) ||
-        Array.isArray(record.allOf)),
-  );
-};
-
-const collectOperationValues = (schema: unknown) => {
-  const record = asRecord(schema);
-  const variants = Array.isArray(record?.oneOf) ? record.oneOf : [record];
-  const operations = new Set<string>();
-  for (const variant of variants) {
-    const operation = asRecord(asRecord(variant)?.properties)?.operation;
-    const operationSchema = asRecord(operation);
-    if (typeof operationSchema?.const === "string") operations.add(operationSchema.const);
-    if (Array.isArray(operationSchema?.enum)) {
-      for (const value of operationSchema.enum) {
-        if (typeof value === "string") operations.add(value);
-      }
-    }
-  }
-  return [...operations];
-};
-
-const collectStablePrimitiveProperties = (schema: unknown) => {
-  const record = asRecord(schema);
-  const variants = Array.isArray(record?.oneOf) ? record.oneOf : [record];
-  const stats = new Map<string, { count: number; type: string; required: number }>();
-  for (const variant of variants) {
-    const variantRecord = asRecord(variant);
-    const properties = asRecord(variantRecord?.properties) ?? {};
-    const required = new Set(
-      Array.isArray(variantRecord?.required)
-        ? variantRecord.required.filter((value): value is string => typeof value === "string")
-        : [],
-    );
-    for (const [name, value] of Object.entries(properties)) {
-      const property = asRecord(value);
-      const type = property?.type;
-      if (
-        typeof type !== "string" ||
-        !["string", "number", "integer", "boolean"].includes(type)
-      ) {
-        continue;
-      }
-      const current = stats.get(name);
-      if (current && current.type !== type) continue;
-      stats.set(name, {
-        count: (current?.count ?? 0) + 1,
-        type,
-        required: (current?.required ?? 0) + (required.has(name) ? 1 : 0),
-      });
-    }
-  }
-
-  const threshold = variants.length / 2;
-  const properties: Record<string, unknown> = {};
-  const required: string[] = [];
-  for (const [name, stat] of stats) {
-    if (stat.count <= threshold) continue;
-    properties[name] = { type: stat.type };
-    if (stat.required > threshold) required.push(name);
-  }
-  return { properties, required };
-};
-
 export const projectProviderVisibleToolSchema = (input: {
   schema: Record<string, unknown>;
   projectComplexToolSchemas: boolean;
-}): Record<string, unknown> => {
-  if (!input.projectComplexToolSchemas || !hasSchemaComposition(input.schema)) {
-    return input.schema;
-  }
-
-  const operations = collectOperationValues(input.schema);
-  const stable = collectStablePrimitiveProperties(input.schema);
-  delete stable.properties.operation;
-  const required = ["operation", ...stable.required.filter((name) => name !== "operation")];
-  return {
-    type: "object",
-    additionalProperties: true,
-    ...(operations.length > 0
-      ? {
-          required,
-          properties: {
-            operation: {
-              type: "string",
-              enum: operations,
-            },
-            ...stable.properties,
-          },
-        }
-      : { properties: stable.properties }),
-  };
-};
+}): Record<string, unknown> =>
+  input.projectComplexToolSchemas
+    ? createProviderVisibleInputSchema(input.schema)
+    : input.schema;
 
 const buildSystemPrompt = (input: SkillAgentExecutionInput) => {
   const primary = input.skillContext.primary;
