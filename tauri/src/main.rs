@@ -72,6 +72,20 @@ fn ensure_secret_file(secret_path: &Path, secret_name: &str) -> Result<String, S
     Ok(secret)
 }
 
+#[cfg(not(debug_assertions))]
+fn ensure_directory(directory_path: &Path, label: &str) -> Result<(), String> {
+    std::fs::create_dir_all(directory_path)
+        .map_err(|error| format!("Failed to create {} {:?}: {}", label, directory_path, error))?;
+
+    let metadata = std::fs::metadata(directory_path)
+        .map_err(|error| format!("Failed to inspect {} {:?}: {}", label, directory_path, error))?;
+    if !metadata.is_dir() {
+        return Err(format!("{} must be a directory: {:?}", label, directory_path));
+    }
+
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 struct RuntimeConfig {
     backend_host: String,
@@ -766,10 +780,9 @@ pub fn run() {
             let jwt_secret = ensure_secret_file(&secrets_dir.join("jwt-secret.txt"), "JWT secret")?;
             let settings_secret = ensure_secret_file(&secrets_dir.join("settings-secret.txt"), "settings secret")?;
 
-            std::fs::create_dir_all(&data_dir)
-                .map_err(|error| format!("Failed to create data directory {:?}: {}", data_dir, error))?;
-            std::fs::create_dir_all(&log_dir)
-                .map_err(|error| format!("Failed to create log directory {:?}: {}", log_dir, error))?;
+            ensure_directory(&data_dir, "data directory")?;
+            ensure_directory(&log_dir, "log directory")?;
+            ensure_directory(&default_workspace_root, "default workspace")?;
 
             let process = start_backend_process(
                 &data_dir,

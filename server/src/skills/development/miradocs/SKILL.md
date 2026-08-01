@@ -148,7 +148,7 @@ github_repository.get_pages
 github_repository.configure_pages
 ```
 
-有能力且用户目标需要，就执行完整闭环；不得因为产品策略而把已存在的能力描述为不可用。每个远程写入仍须走现有审批和回读合同。
+仓库创建、installation 检查、文件写入、PR、Actions 和 Pages 是不同 invocation。每个远程写入仍须走现有审批和回读合同。
 
 ## B. 发布博客或文档
 
@@ -214,20 +214,21 @@ MiraDocs Skill 负责：
 | 定位本地站点、目录和文件 | `read_discover` |
 | 打开已知文件与 Skill 参考资源 | `read_open` |
 | 本地写入、修改、删除、重命名、安装、检查、构建和预览 | `terminal_session` |
-| GitHub 仓库、分支和远程文件 | `github_repository` |
+| GitHub 仓库、installation、分支、远程文件和 Pages | `github_repository` |
 | 创建或维护 PR | `github_pull_request` |
-| 检查或操作 CI / Pages 工作流 | `github_actions` |
+| 检查或操作 CI / workflow | `github_actions` |
 
 `execution.allowedTools` 是 fork 执行的最大工具边界，不是每次任务都必须具备的工具清单。每个操作只校验当前步骤真正需要的工具；未被当前步骤使用的可选工具不可成为阻塞条件。
 
-按操作取用：
+## 按操作取用
 
 ```text
 create_site / local
 → read_discover + read_open + terminal_session
 
 create_site / github
-→ github_repository
+→ github_repository：仓库、installation、分支、文件、Pages
+→ terminal_session：受管本地 staging、依赖安装、类型检查和静态构建
 → 用户要求 PR 时再取 github_pull_request
 → 用户要求上线或需要诊断 CI 时再取 github_actions
 
@@ -235,7 +236,8 @@ publish_content / local
 → read_open + terminal_session
 
 publish_content / github
-→ github_repository
+→ github_repository：读取和写入远程内容
+→ terminal_session：需要本地内容发现、构建或路由验证时使用受管 staging
 → 需要 PR 时再取 github_pull_request
 → 需要上线验证时再取 github_actions
 
@@ -245,12 +247,61 @@ maintain_site / local
 
 maintain_site / github
 → github_repository
+→ 需要本地复现、修改或构建时取 terminal_session 与受管 staging
 → 只在 PR、CI 或部署步骤分别取 github_pull_request / github_actions
 ```
 
-本地文件施工统一由 `terminal_session` 承担，不要求 Skill 感知 `write_file`、`replace_block`、`delete_path`、`move_path` 或兼容层 `edit_file` 等实现细节。具体命令仍走终端审批、工作区边界和执行回读。
+GitHub 模式的“本地验证”不能只靠 GitHub Tool，也不能在默认 Workspace 根目录直接铺开项目文件。
 
-Skill 命中不代表工具已经进入本轮 ToolExposure。Planner 只能使用当前真实暴露并通过 Policy 的能力；但已经真实暴露且当前步骤需要的能力，不应被 Skill 人为回避。
+# Workspace 与 staging 合同
+
+## 1. 本地目标
+
+本地模式使用用户明确的 `target.localPath`，或用户已经明确指定为目标项目的当前 Workspace。写入前必须检查目标是否存在、是否为空以及可能覆盖的文件。
+
+## 2. GitHub 目标
+
+GitHub 模式需要一个独立的本地施工现场，用于：
+
+```text
+生成 / 拉取站点文件
+安装依赖
+类型检查
+静态构建
+路由与内容入口验证
+```
+
+默认使用当前 Harness workspace root 下的受管目录：
+
+```text
+<workspaceRoot>/.mira/staging/miradocs/<owner>/<repo>/<taskKey>/
+```
+
+规则：
+
+- 不能把 `<workspaceRoot>` 本身当作站点根目录；
+- `taskKey` 首次创建后必须保存在 checkpoint / working state，恢复时复用；
+- 不同仓库或并发任务不能共享施工目录；
+- staging 路径必须进入 trace 和最终交付；
+- 失败后保留现场并从失败步骤继续；
+- 未完成交付前不得自动清空现场；
+- 清理 staging 是显式生命周期动作，不得掩盖失败证据。
+
+如果没有有效 Workspace 或 `terminal_session` 未进入当前步骤的真实 ToolExposure，则本地验证能力缺失。此时不得声称站点已经完成构建；按 completion criteria 返回 capability 缺口。
+
+## 3. 默认空间
+
+默认数据库 Workspace 名为 `Mira BASE`，绑定桌面宿主提供的默认物理目录。`Mira BASE` 只是逻辑名称，不是站点目录名。
+
+默认目录的创建由 Electron / Tauri launcher 在 backend 启动前完成；MiraDocs Skill 不负责通过一次 Terminal 调用“补建”全局默认目录，也不能让通用 Workspace snapshot 隐式创建自定义路径。
+
+详细合同见：`docs/chat/workspace.md`。
+
+# 本地文件施工
+
+本地文件施工统一由 `terminal_session` 承担，不要求 Skill 感知 `write_file`、`replace_block`、`delete_path`、`move_path` 或兼容层 `edit_file` 等实现细节。具体命令仍走终端审批、Workspace 边界和执行回读。
+
+Skill 命中不代表工具已经进入本轮 ToolExposure。Planner 只能使用当前真实暴露并通过 Policy 的能力。当前环境已经真实暴露的能力，不应被 Skill 人为回避；当前步骤需要时应实际调用。
 
 # 交付格式
 
@@ -259,7 +310,8 @@ Skill 命中不代表工具已经进入本轮 ToolExposure。Planner 只能使�
 ```text
 目标站点
 本次变更
-写入位置
+本地目标路径或 staging 路径
+远程写入位置
 验证结果
 可访问地址
 commit / PR / CI / 部署状态
@@ -270,7 +322,7 @@ commit / PR / CI / 部署状态
 
 # 失败与恢复
 
-每个已完成的远程动作都是可回读 checkpoint。后续步骤失败时，不撤销已经正确完成的仓库、分支、文件或 PR，也不重复执行不可幂等动作。
+每个已完成的远程动作和本地验证结果都是可回读 checkpoint。后续步骤失败时，不撤销已经正确完成的仓库、分支、文件或 PR，也不重复执行不可幂等动作。
 
 ```text
 仓库创建成功，但 installation 未授权
@@ -279,11 +331,16 @@ commit / PR / CI / 部署状态
 → 用户授权后先重新读取仓库和 installation 状态
 → 从 ensure_installation_access 继续，禁止再次 create
 
-站点文件已写入，但安装、类型检查或构建失败
-→ 保留施工分支与已写入文件
+staging 已创建，但本地安装或构建失败
+→ 保留 exact staging path
 → 返回失败命令、错误层和可核验路径
 → 不配置 Pages，不声称站点可发布
 → 修复后从失败验证层继续
+
+站点文件已写入远程分支，但本地验证失败
+→ 保留远程 checkpoint 和 staging
+→ 不重复创建仓库或分支
+→ 修复并重新验证后再继续 PR / Pages
 
 PR 已创建，但 Actions 失败
 → 保留 PR
@@ -297,7 +354,7 @@ PR 已创建，但 Actions 失败
 → 不重复写内容或重新创建仓库
 ```
 
-交付时把每一步标成：`completed`、`blocked`、`failed` 或 `not_run`。恢复前必须重新读取远程状态，不能只依赖上一轮摘要。
+交付时把每一步标成：`completed`、`blocked`、`failed` 或 `not_run`。恢复前必须重新读取远程状态和 staging 事实，不能只依赖上一轮摘要。
 
 # Hard Rules
 
@@ -317,6 +374,8 @@ PR 已创建，但 Actions 失败
 14. 新仓库创建后必须检查 installation 授权；Pages 配置后必须回读最终状态和 URL。
 15. 恢复任务时先回读 checkpoint，禁止重复创建仓库、重复发布同一内容或重复执行已完成的远程写入。
 16. fork 执行不得调用 `execution.allowedTools` 之外的工具；只在当前步骤关键工具缺失时报告 capability 缺口，不得因未使用的可选工具缺失而阻塞。
+17. GitHub 模式需要本地验证时必须使用独立 staging，不得直接污染 Workspace 根目录。
+18. 不得让 Workspace getter、environment snapshot 或 Skill 通过隐藏 mkdir 复活缺失的自定义目录。
 
 # Completion Criteria
 
@@ -325,11 +384,12 @@ PR 已创建，但 Actions 失败
 - 当前操作和目标站点明确；
 - 阻塞参数已收齐，默认值与推断值已向用户展示；
 - 施工前读取了目标位置、仓库或现有站点事实；
+- GitHub 模式已记录 exact staging path；
 - 写入通过现有审批路径完成；
-- 修改后的文件已回读；
+- 修改后的本地或远程文件已回读；
 - 新 GitHub 仓库已回读创建结果并检查 installation 授权；
-- 与任务相关的内容发现、类型检查、构建、路由、CI 或部署验证结果明确；
-- 用户要求 Pages 上线时，Pages 最终状态和 URL 已回读；
+- 依赖安装、类型检查、静态构建及必要路由验证结果明确；
+- 用户要求 Pages 上线时，Pages 最终状态、Actions 和 URL 已回读；
 - 用户获得路径、地址、分支、commit、PR 或远程状态等可核验证据；
 - 失败步骤、剩余配置和需要人工决定的事项被清楚列出；
 - 恢复执行没有重复已完成的不可幂等动作；

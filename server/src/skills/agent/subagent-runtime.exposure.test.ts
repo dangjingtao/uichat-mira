@@ -119,6 +119,24 @@ describe("prepareSubAgent GitHub exposure", () => {
     expect(prepared.missingCapabilities).toEqual([]);
   });
 
+  it("binds the canonical oneOf schema before provider-specific projection", () => {
+    registerGitHubTools();
+
+    const prepared = prepareSubAgent({
+      goal: "Write a file to dangjingtao/uichat-mira",
+      skillContext: createGitHubSkillContext("built-in"),
+      exposedHarnessToolIds: [],
+    });
+    const repositoryTool = prepared.tools.find(
+      (tool) => tool.id === "github_repository",
+    );
+    const schema = repositoryTool?.inputSchema as Record<string, unknown>;
+
+    expect(schema).toBe(githubRepositoryTool.definition.inputSchema);
+    expect(schema).toHaveProperty("oneOf");
+    expect(githubRepositoryTool.definition.inputSchemaByExposure?.agent_intent).toBeUndefined();
+  });
+
   it("does not let a user Skill grant itself GitHub tools", () => {
     registerGitHubTools();
 
@@ -154,7 +172,7 @@ describe("Ark Plan provider-visible schemas", () => {
     ],
   };
 
-  it("projects composition only for Ark Plan while preserving the runtime schema", () => {
+  it("projects composition only for Ark Plan while preserving every variant field", () => {
     expect(
       projectPiProviderVisibleToolSchema({
         schema: composedSchema,
@@ -165,8 +183,14 @@ describe("Ark Plan provider-visible schemas", () => {
       additionalProperties: true,
       required: ["operation", "repository"],
       properties: {
-        operation: { type: "string", enum: ["get", "list_commits"] },
+        operation: {
+          type: "string",
+          enum: ["get", "list_commits"],
+          description:
+            "Selects the operation-specific runtime contract. Supply the fields required by that operation.",
+        },
         repository: { type: "string" },
+        limit: { type: "integer" },
       },
     });
     expect(composedSchema).toHaveProperty("oneOf");
@@ -176,5 +200,40 @@ describe("Ark Plan provider-visible schemas", () => {
         projectComplexToolSchemas: false,
       }),
     ).toBe(composedSchema);
+  });
+
+  it("retains GitHub write fields in the Ark-only compatibility projection", () => {
+    const projected = projectPiProviderVisibleToolSchema({
+      schema: githubRepositoryTool.definition.inputSchema,
+      projectComplexToolSchemas: true,
+    });
+    const properties = projected.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    expect(projected).not.toHaveProperty("oneOf");
+    expect(properties.operation.enum).toEqual(
+      expect.arrayContaining([
+        "create",
+        "write_file",
+        "ensure_installation_access",
+        "get_pages",
+        "configure_pages",
+      ]),
+    );
+    expect(properties).toMatchObject({
+      repository: { type: "string" },
+      path: { type: "string" },
+      content: { type: "string" },
+      commitMessage: { type: "string" },
+      branch: { type: "string" },
+      owner: { type: "string" },
+      name: { type: "string" },
+      visibility: { type: "string" },
+      mode: { type: "string" },
+    });
+
+    expect(githubRepositoryTool.definition.inputSchema).toHaveProperty("oneOf");
   });
 });

@@ -58,6 +58,24 @@ function ensureSecretFile(secretPath, secretName) {
   return secret;
 }
 
+function ensureDirectory(directoryPath, label) {
+  try {
+    fs.mkdirSync(directoryPath, { recursive: true });
+  } catch (error) {
+    throw new Error(
+      `Failed to create ${label} at ${directoryPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  if (!fs.statSync(directoryPath).isDirectory()) {
+    throw new Error(`${label} must be a directory: ${directoryPath}`);
+  }
+
+  return directoryPath;
+}
+
 async function sleep(ms) {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -358,8 +376,9 @@ async function startBackend() {
     "UIChat Mira",
     "Default Workspace",
   );
-  fs.mkdirSync(dataDir, { recursive: true });
-  fs.mkdirSync(logDir, { recursive: true });
+  ensureDirectory(dataDir, "data directory");
+  ensureDirectory(logDir, "log directory");
+  ensureDirectory(defaultWorkspaceRoot, "default workspace");
 
   const jwtSecret = ensureSecretFile(
     path.join(secretsDir, "jwt-secret.txt"),
