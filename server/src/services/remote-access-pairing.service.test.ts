@@ -1,19 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const scopes = [
-  "threads:read",
-  "messages:read",
-  "messages:write",
-  "agent:read",
-  "agent:approve",
-  "agent:control",
-  "artifacts:read",
-] as const;
+const scopes = vi.hoisted(
+  () =>
+    [
+      "threads:read",
+      "messages:read",
+      "messages:write",
+      "agent:read",
+      "agent:approve",
+      "agent:control",
+      "artifacts:read",
+    ] as const,
+);
 
 type Challenge = {
   id: string;
   userId: number;
-  status: "pending" | "claimed" | "approved" | "rejected" | "delivered" | "expired";
+  status:
+    | "pending"
+    | "claimed"
+    | "approved"
+    | "rejected"
+    | "delivered"
+    | "expired";
   codeHash: string;
   hostUrl: string;
   createdAt: string;
@@ -65,11 +74,14 @@ const repositoryMock = vi.hoisted(() => ({
     state.challenges.set(challenge.id, challenge);
     return challenge;
   }),
-  getPairingChallengeById: vi.fn((id: string) => state.challenges.get(id) ?? null),
-  getPairingChallengeByClaimId: vi.fn((claimId: string) =>
-    Array.from(state.challenges.values()).find(
-      (challenge) => challenge.claimId === claimId,
-    ) ?? null,
+  getPairingChallengeById: vi.fn(
+    (id: string) => state.challenges.get(id) ?? null,
+  ),
+  getPairingChallengeByClaimId: vi.fn(
+    (claimId: string) =>
+      Array.from(state.challenges.values()).find(
+        (challenge) => challenge.claimId === claimId,
+      ) ?? null,
   ),
   incrementPairingAttempts: vi.fn((id: string) => {
     const challenge = state.challenges.get(id);
@@ -117,7 +129,11 @@ const repositoryMock = vi.hoisted(() => ({
     const challenge = Array.from(state.challenges.values()).find(
       (item) => item.claimId === input.claimId,
     );
-    if (!challenge || challenge.status !== "approved" || !challenge.credentialEncrypted) {
+    if (
+      !challenge ||
+      challenge.status !== "approved" ||
+      !challenge.credentialEncrypted
+    ) {
       return null;
     }
     const delivered = { ...challenge };
@@ -213,7 +229,9 @@ describe("RemoteAccessPairingService", () => {
     const delivered = service.poll(claim.claimId, claim.pollToken);
     expect(delivered.status).toBe("approved");
     expect(delivered.scopes).toEqual(["threads:read"]);
-    expect(delivered.credential).toMatch(/^mira_device_[^.]+\.[A-Za-z0-9_-]+$/u);
+    expect(delivered.credential).toMatch(
+      /^mira_device_[^.]+\.[A-Za-z0-9_-]+$/u,
+    );
 
     const repeated = service.poll(claim.claimId, claim.pollToken);
     expect(repeated.status).toBe("delivered");
