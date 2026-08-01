@@ -1,0 +1,96 @@
+name: Memory CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+    paths:
+      - "server/src/memory/**"
+      - "server/src/routes/memory.ts"
+      - "server/src/routes/memory.test.ts"
+      - "server/src/routes/general-settings.ts"
+      - "server/src/routes/proxy-provider/message-persistence.ts"
+      - "server/src/services/shared-nodes/thread-request-context-memory.resolver.ts"
+      - "server/src/services/shared-nodes/thread-request-context-memory.resolver.test.ts"
+      - "server/src/services/shared-nodes/thread-request-context.node.test.ts"
+      - "server/src/services/shared-nodes/thread-request-context.types.ts"
+      - "server/package.json"
+      - "desktop/src/features/Settings/pages/Personalization/**"
+      - "desktop/src/shared/api/memory.ts"
+      - "desktop/package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/memory-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-memory:
+    name: Server Memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: file:${{ github.workspace }}/.test-artifact/uichat-mira-memory-ci.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Prepare test artifact directory
+        run: mkdir -p .test-artifact
+
+      - name: Install server workspace dependencies
+        run: pnpm install --frozen-lockfile --filter @ui-chat-mira/server...
+
+      - name: Typecheck server
+        run: pnpm --filter @ui-chat-mira/server typecheck
+
+      - name: Run memory server regressions
+        run: pnpm --filter @ui-chat-mira/server test:memory
+
+  desktop-memory:
+    name: Desktop Memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install desktop workspace dependencies
+        run: pnpm install --frozen-lockfile --filter @ui-chat-mira/desktop...
+
+      - name: Typecheck desktop
+        run: pnpm --filter @ui-chat-mira/desktop typecheck
+
+      - name: Run personalization memory regressions
+        run: pnpm --filter @ui-chat-mira/desktop test:memory
