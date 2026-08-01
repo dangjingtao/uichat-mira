@@ -4,6 +4,7 @@ import { validateMemoryPatchProposals } from "./memory-policy.js";
 import type { MemoryRecord, MemorySource } from "./types.js";
 
 const source: MemorySource = {
+  type: "conversation",
   threadId: "thread-1",
   userMessageId: "user-1",
   assistantMessageId: "assistant-1",
@@ -23,6 +24,7 @@ describe("validateMemoryPatchProposals", () => {
     const patches = validateMemoryPatchProposals({
       existing: [existing],
       source: {
+        type: "conversation",
         threadId: "thread-2",
         userMessageId: "user-2",
         assistantMessageId: "assistant-2",
@@ -54,6 +56,31 @@ describe("validateMemoryPatchProposals", () => {
       assert.equal(patches[1].record.id, existing.id);
       assert.equal(patches[1].record.sources.length, 2);
       assert.equal(patches[1].record.createdAt, existing.createdAt);
+    }
+  });
+
+  it("merges a manual edit without forging conversation provenance", () => {
+    const patches = validateMemoryPatchProposals({
+      existing: [existing],
+      source: {
+        type: "manual",
+        operationId: "manual-1",
+      },
+      proposals: [
+        {
+          operation: "replace",
+          targetId: existing.id,
+          kind: "fact",
+          content: "用户主要使用 Windows 11。",
+          confidence: 1,
+          reason: "manual edit",
+        },
+      ],
+    });
+
+    assert.equal(patches[0]?.operation, "replace");
+    if (patches[0]?.operation === "replace") {
+      assert.equal(patches[0].record.sources[1]?.type, "manual");
     }
   });
 
