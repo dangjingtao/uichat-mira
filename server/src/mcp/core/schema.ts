@@ -79,34 +79,46 @@ const validateDiscriminatedOneOf = (
   candidates: unknown[],
   pathSegments: string[],
 ) => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const objectValue = value as Record<string, unknown>;
-  const operation = objectValue.operation;
-  if (typeof operation !== "string") return false;
-
   const declaredOperations: string[] = [];
-  const matchingCandidates: JsonSchema[] = [];
+  const candidateEntries: Array<{
+    schema: JsonSchema;
+    operations: string[];
+  }> = [];
 
   for (const candidate of candidates) {
     const candidateSchema = asSchemaObject(candidate);
-    const properties = asSchemaObject(candidateSchema?.properties);
+    if (!candidateSchema) continue;
+    const properties = asSchemaObject(candidateSchema.properties);
     const operationSchema = asSchemaObject(properties?.operation);
     const operationValues = getStringDiscriminatorValues(operationSchema);
+    if (operationValues.length === 0) continue;
     declaredOperations.push(...operationValues);
-    if (operationValues.includes(operation)) {
-      matchingCandidates.push(candidateSchema!);
-    }
+    candidateEntries.push({
+      schema: candidateSchema,
+      operations: operationValues,
+    });
   }
 
   const uniqueOperations = [...new Set(declaredOperations)];
   if (uniqueOperations.length === 0) return false;
 
+  const objectValue = assertObject(value, pathSegments);
+  const operation = objectValue.operation;
+  const operationPath = [...pathSegments, "operation"];
+  if (operation === undefined) {
+    throw mcpBadRequest(`${describePath(operationPath)} is required`);
+  }
+  if (typeof operation !== "string") {
+    throw mcpBadRequest(`${describePath(operationPath)} must be a string`);
+  }
+
+  const matchingCandidates = candidateEntries
+    .filter((candidate) => candidate.operations.includes(operation))
+    .map((candidate) => candidate.schema);
+
   if (matchingCandidates.length === 0) {
     throw mcpBadRequest(
-      `${describePath([...pathSegments, "operation"])} must be one of: ${uniqueOperations.join(", ")}`,
+      `${describePath(operationPath)} must be one of: ${uniqueOperations.join(", ")}`,
     );
   }
 
