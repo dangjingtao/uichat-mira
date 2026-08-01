@@ -29,7 +29,10 @@ V1 中 RAG 明确不读、不写这套用户长期记忆。知识库线程开启
 2. `thread-request-context.node.ts`：Chat 与 Agent 共用的请求上下文链；
 3. 默认对话流：普通 Chat 与 Agent 共用 assistant 消息持久化函数；
 4. `llmSharedNode`：可通过 Mira 的 task 模型执行结构化整理；
-5. `UI_CHAT_DATABASE_DIR`：Electron 与 Tauri 已统一传入的用户数据目录。
+5. `UI_CHAT_DATABASE_DIR`：Electron 与 Tauri 已统一传入的用户数据目录；
+6. `desktop/src/features/Settings/pages/Personalization/index.tsx`：现有个性化页面已经包含记忆开关、管理抽屉和手工输入区域。
+
+现有记忆 UI 目前是 frontend preview，使用页面本地状态，不读取或修改真实记忆。V1 的 UI 任务是接通现有页面与独立 Memory 模块，不新建记忆页面、不迁移入口、不重做现有视觉结构。
 
 V1 在这些合同上补齐中间层，不修改 Planner、Agent Graph 或 Harness 合同。
 
@@ -52,6 +55,8 @@ V1 在这些合同上补齐中间层，不修改 Planner、Agent Graph 或 Harne
 - `assistantMessageId`
 
 模型推测、心理画像、临时情绪和未经用户确认的信息不得进入长期记忆。Assistant 文本只用于理解上下文，不是用户事实的权威来源。
+
+用户通过现有 Personalization UI 手工新增或修改的记忆属于显式用户输入，应标记为 manual source，不伪造成对话消息来源。
 
 ### 3.4 失败不影响聊天
 
@@ -88,12 +93,14 @@ V1 不保存：
     └── <userId>/
         ├── MEMORY.md
         └── .meta/
+            ├── settings.json
             ├── journal.jsonl
             ├── tombstones.jsonl
             └── processed-turns.jsonl
 ```
 
 - `MEMORY.md`：长期记忆真相源；
+- `settings.json`：用户级启用状态等轻量设置；
 - `journal.jsonl`：已执行 Patch 的审计记录；
 - `tombstones.jsonl`：删除记录及原来源，阻止同一旧证据令记忆复活；
 - `processed-turns.jsonl`：已整理轮次的持久化幂等账本。
@@ -102,14 +109,20 @@ V1 先使用单一 `MEMORY.md`。达到真实容量或检索压力后，才引�
 
 ## 5. 托管区块
 
-自动记忆使用机器可识别、人工可阅读的 Markdown 区块：
+自动记忆和 UI 手工记忆都使用机器可识别、人工可阅读的 Markdown 区块：
 
 ```markdown
 <!-- mira:memory
-{"id":"mem_xxx","kind":"preference","sources":[{"threadId":"...","userMessageId":"...","assistantMessageId":"..."}],"createdAt":"...","updatedAt":"..."}
+{"id":"mem_xxx","kind":"preference","sources":[{"type":"conversation","threadId":"...","userMessageId":"...","assistantMessageId":"..."}],"createdAt":"...","updatedAt":"..."}
 -->
 用户偏好先看明确结论，再阅读展开理由。
 <!-- /mira:memory -->
+```
+
+手工来源使用独立类型：
+
+```json
+{"type":"manual","operationId":"manual_xxx"}
 ```
 
 文件中非托管区块属于用户内容，Memory Kernel 不得覆盖。模型输出中包含托管区块保留标记时，Policy 必须拒绝该 Patch。
@@ -127,8 +140,8 @@ interface MemoryRepository {
 }
 
 interface MemoryTurnLedger {
-  has(userId: number, source: MemorySource): Promise<boolean>;
-  mark(userId: number, source: MemorySource): Promise<void>;
+  has(userId: number, source: ConversationMemorySource): Promise<boolean>;
+  mark(userId: number, source: ConversationMemorySource): Promise<void>;
 }
 
 interface MemoryContextBuilder {
@@ -142,7 +155,7 @@ V1 Patch 操作：
 - `replace`
 - `delete`
 
-`delete` 必须写入 tombstone。Tombstone 只阻止同一旧来源重复晋升；用户在后续新消息中明确重新确认时，允许重新建立同内容记忆。
+`delete` 必须写入 tombstone。Tombstone 只阻止同一旧来源重复晋升；用户在后续新消息或 Personalization UI 中明确重新确认时，允许重新建立同内容记忆。
 
 ## 7. 生命周期
 
@@ -150,6 +163,7 @@ V1 Patch 操作：
 
 ```text
 收到普通 Chat / Agent 请求
+→ 检查用户级 memory enabled
 → 同步读取当前用户 MEMORY.md
 → 构建有大小上限的 memoryContext
 → 交给现有 resolveMemoryContext
@@ -158,10 +172,11 @@ V1 Patch 操作：
 
 普通 RAG 路径不执行这一步。同步读取在文件超过 256 KiB 时安全降级为空；V1 达到该规模前应先引入索引和分文件策略。
 
-### 7.2 写入
+### 7.2 自动写入
 
 ```text
 assistant 消息已持久化
+→ 检查用户级 memory enabled
 → 判断是否是可提交轮次
 → processed-turns 幂等检查
 → MemoryConsolidator 读取本轮与现有记忆
@@ -180,6 +195,27 @@ assistant 消息已持久化
 
 即使某轮没有产生任何 Patch，也必须记录为 processed，避免 Agent 恢复或消息重复持久化时再次调用 task 模型。
 
+### 7.3 UI 手工管理
+
+现有 Personalization 页面通过 Memory API 完成：
+
+```text
+打开页面 / 抽屉
+→ 读取 enabled 与 MemoryRecord 列表
+
+切换开关
+→ 更新用户级 enabled
+
+手工输入
+→ 创建 manual source 记忆
+
+编辑 / 删除
+→ 按稳定 memory id 执行 replace / delete
+→ 返回最新列表
+```
+
+UI 不直接读取或修改 Markdown 文件，也不绕过 Memory Policy 与 journal。
+
 ## 8. 并发、原子性与幂等
 
 同一用户的轮次整理和文件修改必须串行执行；不同用户可以并行。
@@ -192,7 +228,7 @@ assistant 消息已持久化
 4. 写临时文件；
 5. `rename` 原子替换；
 6. 追加 journal；
-7. 记录 processed turn。
+7. 自动整理轮次记录 processed turn。
 
 整理失败时不记录 processed turn，使后续可以重试；已经完成的聊天回复不回滚。
 
@@ -204,7 +240,7 @@ V1 规则：
 - 总字符数不超过 6000；
 - 按最近更新时间倒序；
 - 不注入 metadata 和来源 ID；
-- 记忆为空时不生成 memory execution node。
+- memory disabled 或记忆为空时不生成 memory execution node。
 
 ## 10. V1 验收
 
@@ -218,16 +254,19 @@ V1 规则：
 6. 非法 JSON、低置信度或非法 Patch 不写文件；
 7. 托管区块保留标记不能由模型写入正文；
 8. 同一用户并发写入不破坏 Markdown；
-9. 人工文本不会被自动修改；
+9. 人工文件文本不会被自动修改；
 10. replace 能替换旧记忆而不是重复追加；
 11. delete 写 tombstone，同一旧证据不能复活，新明确来源可以重新确认；
 12. 同一消息轮次持久化幂等；
-13. RAG 不进入 V1 读取或写入链。
+13. RAG 不进入 V1 读取或写入链；
+14. 现有 Personalization 记忆开关可真实控制 Chat / Agent 记忆；
+15. 现有管理抽屉可读取、新增、编辑和删除真实记忆；
+16. UI 手工记忆使用 manual source，不伪造消息来源。
 
 ## 11. 后续阶段（非 V1）
 
-- 用户查看、编辑、删除记忆的桌面管理页；
 - 来源消息回看与分支失效；
+- 记忆管理 UI 的筛选、搜索、来源详情和批量操作；
 - `USER.md`、topic 文件与每日记忆；
 - FTS / embedding 混合检索；
 - 记忆质量评测与真实对话回放；
