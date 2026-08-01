@@ -10,6 +10,7 @@
     "build": "node build.js",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "test:memory": "vitest run src/memory/file-memory.repository.test.ts src/memory/memory-policy.test.ts src/memory/memory.service.test.ts src/memory/turn-commit-policy.test.ts src/routes/memory.test.ts src/services/shared-nodes/thread-request-context-memory.resolver.test.ts src/services/shared-nodes/thread-request-context.node.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:protocol": "tsx --tsconfig tsconfig.test.json --test src/**/*.test.ts",
     "smoke:pi-skill-agent": "tsx scripts/smoke-pi-skill-agent.ts",
