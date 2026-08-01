@@ -1,6 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
 import { generalSettingsRepository } from "@/db/repositories/general-settings.repository.js";
+import { tailscaleRemoteAccessRepository } from "@/db/repositories/tailscale-remote-access.repository.js";
 import { errorEnvelope, successEnvelope } from "@/routes/schema-helpers.js";
+import remoteAccessRoute from "@/routes/remote-access.js";
 import {
   TailscaleRemoteAccessError,
   tailscaleRemoteAccessService,
@@ -199,8 +201,15 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    routeHandler("Failed to inspect Tailscale remote access", async () =>
-      success(await tailscaleRemoteAccessService.getSnapshot())),
+    routeHandler("Failed to inspect Tailscale remote access", async (request) => {
+      const snapshot = await tailscaleRemoteAccessService.getSnapshot();
+      return success({
+        ...snapshot,
+        pairedDevices: tailscaleRemoteAccessRepository.listDevices(
+          request.authUser?.id,
+        ),
+      });
+    }),
   );
 
   app.post(
@@ -218,8 +227,15 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
         },
       },
     },
-    routeHandler("Failed to check Tailscale remote access", async () =>
-      success(await tailscaleRemoteAccessService.check())),
+    routeHandler("Failed to check Tailscale remote access", async (request) => {
+      const snapshot = await tailscaleRemoteAccessService.check();
+      return success({
+        ...snapshot,
+        pairedDevices: tailscaleRemoteAccessRepository.listDevices(
+          request.authUser?.id,
+        ),
+      });
+    }),
   );
 
   app.put<{ Body: { enabled: boolean } }>(
@@ -248,8 +264,16 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
     },
     routeHandler("Failed to update Tailscale remote access", async (request) => {
       try {
+        const snapshot = await tailscaleRemoteAccessService.updateEnabled(
+          request.body.enabled,
+        );
         return success(
-          await tailscaleRemoteAccessService.updateEnabled(request.body.enabled),
+          {
+            ...snapshot,
+            pairedDevices: tailscaleRemoteAccessRepository.listDevices(
+              request.authUser?.id,
+            ),
+          },
           request.body.enabled
             ? "Tailscale remote access enabled"
             : "Tailscale remote access disabled",
@@ -285,8 +309,10 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
       },
     },
     routeHandler("Failed to revoke remote device", async (request) => {
-      const revoked = tailscaleRemoteAccessService.revokeDevice(
+      const userId = request.authUser?.id;
+      const revoked = tailscaleRemoteAccessRepository.revokeDevice(
         request.params.id,
+        userId,
       );
       if (!revoked) {
         throw notFound("Remote device not found");
@@ -294,6 +320,8 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
       return success({ revoked: true }, "Remote device revoked");
     }),
   );
+
+  await app.register(remoteAccessRoute);
 };
 
 export default generalSettingsRoute;
