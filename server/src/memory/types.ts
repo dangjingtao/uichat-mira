@@ -1,10 +1,18 @@
 export type MemoryKind = "preference" | "fact" | "decision" | "constraint";
 
-export interface MemorySource {
+export interface ConversationMemorySource {
+  type: "conversation";
   threadId: string;
   userMessageId: string;
   assistantMessageId: string;
 }
+
+export interface ManualMemorySource {
+  type: "manual";
+  operationId: string;
+}
+
+export type MemorySource = ConversationMemorySource | ManualMemorySource;
 
 export interface MemoryRecord {
   id: string;
@@ -58,7 +66,7 @@ export type ValidatedMemoryPatch =
 
 export interface ConsolidationInput {
   userId: number;
-  source: MemorySource;
+  source: ConversationMemorySource;
   userText: string;
   assistantText: string;
   existing: MemoryRecord[];
@@ -69,8 +77,12 @@ export interface MemoryConsolidator {
 }
 
 export interface MemoryTurnLedger {
-  has(userId: number, source: MemorySource): Promise<boolean>;
-  mark(userId: number, source: MemorySource): Promise<void>;
+  has(userId: number, source: ConversationMemorySource): Promise<boolean>;
+  mark(userId: number, source: ConversationMemorySource): Promise<void>;
+}
+
+export interface MemorySettings {
+  enabled: boolean;
 }
 
 export interface MemoryContextSnapshot {
@@ -83,4 +95,18 @@ export interface MemoryApplyResult {
   created: number;
   replaced: number;
   deleted: number;
+}
+
+export interface MemoryOverviewRecord {
+  id: string;
+  kind: MemoryKind;
+  content: string;
+  origin: MemorySource["type"];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryOverview {
+  enabled: boolean;
+  records: MemoryOverviewRecord[];
 }
