@@ -1,6 +1,7 @@
 const net = require("net");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const { spawn } = require("child_process");
 const electronBinary = require("electron");
 const { pathToFileURL } = require("url");
@@ -9,15 +10,48 @@ const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
 let isShuttingDown = false;
 
-function buildBackendEnv(baseEnv = process.env) {
+function assertExistingDirectory(directoryPath, label) {
+  if (!fs.existsSync(directoryPath)) {
+    throw new Error(`${label} does not exist: ${directoryPath}`);
+  }
+  if (!fs.statSync(directoryPath).isDirectory()) {
+    throw new Error(`${label} must be a directory: ${directoryPath}`);
+  }
+  return directoryPath;
+}
+
+function resolveBackendWorkspaceRoot(
+  baseEnv = process.env,
+  defaultWorkspaceRoot = path.join(
+    os.homedir(),
+    "Documents",
+    "UIChat Mira",
+    "Default Workspace",
+  ),
+) {
   const explicitWorkspaceRoot = baseEnv.UI_CHAT_WORKSPACE_ROOT?.trim();
+  if (explicitWorkspaceRoot) {
+    return assertExistingDirectory(
+      path.resolve(explicitWorkspaceRoot),
+      "UI_CHAT_WORKSPACE_ROOT",
+    );
+  }
+
+  const resolvedDefaultRoot = path.resolve(defaultWorkspaceRoot);
+  fs.mkdirSync(resolvedDefaultRoot, { recursive: true });
+  return assertExistingDirectory(resolvedDefaultRoot, "Default workspace");
+}
+
+function buildBackendEnv(baseEnv = process.env, defaultWorkspaceRoot) {
   const { UI_CHAT_WORKSPACE_ROOT: _ignoredWorkspaceRoot, ...restEnv } = baseEnv;
 
   return {
     ...restEnv,
     UI_CHAT_ALLOW_BACKEND_REUSE: "1",
-    UI_CHAT_WORKSPACE_ROOT:
-      explicitWorkspaceRoot || path.join(require("os").homedir(), "Documents", "UIChat Mira", "Default Workspace"),
+    UI_CHAT_WORKSPACE_ROOT: resolveBackendWorkspaceRoot(
+      baseEnv,
+      defaultWorkspaceRoot,
+    ),
   };
 }
 
@@ -306,4 +340,5 @@ if (require.main === module) {
 
 module.exports = {
   buildBackendEnv,
+  resolveBackendWorkspaceRoot,
 };
