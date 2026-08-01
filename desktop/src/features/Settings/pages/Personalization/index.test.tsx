@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import PersonalizationSettings from "./index";
+
+const memoryApi = vi.hoisted(() => ({
+  getMemoryOverview: vi.fn(),
+  updateMemorySettings: vi.fn(),
+  createMemory: vi.fn(),
+  updateMemory: vi.fn(),
+  deleteMemory: vi.fn(),
+}));
+
+vi.mock("@/shared/api/memory", () => memoryApi);
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -10,8 +20,36 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+const emptyOverview = {
+  enabled: true,
+  records: [],
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  memoryApi.getMemoryOverview.mockResolvedValue(emptyOverview);
+  memoryApi.updateMemorySettings.mockImplementation(async (enabled: boolean) => ({
+    enabled,
+    records: [],
+  }));
+  memoryApi.createMemory.mockResolvedValue(emptyOverview);
+  memoryApi.updateMemory.mockResolvedValue(emptyOverview);
+  memoryApi.deleteMemory.mockResolvedValue(emptyOverview);
+});
+
+const waitForMemoryLoaded = async () => {
+  await waitFor(() => {
+    expect(memoryApi.getMemoryOverview).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", {
+        name: "settings.personalization.memory.manage",
+      }),
+    ).toBeEnabled();
+  });
+};
+
 describe("PersonalizationSettings", () => {
-  it("renders the personalization fields and opens the memory summary", async () => {
+  it("loads real memory state and opens the existing memory drawer", async () => {
     render(<PersonalizationSettings />);
 
     expect(
@@ -23,13 +61,8 @@ describe("PersonalizationSettings", () => {
     expect(
       screen.getByLabelText("settings.personalization.aboutYou.nickname"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("settings.personalization.aboutYou.occupation"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("settings.personalization.aboutYou.details"),
-    ).toBeInTheDocument();
 
+    await waitForMemoryLoaded();
     await userEvent.click(
       screen.getByRole("button", {
         name: "settings.personalization.memory.manage",
@@ -44,19 +77,64 @@ describe("PersonalizationSettings", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables memory management when memory is turned off", async () => {
+  it("persists the existing memory switch and disables management", async () => {
     render(<PersonalizationSettings />);
 
-    await userEvent.click(
-      screen.getByRole("switch", {
-        name: "settings.personalization.memory.enable",
-      }),
-    );
+    await waitForMemoryLoaded();
+    const memorySwitch = screen.getByRole("switch", {
+      name: "settings.personalization.memory.enable",
+    });
+    expect(memorySwitch).toBeEnabled();
+    await userEvent.click(memorySwitch);
 
+    await waitFor(() => {
+      expect(memoryApi.updateMemorySettings).toHaveBeenCalledWith(false);
+    });
     expect(
       screen.getByRole("button", {
         name: "settings.personalization.memory.manage",
       }),
     ).toBeDisabled();
+  });
+
+  it("creates a manual memory from the existing drawer input", async () => {
+    memoryApi.createMemory.mockResolvedValue({
+      enabled: true,
+      records: [
+        {
+          id: "mem-1",
+          kind: "preference",
+          content: "技术讨论先给结论。",
+          origin: "manual",
+          createdAt: "2026-08-01T00:00:00.000Z",
+          updatedAt: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+    });
+    render(<PersonalizationSettings />);
+
+    await waitForMemoryLoaded();
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "settings.personalization.memory.manage",
+      }),
+    );
+    await userEvent.type(
+      screen.getByLabelText("settings.personalization.memory.updateLabel"),
+      "技术讨论先给结论。",
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "settings.personalization.memory.add",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(memoryApi.createMemory).toHaveBeenCalledWith({
+        kind: "preference",
+        content: "技术讨论先给结论。",
+      });
+    });
+    expect(screen.getByText("技术讨论先给结论。")).toBeInTheDocument();
   });
 });

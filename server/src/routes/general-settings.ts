@@ -13,6 +13,7 @@ import {
   notFound,
   routeHandler,
 } from "@/utils/route-errors.js";
+import memoryRoute from "./memory.js";
 
 const generalSettingsSchema = {
   type: "object",
@@ -322,6 +323,7 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
   );
 
   await app.register(remoteAccessRoute);
+  await app.register(memoryRoute);
 };
 
 export default generalSettingsRoute;

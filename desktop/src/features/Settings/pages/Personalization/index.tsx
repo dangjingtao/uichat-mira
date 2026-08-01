@@ -1,18 +1,38 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Brain, Info, Sparkles } from "lucide-react";
+import { Brain, Pencil, Sparkles, Trash2 } from "lucide-react";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import {
   Button,
   Drawer,
+  IconButton,
   Select,
   Switch,
   TextArea,
   TextInput,
 } from "@/shared/ui";
 import SectionCard, { SectionCardRow } from "@/shared/ui/SectionCard";
+import {
+  createMemory,
+  deleteMemory,
+  getMemoryOverview,
+  updateMemory,
+  updateMemorySettings,
+  type MemoryKind,
+  type MemoryOverview,
+  type MemoryRecord,
+} from "@/shared/api/memory";
 
 type TonePreset = "friendly" | "professional" | "concise" | "direct";
+
+const DEFAULT_MEMORY_KIND: MemoryKind = "preference";
+
+const getMemoryKindDefaultLabel = (kind: MemoryKind) => {
+  if (kind === "preference") return "偏好";
+  if (kind === "fact") return "长期事实";
+  if (kind === "decision") return "决定";
+  return "约束";
+};
 
 export default function PersonalizationSettings() {
   const { t } = useTranslation();
@@ -22,8 +42,15 @@ export default function PersonalizationSettings() {
   const [occupation, setOccupation] = useState("");
   const [details, setDetails] = useState("");
   const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [memoryRecords, setMemoryRecords] = useState<MemoryRecord[]>([]);
+  const [memoryLoading, setMemoryLoading] = useState(true);
+  const [memorySaving, setMemorySaving] = useState(false);
+  const [memoryError, setMemoryError] = useState("");
   const [memoryDrawerOpen, setMemoryDrawerOpen] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState("");
+  const [memoryKind, setMemoryKind] =
+    useState<MemoryKind>(DEFAULT_MEMORY_KIND);
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
 
   const toneOptions = useMemo(
     () =>
@@ -35,6 +62,107 @@ export default function PersonalizationSettings() {
       ),
     [t],
   );
+
+  const memoryKindOptions = useMemo(
+    () =>
+      (["preference", "fact", "decision", "constraint"] as const).map(
+        (value) => ({
+          value,
+          label: t(`settings.personalization.memory.kinds.${value}`, {
+            defaultValue: getMemoryKindDefaultLabel(value),
+          }),
+        }),
+      ),
+    [t],
+  );
+
+  const applyMemoryOverview = useCallback((overview: MemoryOverview) => {
+    setMemoryEnabled(overview.enabled);
+    setMemoryRecords(overview.records);
+    setMemoryError("");
+  }, []);
+
+  const loadMemory = useCallback(async () => {
+    setMemoryLoading(true);
+    try {
+      applyMemoryOverview(await getMemoryOverview());
+    } catch (error) {
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, [applyMemoryOverview]);
+
+  useEffect(() => {
+    void loadMemory();
+  }, [loadMemory]);
+
+  const resetMemoryEditor = useCallback(() => {
+    setEditingMemoryId(null);
+    setMemoryDraft("");
+    setMemoryKind(DEFAULT_MEMORY_KIND);
+  }, []);
+
+  const handleMemoryToggle = async () => {
+    const nextEnabled = !memoryEnabled;
+    setMemoryEnabled(nextEnabled);
+    setMemorySaving(true);
+    try {
+      applyMemoryOverview(await updateMemorySettings(nextEnabled));
+      if (!nextEnabled) {
+        setMemoryDrawerOpen(false);
+        resetMemoryEditor();
+      }
+    } catch (error) {
+      setMemoryEnabled(!nextEnabled);
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemorySaving(false);
+    }
+  };
+
+  const handleSaveMemory = async () => {
+    const content = memoryDraft.trim();
+    if (content.length < 4 || memorySaving) return;
+
+    setMemorySaving(true);
+    try {
+      const overview = editingMemoryId
+        ? await updateMemory(editingMemoryId, {
+            kind: memoryKind,
+            content,
+          })
+        : await createMemory({
+            kind: memoryKind,
+            content,
+          });
+      applyMemoryOverview(overview);
+      resetMemoryEditor();
+    } catch (error) {
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemorySaving(false);
+    }
+  };
+
+  const handleEditMemory = (record: MemoryRecord) => {
+    setEditingMemoryId(record.id);
+    setMemoryKind(record.kind);
+    setMemoryDraft(record.content);
+  };
+
+  const handleDeleteMemory = async (id: string) => {
+    if (memorySaving) return;
+    setMemorySaving(true);
+    try {
+      applyMemoryOverview(await deleteMemory(id));
+      if (editingMemoryId === id) resetMemoryEditor();
+    } catch (error) {
+      setMemoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemorySaving(false);
+    }
+  };
 
   return (
     <>
@@ -119,9 +247,15 @@ export default function PersonalizationSettings() {
           title={t("settings.personalization.memory.title")}
           icon={<Brain className="h-4 w-4" />}
           meta={
-            <span className="inline-flex items-center gap-1">
-              <Info className="h-3.5 w-3.5" />
-              {t("settings.personalization.previewOnly")}
+            <span>
+              {memoryLoading
+                ? t("settings.personalization.memory.loading", {
+                    defaultValue: "正在读取",
+                  })
+                : t("settings.personalization.memory.recordCount", {
+                    count: memoryRecords.length,
+                    defaultValue: `${memoryRecords.length} 条记忆`,
+                  })}
             </span>
           }
           divided
@@ -137,7 +271,8 @@ export default function PersonalizationSettings() {
             </div>
             <Switch
               checked={memoryEnabled}
-              onChange={() => setMemoryEnabled((enabled) => !enabled)}
+              onChange={() => void handleMemoryToggle()}
+              disabled={memoryLoading || memorySaving}
               ariaLabel={t("settings.personalization.memory.enable")}
             />
           </SectionCardRow>
@@ -154,11 +289,17 @@ export default function PersonalizationSettings() {
             <Button
               size="sm"
               onClick={() => setMemoryDrawerOpen(true)}
-              disabled={!memoryEnabled}
+              disabled={!memoryEnabled || memoryLoading}
             >
               {t("settings.personalization.memory.manage")}
             </Button>
           </SectionCardRow>
+
+          {memoryError ? (
+            <div className="border-t border-border px-4 py-3 text-xs text-danger-text">
+              {memoryError}
+            </div>
+          ) : null}
         </SectionCard>
       </SettingsPageLayout>
 
@@ -173,7 +314,9 @@ export default function PersonalizationSettings() {
               {t("settings.personalization.memory.drawerTitle")}
             </div>
             <div className="mt-1 text-xs text-text-tertiary">
-              {t("settings.personalization.memory.drawerDescription")}
+              {t("settings.personalization.memory.drawerLiveDescription", {
+                defaultValue: "这里显示 Mira 当前实际使用的长期记忆。",
+              })}
             </div>
           </div>
         }
@@ -193,9 +336,92 @@ export default function PersonalizationSettings() {
             </p>
           </div>
 
-          <div className="border-t border-border pt-4">
+          <div className="space-y-2">
+            {memoryRecords.length === 0 ? (
+              <div className="rounded-ui-panel border border-dashed border-border px-4 py-8 text-center text-sm text-text-tertiary">
+                {t("settings.personalization.memory.empty", {
+                  defaultValue: "还没有长期记忆。",
+                })}
+              </div>
+            ) : (
+              memoryRecords.map((record) => (
+                <div
+                  key={record.id}
+                  className="rounded-ui-panel border border-border bg-surface-primary p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-text-tertiary">
+                        <span>
+                          {t(
+                            `settings.personalization.memory.kinds.${record.kind}`,
+                            {
+                              defaultValue: getMemoryKindDefaultLabel(record.kind),
+                            },
+                          )}
+                        </span>
+                        <span>·</span>
+                        <span>
+                          {record.origin === "manual"
+                            ? t("settings.personalization.memory.manualOrigin", {
+                                defaultValue: "手工维护",
+                              })
+                            : t(
+                                "settings.personalization.memory.conversationOrigin",
+                                { defaultValue: "对话沉淀" },
+                              )}
+                        </span>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text-primary">
+                        {record.content}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <IconButton
+                        size="sm"
+                        ariaLabel={t("settings.personalization.memory.edit", {
+                          defaultValue: "编辑记忆",
+                        })}
+                        onClick={() => handleEditMemory(record)}
+                        disabled={memorySaving}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton
+                        size="sm"
+                        tone="danger"
+                        ariaLabel={t("settings.personalization.memory.delete", {
+                          defaultValue: "删除记忆",
+                        })}
+                        onClick={() => void handleDeleteMemory(record.id)}
+                        disabled={memorySaving}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </IconButton>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="space-y-3 border-t border-border pt-4">
+            <div className="w-full max-w-[220px]">
+              <Select
+                value={memoryKind}
+                onChange={(value) => setMemoryKind(value as MemoryKind)}
+                options={memoryKindOptions}
+                compact
+              />
+            </div>
             <TextArea
-              label={t("settings.personalization.memory.updateLabel")}
+              label={
+                editingMemoryId
+                  ? t("settings.personalization.memory.editLabel", {
+                      defaultValue: "修改记忆",
+                    })
+                  : t("settings.personalization.memory.updateLabel")
+              }
               value={memoryDraft}
               onChange={setMemoryDraft}
               placeholder={t(
@@ -203,8 +429,40 @@ export default function PersonalizationSettings() {
               )}
               rows={3}
             />
-            <div className="mt-2 text-xs text-text-tertiary">
-              {t("settings.personalization.memory.updateHint")}
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-text-tertiary">
+                {t("settings.personalization.memory.liveUpdateHint", {
+                  defaultValue: "保存后会立即用于后续 Chat 与 Agent 对话。",
+                })}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {editingMemoryId ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={resetMemoryEditor}
+                    disabled={memorySaving}
+                  >
+                    {t("settings.personalization.memory.cancelEdit", {
+                      defaultValue: "取消",
+                    })}
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => void handleSaveMemory()}
+                  disabled={memoryDraft.trim().length < 4 || memorySaving}
+                >
+                  {editingMemoryId
+                    ? t("settings.personalization.memory.saveEdit", {
+                        defaultValue: "保存修改",
+                      })
+                    : t("settings.personalization.memory.add", {
+                        defaultValue: "添加记忆",
+                      })}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
