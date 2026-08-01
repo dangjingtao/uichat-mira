@@ -10,6 +10,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:memory": "vitest run src/features/Settings/pages/Personalization/index.test.tsx",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:protocol": "tsx --tsconfig tsconfig.test.json --test --test-force-exit src/features/chat/transport/*.test.ts src/features/chat/adapters/*.test.ts src/shared/uchat/core/*.test.ts"
