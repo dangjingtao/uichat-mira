@@ -34,7 +34,7 @@ describe("workspace selection", () => {
     expect(() => getWorkspaceRoot()).toThrow("workspace root is not selected");
   });
 
-  it("materializes configured workspace root before exposing the selection", () => {
+  it("reports a configured workspace path without creating a missing directory", () => {
     process.env.UI_CHAT_WORKSPACE_ROOT = tempRoot;
     expect(fs.existsSync(tempRoot)).toBe(false);
 
@@ -42,7 +42,18 @@ describe("workspace selection", () => {
       rootPath: path.resolve(tempRoot),
       source: "configured",
     });
-    expect(fs.statSync(tempRoot).isDirectory()).toBe(true);
+    expect(fs.existsSync(tempRoot)).toBe(false);
+    expect(() => getWorkspaceRoot()).toThrow(
+      `workspace path does not exist: ${path.resolve(tempRoot)}`,
+    );
+    expect(fs.existsSync(tempRoot)).toBe(false);
+  });
+
+  it("rejects selecting a missing custom workspace without creating it", () => {
+    expect(() => selectWorkspaceRoot(tempRoot)).toThrow(
+      `workspace path does not exist: ${path.resolve(tempRoot)}`,
+    );
+    expect(fs.existsSync(tempRoot)).toBe(false);
   });
 
   it("selects workspace root explicitly", () => {
