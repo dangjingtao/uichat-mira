@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Brain, Pencil, Trash2 } from "lucide-react";
+import { Brain, Pencil, Sparkles, Trash2 } from "lucide-react";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import {
   Button,
@@ -26,6 +26,13 @@ import {
 type TonePreset = "friendly" | "professional" | "concise" | "direct";
 
 const DEFAULT_MEMORY_KIND: MemoryKind = "preference";
+
+const getMemoryKindDefaultLabel = (kind: MemoryKind) => {
+  if (kind === "preference") return "偏好";
+  if (kind === "fact") return "长期事实";
+  if (kind === "decision") return "决定";
+  return "约束";
+};
 
 export default function PersonalizationSettings() {
   const { t } = useTranslation();
@@ -62,14 +69,7 @@ export default function PersonalizationSettings() {
         (value) => ({
           value,
           label: t(`settings.personalization.memory.kinds.${value}`, {
-            defaultValue:
-              value === "preference"
-                ? "偏好"
-                : value === "fact"
-                  ? "长期事实"
-                  : value === "decision"
-                    ? "决定"
-                    : "约束",
+            defaultValue: getMemoryKindDefaultLabel(value),
           }),
         }),
       ),
@@ -175,7 +175,7 @@ export default function PersonalizationSettings() {
       >
         <SectionCard
           title={t("settings.personalization.communication.title")}
-          icon={<Brain className="h-4 w-4" />}
+          icon={<Sparkles className="h-4 w-4" />}
           divided
         >
           <SectionCardRow>
@@ -356,7 +356,7 @@ export default function PersonalizationSettings() {
                           {t(
                             `settings.personalization.memory.kinds.${record.kind}`,
                             {
-                              defaultValue: record.kind,
+                              defaultValue: getMemoryKindDefaultLabel(record.kind),
                             },
                           )}
                         </span>
