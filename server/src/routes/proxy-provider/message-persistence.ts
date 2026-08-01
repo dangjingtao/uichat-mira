@@ -226,6 +226,7 @@ export const persistAssistantMessage = ({
         .commitTurn({
           userId,
           source: {
+            type: "conversation",
             threadId,
             userMessageId: userMessage.id,
             assistantMessageId: persisted.id,
