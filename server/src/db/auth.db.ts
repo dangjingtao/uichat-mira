@@ -7,7 +7,13 @@ import jwt from "jsonwebtoken";
 import { getSqlite, userRepository } from "@/db";
 import { applySqliteConnectionPragmas } from "@/db/init-utils";
 import { errorResponse, ErrorCodes } from "@/utils/index.js";
+import { forbidden } from "@/utils/route-errors.js";
 import CONFIG from "@/config/index.js";
+import {
+  getRequiredRemoteScope,
+  remoteDeviceHasScope,
+  verifyRemoteDeviceToken,
+} from "@/services/remote-device-auth.service.js";
 
 export type AuthenticatedUser = {
   id: number;
@@ -52,6 +58,17 @@ const hashPassword = (password: string) => {
 const isLegacySha256Hash = (value: string) =>
   /^[a-f0-9]{64}$/i.test(value) && value.length === LEGACY_SHA256_HEX_LENGTH;
 
+const isSameHash = (leftHex: string, rightHex: string) => {
+  const left = Buffer.from(leftHex, "hex");
+  const right = Buffer.from(rightHex, "hex");
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return timingSafeEqual(left, right);
+};
+
 const verifyPassword = (storedHash: string, password: string) => {
   if (storedHash.startsWith(`${PASSWORD_HASH_PREFIX}$`)) {
     const [, salt, derivedKeyHex] = storedHash.split("$");
@@ -60,9 +77,11 @@ const verifyPassword = (storedHash: string, password: string) => {
       return false;
     }
 
-    const nextDerivedKeyHex = scryptSync(password, salt, SCRYPT_KEY_LENGTH).toString(
-      "hex",
-    );
+    const nextDerivedKeyHex = scryptSync(
+      password,
+      salt,
+      SCRYPT_KEY_LENGTH,
+    ).toString("hex");
     return isSameHash(derivedKeyHex, nextDerivedKeyHex);
   }
 
@@ -73,7 +92,11 @@ const verifyPassword = (storedHash: string, password: string) => {
   return false;
 };
 
-const maybeUpgradeLegacyPasswordHash = (userId: number, storedHash: string, password: string) => {
+const maybeUpgradeLegacyPasswordHash = (
+  userId: number,
+  storedHash: string,
+  password: string,
+) => {
   if (!isLegacySha256Hash(storedHash)) {
     return;
   }
@@ -143,23 +166,11 @@ const getBootstrapUsers = () => {
   return [];
 };
 
-const isSameHash = (leftHex: string, rightHex: string) => {
-  const left = Buffer.from(leftHex, "hex");
-  const right = Buffer.from(rightHex, "hex");
-
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return timingSafeEqual(left, right);
-};
-
 export const initializeAuthDatabase = (): void => {
   try {
     const sqlite = getSqlite();
     applySqliteConnectionPragmas(sqlite);
 
-    // 创建用户表
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,7 +182,6 @@ export const initializeAuthDatabase = (): void => {
       )
     `);
 
-    // 创建索引
     sqlite.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)
     `);
@@ -219,7 +229,13 @@ export const authenticateUser = (
 
 export type ChangePasswordResult =
   | { ok: true; user: AuthenticatedUser }
-  | { ok: false; reason: "USER_NOT_FOUND" | "INVALID_CURRENT_PASSWORD" | "PASSWORD_UNCHANGED" };
+  | {
+      ok: false;
+      reason:
+        | "USER_NOT_FOUND"
+        | "INVALID_CURRENT_PASSWORD"
+        | "PASSWORD_UNCHANGED";
+    };
 
 export const changeUserPassword = (
   userId: number,
@@ -271,7 +287,9 @@ const getJwtSecret = () => {
 
   if (!hasWarnedAboutJwtFallback) {
     hasWarnedAboutJwtFallback = true;
-    console.warn("[Auth] JWT_SECRET is not set. Falling back to a development-only secret.");
+    console.warn(
+      "[Auth] JWT_SECRET is not set. Falling back to a development-only secret.",
+    );
   }
 
   return "uichat-rag-test-dev-secret";
@@ -305,6 +323,10 @@ export const verifyAccessToken = (token: string): AuthenticatedUser | null => {
 export const getAuthUserFromRequest = (
   request: FastifyRequest,
 ): AuthenticatedUser | null => {
+  if (request.authUser) {
+    return request.authUser;
+  }
+
   const authHeader = request.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -312,7 +334,25 @@ export const getAuthUserFromRequest = (
   }
 
   const token = authHeader.slice(7);
-  return verifyAccessToken(token);
+  const jwtUser = verifyAccessToken(token);
+  if (jwtUser) {
+    return jwtUser;
+  }
+
+  const remote = verifyRemoteDeviceToken(token);
+  if (!remote) {
+    return null;
+  }
+
+  const requiredScope = getRequiredRemoteScope(request.method, request.url);
+  if (!requiredScope || !remoteDeviceHasScope(remote.device, requiredScope)) {
+    throw forbidden(
+      "Remote device is not permitted to access this Mira route",
+    );
+  }
+
+  request.remoteDevice = remote.device;
+  return remote.user;
 };
 
 export const requireAuth: preHandlerHookHandler = async (
