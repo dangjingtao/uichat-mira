@@ -5,6 +5,7 @@ on:
     branches:
       - dev
     paths:
+      - "docs/architecture/chat-agent-memory-v1.md"
       - "server/src/memory/**"
       - "server/src/routes/memory.ts"
       - "server/src/routes/memory.test.ts"
