@@ -3,6 +3,7 @@ import { generalSettingsRepository } from "@/db/repositories/general-settings.re
 import { errorEnvelope, successEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
 import { routeHandler } from "@/utils/route-errors.js";
+import memoryRoute from "./memory.js";
 
 const generalSettingsSchema = {
   type: "object",
@@ -75,6 +76,11 @@ const generalSettingsRoute: FastifyPluginAsync = async (app) => {
         "General settings updated",
       )),
   );
+
+  // Personalization already owns the Memory UI. Register the independent
+  // Memory API under the existing settings route group without coupling it to
+  // Role, RAG, or the Agent Graph.
+  await app.register(memoryRoute);
 };
 
 export default generalSettingsRoute;
