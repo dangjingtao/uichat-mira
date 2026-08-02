@@ -1,6 +1,12 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
-import { getWorkspaceSelection } from "@/mcp/workspace.js";
+import {
+  ensureParentDir,
+  getWorkspaceSelection,
+  resolveWorkspaceWritePath,
+  runWithWorkspaceRootOverride,
+} from "@/mcp/workspace.js";
 import { loadSkillResource } from "@/skills/context/provider.js";
 import type {
   SkillContext,
@@ -110,14 +116,67 @@ export const resolveSkillResourceRequest = (input: {
   };
 };
 
+const resolveScriptResourceRelativePath = (input: {
+  skillId: string;
+  uri: string;
+}) => {
+  const prefix = `skill://${input.skillId}/`;
+  if (!input.uri.startsWith(prefix)) {
+    throw new Error(`Skill resource must belong to active Skill ${input.skillId}`);
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(input.skillId)) {
+    throw new Error(`Invalid Skill id for workspace materialization: ${input.skillId}`);
+  }
+
+  const relative = path.posix.normalize(input.uri.slice(prefix.length));
+  if (
+    !relative ||
+    relative === "." ||
+    relative === ".." ||
+    relative.startsWith("../") ||
+    path.posix.isAbsolute(relative)
+  ) {
+    throw new Error(`Invalid Skill resource path: ${input.uri}`);
+  }
+
+  return path.posix.join(
+    ".mira",
+    "staging",
+    "skill-resources",
+    input.skillId,
+    relative,
+  );
+};
+
+export const materializeSkillScriptResource = async (input: {
+  skillId: string;
+  uri: string;
+  content: string;
+  workspaceRoot: string;
+}) => {
+  const workspacePath = resolveScriptResourceRelativePath({
+    skillId: input.skillId,
+    uri: input.uri,
+  });
+
+  await runWithWorkspaceRootOverride(input.workspaceRoot, async () => {
+    const targetPath = resolveWorkspaceWritePath(workspacePath);
+    ensureParentDir(targetPath);
+    await fs.writeFile(targetPath, input.content, "utf8");
+  });
+
+  return workspacePath;
+};
+
 const createSkillResourceTool = (input: {
   skillId: string;
   availableUris: string[];
+  workspaceRoot?: string;
 }): SubAgentToolBinding => ({
   id: "skill_read_resource",
   label: "Read Skill Resource",
   description:
-    "Read one available reference/template/example/script text resource belonging to the active Skill. Pass either the exact skill:// URI or its package-relative path. A missing resource returns a recoverable result instead of failing the subAgent.",
+    "Read one available reference/template/example/script resource belonging to the active Skill. Script resources are materialized into the bound workspace and return workspacePath; execute that path directly and never copy script source into a shell command. Pass either the exact skill:// URI or its package-relative path. A missing resource returns a recoverable result instead of failing the subAgent.",
   inputSchema: {
     type: "object",
     required: ["uri"],
@@ -147,6 +206,40 @@ const createSkillResourceTool = (input: {
         skillId: input.skillId,
         uri: resolution.uri,
       });
+
+      if (loaded.kind === "script") {
+        if (!input.workspaceRoot) {
+          return {
+            result: {
+              status: "workspace_required",
+              uri: loaded.uri,
+              kind: loaded.kind,
+              reason: "Script resources require a bound workspace for materialization.",
+            },
+          };
+        }
+        const workspacePath = await materializeSkillScriptResource({
+          skillId: input.skillId,
+          uri: loaded.uri,
+          content: loaded.content,
+          workspaceRoot: input.workspaceRoot,
+        });
+        return {
+          result: {
+            status: "materialized",
+            uri: loaded.uri,
+            kind: loaded.kind,
+            workspacePath,
+            bytes: Buffer.byteLength(loaded.content, "utf8"),
+          },
+          evidence: {
+            status: "completed",
+            actionTaken: `Materialized Skill script ${loaded.uri}`,
+            facts: [`Materialized ${loaded.uri} at ${workspacePath}`],
+          },
+        };
+      }
+
       return {
         result: {
           status: "loaded",
@@ -348,7 +441,13 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
     .filter((resource) => resource.skillId === skillId)
     .map((resource) => resource.uri);
   const tools: SubAgentToolBinding[] = availableResourceUris.length > 0
-    ? [createSkillResourceTool({ skillId, availableUris: availableResourceUris })]
+    ? [
+        createSkillResourceTool({
+          skillId,
+          availableUris: availableResourceUris,
+          workspaceRoot,
+        }),
+      ]
     : [];
   const missingCapabilities: SubAgentRequirement[] = [];
   let availableCapabilityCount = 0;
