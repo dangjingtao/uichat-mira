@@ -1,3 +1,4 @@
+import { prepareAgentHtmlPreview } from "@/agent/html-preview.js";
 import { memoryService } from "@/memory/runtime.js";
 import { shouldCommitTurnToMemory } from "@/memory/turn-commit-policy.js";
 import { threadService } from "@/services/thread.service.js";
@@ -188,23 +189,28 @@ export const persistAssistantMessage = ({
     content,
     metadata,
   );
-  const normalizedContent = clearApprovalPlaceholder ? "" : content;
+  const baseContent = clearApprovalPlaceholder ? "" : content;
+  const normalizedContent = prepareAgentHtmlPreview({
+    content: baseContent,
+    metadata,
+  });
   const cleanedParts = clearApprovalPlaceholder
     ? parts?.filter(
         (part) => part.type !== "text" || part.text.trim() !== "等待审批",
       )
     : parts;
-  const normalizedParts =
-    cleanedParts && cleanedParts.length > 0
-      ? cleanedParts
-      : normalizedContent.trim()
-        ? [
-            {
-              type: "text" as const,
-              text: normalizedContent,
-            },
-          ]
-        : [];
+  const nonTextParts = (cleanedParts ?? []).filter(
+    (part) => part.type !== "text",
+  );
+  const normalizedParts = normalizedContent.trim()
+    ? [
+        {
+          type: "text" as const,
+          text: normalizedContent,
+        },
+        ...nonTextParts,
+      ]
+    : nonTextParts;
 
   if (!normalizedContent.trim() && normalizedParts.length === 0) {
     return;
