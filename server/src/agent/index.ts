@@ -5,6 +5,10 @@ import type { AgentGraphInput } from "./types";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository";
 import { prepareSkillConversationFlow } from "@/skills/flow/coordinator.js";
 import { buildSkillFlowRequestContextMessages } from "@/skills/flow/context.js";
+import {
+  buildAgentAttachmentGoalContext,
+  materializeAgentTaskFileAttachments,
+} from "@/services/chat-file-context.service.js";
 
 configureAgentRunPersistence({
   create: (run) => {
@@ -24,7 +28,18 @@ export const createAndRunAgent = async (
     assistantParentId?: string | null;
   },
 ) => {
-  const goal = createAgentGoal(input.goalText);
+  const materializedAttachments = await materializeAgentTaskFileAttachments({
+    messages: input.messages,
+    workspaceRoot: input.workspaceRoot,
+  });
+  const attachmentGoalContext = buildAgentAttachmentGoalContext(
+    materializedAttachments,
+  );
+  const goal = createAgentGoal(
+    attachmentGoalContext
+      ? `${input.goalText}\n\n${attachmentGoalContext}`
+      : input.goalText,
+  );
   const latestUserMessage = [...input.messages]
     .reverse()
     .find((message) => message.role === "user");
