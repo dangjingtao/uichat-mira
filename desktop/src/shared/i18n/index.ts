@@ -11,6 +11,8 @@ import chatPendingZh from "@/features/chat/i18n/zh-CN";
 import chatPendingEn from "@/features/chat/i18n/en-US";
 import settingsPendingZh from "@/features/Settings/i18n/zh-CN";
 import settingsPendingEn from "@/features/Settings/i18n/en-US";
+import skillsZh from "@/features/Settings/pages/Skills/i18n/zh-CN";
+import skillsEn from "@/features/Settings/pages/Skills/i18n/en-US";
 import codeGraphZh from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/zh-CN";
 import codeGraphEn from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/en-US";
 import jianXingZh from "@/features/Settings/pages/MicroApps/JianXing/i18n/zh-CN";
@@ -64,6 +66,7 @@ const shards = {
     dashboardZh,
     chatPendingZh,
     settingsPendingZh,
+    skillsZh,
     codeGraphZh,
     jianXingZh,
     integrationsZh,
@@ -74,6 +77,7 @@ const shards = {
     dashboardEn,
     chatPendingEn,
     settingsPendingEn,
+    skillsEn,
     codeGraphEn,
     jianXingEn,
     integrationsEn,
