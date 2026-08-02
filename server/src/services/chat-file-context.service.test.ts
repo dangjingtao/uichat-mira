@@ -114,7 +114,7 @@ describe("chat file context", () => {
     );
   });
 
-  it("reuses only the immediately preceding upload for a clarification reply", async () => {
+  it("reuses only the immediately preceding upload for a natural-language clarification reply", async () => {
     const uploaded = await attachmentStorageService.save({
       buffer: Buffer.from("article body", "utf8"),
       mimeType: "text/markdown",
@@ -139,9 +139,9 @@ describe("chat file context", () => {
       originalUserMessage,
       {
         role: "assistant" as const,
-        content: "请选择排版风格：terminal-dark、minimal-light、magazine-warm 或 academic-blue？",
+        content: "请选择排版风格：终端暗黑、清爽简约、杂志暖调、学术规整？",
       },
-      { role: "user" as const, content: "magazine-warm" },
+      { role: "user" as const, content: "杂志暖调" },
     ];
     expect(selectAgentTaskFileParts(clarificationMessages)).toHaveLength(1);
     await expect(
