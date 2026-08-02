@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("Skill clarification continuation context", () => {
-  it("carries the original request, assistant question and latest reply into the resumed Skill body", async () => {
+  it("carries the original request, assistant question and natural-language reply into the resumed Skill body", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "mira-skill-continuation-"));
     tempDirs.push(root);
     const skillRoot = path.join(root, "wechat-article-layout");
@@ -47,8 +47,8 @@ describe("Skill clarification continuation context", () => {
     const originalRequest =
       "$wechat-article-layout 把工作区里的 article.md 排成公众号 HTML";
     const assistantQuestion =
-      "请选择排版风格：terminal-dark、minimal-light、magazine-warm 或 academic-blue？";
-    const latestReply = "magazine-warm";
+      "请选择排版风格：终端暗黑、清爽简约、杂志暖调或学术规整？";
+    const latestReply = "杂志暖调";
     const context = await provider.prepare({
       query: latestReply,
       messages: [
