@@ -21,7 +21,7 @@ describe("DesktopChatArtifactSlot", () => {
     expect(resolveDesktopChatArtifactKind(ordinary)).toBeNull();
   });
 
-  it("routes a skill report marker through the host artifact registry", () => {
+  it("routes a fertility report marker through the host artifact registry", () => {
     const report = message(
       "报告已生成。<!--mira-skill-report:session_123:pdf-->",
     );
@@ -29,7 +29,21 @@ describe("DesktopChatArtifactSlot", () => {
     expect(readSkillReportArtifactMarker(report)).toEqual({
       sessionId: "session_123",
       pdfAvailable: true,
+      artifactKind: "fertility-report",
     });
     expect(resolveDesktopChatArtifactKind(report)).toBe("skill-report");
+  });
+
+  it("routes a WeChat layout HTML marker to the same inline preview slot", () => {
+    const preview = message(
+      "排版已完成。<!--mira-skill-report:run_123:html:wechat-article-layout-->",
+    );
+
+    expect(readSkillReportArtifactMarker(preview)).toEqual({
+      sessionId: "run_123",
+      pdfAvailable: false,
+      artifactKind: "wechat-article-layout",
+    });
+    expect(resolveDesktopChatArtifactKind(preview)).toBe("skill-report");
   });
 });
