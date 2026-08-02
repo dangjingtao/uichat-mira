@@ -1,7 +1,7 @@
 ---
 id: wechat-article-layout
 displayName: 微信公众号文章排版
-description: "把 URL、Markdown 文件或正文排版成微信公众号编辑器可直接粘贴的 HTML。内置终端暗黑、清爽简约、杂志暖调、学术规整四套风格；当用户要求公众号排版、公众号发布稿、可粘贴 HTML 或给出文章链接要求排版时使用。未指定风格时必须先追问一次。"
+description: "把 URL、上传文件、工作区 Markdown 或粘贴正文排成微信公众号可直接粘贴的 HTML。支持终端暗黑、清爽简约、杂志暖调、学术规整；未指定风格时先确认。"
 version: 0.1.0
 category: content
 visibility: public
@@ -13,130 +13,105 @@ execution.allowedTools: read_open, terminal_session
 execution.workspaceBound: true
 ---
 
-# 微信公众号文章排版
+# 公众号文章排版
 
-把文章转成微信公众号编辑器可直接粘贴的 HTML。核心资产：
+核心资源：
 
 - `skill://wechat-article-layout/scripts/build_wechat_html.py`
 - `skill://wechat-article-layout/references/dark-mode-mapping.md`
 
-这个 Skill 使用现有 `terminal_session` 执行脚本，不注册专用 Runtime，不安装依赖，不绕过 Harness、审批、工作区和 Evidence。
+## 0. 确认风格
 
-## 0. 风格确认：唯一必问项
-
-没有明确风格时，不得直接生成。返回 `needs_input`，只提出一项 `user_input` requirement，并只向用户展示自然中文名称：
+用户未指定时，返回 `needs_input`，只问一次：
 
 > 请选择排版风格：终端暗黑、清爽简约、杂志暖调、学术规整。
 
-用户可以用自然语言回答，例如“杂志暖调”“暖一点的杂志风”“用学术风”“暗黑终端”。不要要求用户输入内部英文枚举。
+接受自然中文并映射为脚本参数：
 
-执行前把用户表达归一化为脚本参数：
+- 终端/暗黑/代码风 → `terminal-dark`
+- 清爽/简约/白底 → `minimal-light`
+- 杂志/暖调/暖色 → `magazine-warm`
+- 学术/规整/蓝色 → `academic-blue`
 
-| 用户表达 | 内部 style |
-|---|---|
-| 终端暗黑、暗黑终端、终端风、黑色终端 | `terminal-dark` |
-| 清爽简约、简约清爽、简洁风、白底简约 | `minimal-light` |
-| 杂志暖调、暖色杂志、暖调、故事杂志风 | `magazine-warm` |
-| 学术规整、学术风、蓝色学术、报告风 | `academic-blue` |
+请求中已说明风格时直接执行；不要要求用户输入英文枚举。用户要求自定义风格时，可修改脚本 `PRESETS`，但必须遵守文末红线。
 
-用户直接输入内部枚举也兼容，但不得把它作为正常交互要求。用户已经点名风格、使用上述近义表达或明确说“沿用上次风格”时，视为已确认，不重复询问。收到用户回答后继续原排版任务，不把“杂志暖调”之类的短回答当成新任务。
+## 1. 准备输入
 
-## 1. 输入准备
+按以下优先级取文章：
 
-支持：
+1. 用户明确指定的工作区文件：直接使用原路径。
+2. 本轮上传文件：使用 Agent 目标中提供的工作区相对路径。
+3. 用户粘贴正文：原样写入临时 `.md`。
+4. URL：用现有 `curl` 抓取；失败则说明缺口，不安装抓取器。
 
-- 本轮聊天上传的 `.md` / `.txt` 等文件；
-- 工作区内已有的 `.md` / `.txt` 文件；
-- 用户直接粘贴的正文；
-- URL。
+不要改写原文。标题、来源缺失时可留空，不追问。
 
-处理规则：
+引用块可用首行标记：
 
-1. 本轮上传附件：Agent 会在目标中提供工作区相对路径，直接读取该路径；不要要求用户再手工复制到工作目录。
-2. 工作区已有文件：优先按用户明确提供的路径读取，不复制、不改用上传附件。
-3. 粘贴正文：忠实写入工作区临时 Markdown，不改写原文。
-4. URL：可用 `terminal_session` 调用系统已有 `curl` 下载；抓取失败就如实返回缺口，不安装抓取器。
-5. 标题和来源可以从用户输入推断；缺失时允许留空，不额外追问。
+- `[!system]` / `[!accent]`：强调色
+- `[!warn]` / `[!red]`：警告色
+- 无标记：默认引用色
 
-生成器支持：段落、分隔线、引用块、三级标题、加粗、行内代码、无序/有序列表、独立行图片。Markdown 链接按公众号不可依赖链接处理，降级为“标题（地址）”。
+## 2. 生成 HTML
 
-## 2. 执行生成器
-
-先用 `skill_read_resource` 读取脚本全文，再使用当前主机 shell 的原生 UTF-8 文件写入方式，把脚本原样落到工作区：
+用 `skill_read_resource` 读取脚本，原样写到：
 
 ```text
 .mira/staging/wechat-article-layout/build_wechat_html.py
 ```
 
-不得改写脚本视觉预设。仅当输入触发确定的健壮性问题时，才修改脚本并保留原主流程。
-
-解释器规则：
-
-1. 先使用当前环境已存在的 `python`；Windows 可回退到 `py -3`。
-2. 不执行 `pip install`、`conda install`、虚拟环境创建或全局 Python 配置。
-3. 脚本只依赖 Python 标准库：`argparse`、`os`、`re`。
-4. 当前环境没有 Python 时，返回 capability 缺口，不擅自安装。
-
-调用形式：
+使用现有 Python：
 
 ```text
-python build_wechat_html.py --input <article.md> --output <article-wechat.html> --style <normalized-style> --title <title> --source <source>
+python build_wechat_html.py --input <article.md> --output <article-wechat.html> --style <style> --title <title> --source <source>
 ```
 
-`normalized-style` 必须是归一化后的内部枚举。路径必须位于当前工作区。`terminal_session` 的调用继续走正常精确审批。
+Windows 可回退 `py -3`。不得运行 `pip`、`conda` 或创建虚拟环境；脚本只用 `argparse`、`os`、`re`。没有 Python 时返回 capability 缺口。
 
-## 3. 图片处理
+## 3. 处理图片
 
-生成器会把 Markdown 图片替换成轻量占位行，并在执行结果 `images` 中返回原始地址和 alt。
+生成器会把 `![alt](url)` 转成单行占位，并在结果中返回图片列表。
 
-存在图片时：
+- 用现有 `curl` 下载到输出目录旁的 `images/`。
+- 检查文件非空且不是 HTML 错误页。
+- 下载失败不阻断正文 HTML；交付时列出失败项。
+- 告诉用户在占位行处上传图片后删除该行。
 
-1. 用系统已有 `curl` 下载到输出文件旁的 `images/`；
-2. 检查文件非空，并用文件头或系统文件识别能力确认不是 HTML 错误页；
-3. 下载失败不阻断正文 HTML，但必须在交付中列出失败图片；
-4. 告诉用户在占位行处上传对应图片，再删除占位行。
+不得引入 Pillow、requests 等依赖。
 
-不得引入 Pillow、requests 或其他 Python 第三方依赖。
+## 4. 验证
 
-## 4. 最低验证
+至少确认：
 
-生成后至少完成：
+1. HTML 存在且非空；
+2. 标题或正文关键文本存在；
+3. 不含 `<script>`；
+4. 图片占位数与结果一致；
+5. 标题、引用、列表未因缺少空行而吞并。
 
-1. HTML 文件存在且非空；
-2. 标题和正文关键文本存在；
-3. 不包含 `<script>`；
-4. 图片占位数量与 `images` 结果一致；
-5. 输入中标题、引用、列表即使没有规范空行，也没有互相吞并。
-
-当前环境已有 Chrome/Chromium 时，可以额外截图检查；没有浏览器时不安装，只报告未做视觉截图验证。
+系统已有 Chrome/Chromium 时可截图检查；没有则跳过，不安装。没有真实文件 Evidence 不得宣称完成。
 
 ## 5. 交付
 
-交付内容只包括：
+提供：
 
-- 生成的 HTML；
-- 成功下载的图片文件；
+- HTML 文件；
+- 已下载图片；
 - 失败图片清单（如有）；
-- 粘贴步骤：浏览器打开 HTML → `Ctrl+A` → `Ctrl+C` → 公众号编辑器 `Ctrl+V`；
-- 提醒标题、作者、封面在公众号后台单独填写。
-
-完成必须有真实 Artifact / 文件 Evidence。仅输出一段 HTML 文本或口头声称“已生成”不算完成。
+- 操作说明：浏览器打开 HTML → `Ctrl+A` → `Ctrl+C` → 公众号编辑器 `Ctrl+V`；
+- 提醒标题、作者、封面需在公众号后台填写。
 
 ## 深色模式
 
-需要判断或调整配色时，再读取：
-
-`skill://wechat-article-layout/references/dark-mode-mapping.md`
-
-不要默认加载，也不要为了普通排版重新做色卡研究。
+只有新增或调整配色时才读取 `dark-mode-mapping.md`。普通排版不要加载。
 
 ## 抗剥离红线
 
-1. 只使用 `section / p / span / strong / img`，不用 `div / h1-h6 / blockquote`。
-2. 最外层使用无样式空 `section` 作为牺牲层。
-3. 背景色写到各元素，不依赖继承。
-4. 纵向间距使用 padding，不依赖 margin。
+1. 只用 `section / p / span / strong / img`。
+2. 最外层套无样式空 `section`。
+3. 背景色写到每个元素，不依赖继承。
+4. 纵向间距用 padding，不用 margin。
 5. 左右内距下沉到顶层元素。
-6. 保留负 margin 出血骨架。
-7. 装饰性圆角允许被微信降级。
-8. 首尾背景间隔条不得删除。
+6. 保留 `margin:0 -16px;padding:0` 出血骨架。
+7. 圆角等装饰允许被剥离。
+8. 首尾保留 `height:32px` 背景间隔条。
