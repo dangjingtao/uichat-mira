@@ -3,7 +3,8 @@ export type BuiltInSkillPackageId =
   | "pdf"
   | "xlsx"
   | "pptx"
-  | "github-collaboration";
+  | "github-collaboration"
+  | "wechat-article-layout";
 
 export const MIRA_LAB_SKILL_SOURCE = "Mira Lab";
 
@@ -92,6 +93,24 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "references/pr-review.md",
       "references/actions-triage.md",
       "references/delivery-flow.md",
+    ],
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
+  },
+  {
+    id: "wechat-article-layout",
+    version: "0.1.0",
+    name: "微信公众号文章排版",
+    source: MIRA_LAB_SKILL_SOURCE,
+    category: "内容创作",
+    description:
+      "把 URL、Markdown 或正文排版成微信公众号编辑器可直接粘贴的 HTML，并通过通用终端执行无第三方依赖的 Python 生成器。",
+    bundled: true,
+    runtimeCapabilities: [],
+    packageFiles: [
+      "SKILL.md",
+      "references/dark-mode-mapping.md",
+      "scripts/build_wechat_html.py",
     ],
     contextIntegration: progressiveContextIntegration(),
     statefulRuntime: deferredStatefulRuntime(),
