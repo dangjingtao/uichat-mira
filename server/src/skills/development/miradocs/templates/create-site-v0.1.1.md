@@ -231,7 +231,7 @@ dist/
 
 ## 12. README.md
 
-```md
+````md
 # {{siteName}}
 
 基于 `@uichat-mira/docs@0.1.1`、Vite 与 React 构建。
@@ -253,7 +253,7 @@ npm run build
 ## 部署
 
 推送到 `{{defaultBranch}}` 后，`.github/workflows/pages.yml` 构建 `dist` 并部署到 GitHub Pages。
-```
+````
 
 ## 13. .github/workflows/pages.yml
 
@@ -320,6 +320,8 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 ```
+
+默认远程写入目标应为回读得到的默认分支，使 workflow 在写入后直接触发。用户或仓库策略明确要求 PR 时，只能先交付 PR 与构建验证；Pages 部署要等合并到 `{{defaultBranch}}` 后再继续，不得把未触发的 workflow 宣称为成功。
 
 ## 14. 固定本地命令
 
