@@ -74,6 +74,7 @@ describe("WeChat article layout Skill", () => {
     expect(body).toContain("本轮上传文件");
     expect(body).toContain("skill_read_resource");
     expect(body).toContain("workspacePath");
+    expect(body).toContain("--output article-wechat.html");
     expect(body).toContain("禁止把脚本源码拼进 `terminal_session.command`");
     expect(body).toContain("没有真实文件 Evidence 不得宣称完成");
     expect(body).not.toContain("原样写到");
