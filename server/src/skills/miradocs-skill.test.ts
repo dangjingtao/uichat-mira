@@ -166,7 +166,7 @@ describe("MiraDocs canonical Skill", () => {
     expect(maintainSite).toContain("不创建重复施工分支或重复 PR");
     expect(maintainSite).toContain("只重试未完成的 `configure_pages`");
     expect(conversations).toContain("不会重复创建仓库");
-    expect(conversations).toContain("不重新创建仓库、重写内容或新建重复 PR");
+    expect(conversations).toContain("不重新创建仓库、重写内容、重新安装或重新构建");
     expect(deliveryTemplate).toContain("completed");
     expect(deliveryTemplate).toContain("blocked");
     expect(deliveryTemplate).toContain("failed");
