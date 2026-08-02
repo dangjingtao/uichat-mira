@@ -1,7 +1,7 @@
 ---
 id: wechat-article-layout
 displayName: 微信公众号文章排版
-description: "把 URL、Markdown 文件或正文排版成微信公众号编辑器可直接粘贴的 HTML。内置 terminal-dark、minimal-light、magazine-warm、academic-blue 四套风格；当用户要求公众号排版、公众号发布稿、可粘贴 HTML 或给出文章链接要求排版时使用。未指定风格时必须先追问一次。"
+description: "把 URL、Markdown 文件或正文排版成微信公众号编辑器可直接粘贴的 HTML。内置终端暗黑、清爽简约、杂志暖调、学术规整四套风格；当用户要求公众号排版、公众号发布稿、可粘贴 HTML 或给出文章链接要求排版时使用。未指定风格时必须先追问一次。"
 version: 0.1.0
 category: content
 visibility: public
@@ -24,11 +24,22 @@ execution.workspaceBound: true
 
 ## 0. 风格确认：唯一必问项
 
-没有明确风格时，不得直接生成。返回 `needs_input`，只提出一项 `user_input` requirement：
+没有明确风格时，不得直接生成。返回 `needs_input`，只提出一项 `user_input` requirement，并只向用户展示自然中文名称：
 
-> 请选择排版风格：terminal-dark 终端暗黑、minimal-light 清爽简约、magazine-warm 杂志暖调、academic-blue 学术规整。
+> 请选择排版风格：终端暗黑、清爽简约、杂志暖调、学术规整。
 
-用户已经点名风格、中文别名或明确说“沿用上次风格”时，视为已确认，不重复询问。收到用户回答后继续原排版任务，不把“magazine-warm”之类的短回答当成新任务。
+用户可以用自然语言回答，例如“杂志暖调”“暖一点的杂志风”“用学术风”“暗黑终端”。不要要求用户输入内部英文枚举。
+
+执行前把用户表达归一化为脚本参数：
+
+| 用户表达 | 内部 style |
+|---|---|
+| 终端暗黑、暗黑终端、终端风、黑色终端 | `terminal-dark` |
+| 清爽简约、简约清爽、简洁风、白底简约 | `minimal-light` |
+| 杂志暖调、暖色杂志、暖调、故事杂志风 | `magazine-warm` |
+| 学术规整、学术风、蓝色学术、报告风 | `academic-blue` |
+
+用户直接输入内部枚举也兼容，但不得把它作为正常交互要求。用户已经点名风格、使用上述近义表达或明确说“沿用上次风格”时，视为已确认，不重复询问。收到用户回答后继续原排版任务，不把“杂志暖调”之类的短回答当成新任务。
 
 ## 1. 输入准备
 
@@ -69,10 +80,10 @@ execution.workspaceBound: true
 调用形式：
 
 ```text
-python build_wechat_html.py --input <article.md> --output <article-wechat.html> --style <style> --title <title> --source <source>
+python build_wechat_html.py --input <article.md> --output <article-wechat.html> --style <normalized-style> --title <title> --source <source>
 ```
 
-路径必须位于当前工作区。`terminal_session` 的调用继续走正常精确审批。
+`normalized-style` 必须是归一化后的内部枚举。路径必须位于当前工作区。`terminal_session` 的调用继续走正常精确审批。
 
 ## 3. 图片处理
 
