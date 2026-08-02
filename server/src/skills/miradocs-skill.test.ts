@@ -177,6 +177,11 @@ describe("MiraDocs canonical Skill", () => {
     expect(createSiteScaffold).toContain("actions/configure-pages@v5");
     expect(createSiteScaffold).toContain("actions/upload-pages-artifact@v4");
     expect(createSiteScaffold).toContain("actions/deploy-pages@v4");
+    expect(createSiteScaffold).toContain("targetMode = local");
+    expect(createSiteScaffold).toContain("省略 `siteUrl` 与 `github`");
+    expect(createSiteScaffold).toContain("repository = <owner>.github.io");
+    expect(createSiteScaffold).toContain("### deployment = none");
+    expect(createSiteScaffold).toContain("````md");
   });
 
   it("makes GitHub Pages the create-site default and fixes the execution stages", async () => {
