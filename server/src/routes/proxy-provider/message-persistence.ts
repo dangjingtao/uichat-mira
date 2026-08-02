@@ -194,23 +194,30 @@ export const persistAssistantMessage = ({
     content: baseContent,
     metadata,
   });
+  const previewMarkerAdded = normalizedContent !== baseContent;
   const cleanedParts = clearApprovalPlaceholder
     ? parts?.filter(
         (part) => part.type !== "text" || part.text.trim() !== "等待审批",
       )
     : parts;
-  const nonTextParts = (cleanedParts ?? []).filter(
-    (part) => part.type !== "text",
-  );
-  const normalizedParts = normalizedContent.trim()
+  const normalizedParts = previewMarkerAdded
     ? [
         {
           type: "text" as const,
           text: normalizedContent,
         },
-        ...nonTextParts,
+        ...(cleanedParts ?? []).filter((part) => part.type !== "text"),
       ]
-    : nonTextParts;
+    : cleanedParts && cleanedParts.length > 0
+      ? cleanedParts
+      : normalizedContent.trim()
+        ? [
+            {
+              type: "text" as const,
+              text: normalizedContent,
+            },
+          ]
+        : [];
 
   if (!normalizedContent.trim() && normalizedParts.length === 0) {
     return;
