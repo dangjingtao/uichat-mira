@@ -26,17 +26,25 @@ package-lock.json                       # npm install 后生成并随源码写�
 ## 2. 参数
 
 ```text
+{{targetMode}}        local / new_github_repo / existing_github_repo
+{{deployment}}        none / github_pages
 {{packageName}}       kebab-case npm 包名
 {{siteName}}          站点显示名称
 {{description}}       站点描述
-{{owner}}             GitHub owner
-{{repository}}        GitHub repository name
-{{defaultBranch}}     workflow 监听分支
-{{siteUrl}}           https://<owner>.github.io/<repository>/
 {{contentMode}}       docs / blog / docs_and_blog
+{{currentDate}}       YYYY-MM-DD
+{{owner}}             GitHub owner，仅 GitHub 模式
+{{repository}}        GitHub repository name，仅 GitHub 模式
+{{defaultBranch}}     workflow 监听分支，仅 deployment = github_pages
+{{siteUrl}}           GitHub Pages URL 草案，仅 deployment = github_pages
 ```
 
-`siteUrl` 使用最终 Pages URL 草案；配置 Pages 后必须以远程回读 URL 为准。
+参数规则：
+
+- `targetMode = local` 时，不要求也不得虚构 `owner`、`repository`、`defaultBranch` 或 `siteUrl`；配置文件省略 `siteUrl` 与 `github`，不生成 Pages workflow。
+- GitHub 项目站：`siteUrl = https://<owner>.github.io/<repository>/`。
+- GitHub 用户或组织根站：当 `repository = <owner>.github.io` 时，`siteUrl = https://<owner>.github.io/`，不得重复追加仓库名。
+- `siteUrl` 只是施工草案；配置 Pages 后必须以远程回读 URL 为准。
 
 ## 3. package.json
 
@@ -142,6 +150,8 @@ export default defineConfig({
 
 根据启用的内容入口保留对应 navigation 项。
 
+### GitHub 模式
+
 ```ts
 import { defineMiraDocsConfig } from "@uichat-mira/docs";
 
@@ -150,6 +160,24 @@ export default defineMiraDocsConfig({
   description: "{{description}}",
   siteUrl: "{{siteUrl}}",
   github: "https://github.com/{{owner}}/{{repository}}",
+  navigation: [
+    { label: "文档", href: "/docs/getting-started" },
+    { label: "博客", href: "/blogs/welcome" }
+  ],
+  footer: "{{siteName}} · Powered by MiraDocs.",
+});
+```
+
+### 本地模式
+
+`targetMode = local` 时使用本地变体，省略 GitHub 专属字段：
+
+```ts
+import { defineMiraDocsConfig } from "@uichat-mira/docs";
+
+export default defineMiraDocsConfig({
+  title: "{{siteName}}",
+  description: "{{description}}",
   navigation: [
     { label: "文档", href: "/docs/getting-started" },
     { label: "博客", href: "/blogs/welcome" }
@@ -216,7 +244,7 @@ tags: ["MiraDocs", "开始"]
 - Markdown 内容发现
 - 静态页面生成
 - Sitemap 与 robots.txt
-- GitHub Pages 部署工作流
+- GitHub Pages 部署工作流（仅 `deployment = github_pages` 时保留）
 ```
 
 ## 11. .gitignore
@@ -230,6 +258,8 @@ dist/
 ```
 
 ## 12. README.md
+
+### deployment = github_pages
 
 ````md
 # {{siteName}}
@@ -253,6 +283,32 @@ npm run build
 ## 部署
 
 推送到 `{{defaultBranch}}` 后，`.github/workflows/pages.yml` 构建 `dist` 并部署到 GitHub Pages。
+````
+
+### deployment = none
+
+````md
+# {{siteName}}
+
+基于 `@uichat-mira/docs@0.1.1`、Vite 与 React 构建。
+
+## 本地运行
+
+```bash
+npm ci
+npm run dev
+```
+
+## 验证
+
+```bash
+npm run typecheck
+npm run build
+```
+
+## 部署
+
+当前未配置自动部署。需要上线时再添加 GitHub Pages 或其他部署方式。
 ````
 
 ## 13. .github/workflows/pages.yml
