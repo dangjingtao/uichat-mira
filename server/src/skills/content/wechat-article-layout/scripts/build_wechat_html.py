@@ -5,11 +5,10 @@
 核心：所有元素自带背景色与内边距、纵向间距一律用 padding、牺牲外层、
 负 margin 出血，保证微信编辑器剥离外层样式后排版不崩。
 
-用法（PythonRun）：把本文件内容读入后，在末尾追加：
-    def main(ctx):
-        return build(r"input.md", r"output.html", style="terminal-dark",
-                     title="标题", source="来源")
-也可命令行：python build_wechat_html.py --input a.md --output o.html --style minimal-light
+用法：
+    python build_wechat_html.py --input a.md --output o.html --style minimal-light
+
+脚本只依赖 Python 标准库，可由 Mira 的 terminal_session 在受治理工作区内执行。
 """
 
 import argparse
