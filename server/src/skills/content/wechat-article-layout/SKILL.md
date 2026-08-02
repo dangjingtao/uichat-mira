@@ -56,10 +56,10 @@ execution.workspaceBound: true
 
 用 `skill_read_resource` 读取脚本。脚本会自动物化到工作区，结果返回 `workspacePath`。
 
-直接执行该路径：
+输出文件固定为工作区根目录的 `article-wechat.html`，直接执行：
 
 ```text
-python <workspacePath> --input <article.md> --output <article-wechat.html> --style <style> --title <title> --source <source>
+python <workspacePath> --input <article.md> --output article-wechat.html --style <style> --title <title> --source <source>
 ```
 
 禁止把脚本源码拼进 `terminal_session.command`，也不要再次复制或重写脚本。Windows 可回退 `py -3`。不得运行 `pip`、`conda` 或创建虚拟环境；脚本只用 `argparse`、`os`、`re`。没有 Python 时返回 capability 缺口。
@@ -79,7 +79,7 @@ python <workspacePath> --input <article.md> --output <article-wechat.html> --sty
 
 至少确认：
 
-1. HTML 存在且非空；
+1. `article-wechat.html` 存在且非空；
 2. 标题或正文关键文本存在；
 3. 不含 `<script>`；
 4. 图片占位数与结果一致；
@@ -91,7 +91,7 @@ python <workspacePath> --input <article.md> --output <article-wechat.html> --sty
 
 提供：
 
-- HTML 文件；
+- `article-wechat.html`；
 - 已下载图片；
 - 失败图片清单（如有）；
 - 操作说明：浏览器打开 HTML → `Ctrl+A` → `Ctrl+C` → 公众号编辑器 `Ctrl+V`；
