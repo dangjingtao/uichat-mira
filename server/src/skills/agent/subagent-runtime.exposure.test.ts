@@ -12,6 +12,7 @@ import {
 import type { SkillContext, SkillPackageOrigin } from "@/skills/context/types.js";
 import {
   prepareSubAgent,
+  resolveSkillResourceRequest,
   resolveSubAgentHarnessToolIds,
 } from "./subagent-runtime.js";
 import { projectProviderVisibleToolSchema as projectPiProviderVisibleToolSchema } from "./pi-core.js";
@@ -23,7 +24,10 @@ const githubTools = [
   "github_actions",
 ];
 
-const createGitHubSkillContext = (origin: SkillPackageOrigin): SkillContext => ({
+const createGitHubSkillContext = (
+  origin: SkillPackageOrigin,
+  withResource = false,
+): SkillContext => ({
   instruction: "Use the GitHub collaboration Skill.",
   primary: {
     id: "github-collaboration",
@@ -39,7 +43,16 @@ const createGitHubSkillContext = (origin: SkillPackageOrigin): SkillContext => (
       workspaceBound: false,
     },
   },
-  resources: [],
+  resources: withResource
+    ? [
+        {
+          uri: "skill://github-collaboration/references/project-pulse.md",
+          skillId: "github-collaboration",
+          name: "project-pulse.md",
+          kind: "reference",
+        },
+      ]
+    : [],
   disclosedResources: [],
   match: {
     source: "explicit",
@@ -101,8 +114,70 @@ describe("resolveSubAgentHarnessToolIds", () => {
   );
 });
 
+describe("Skill resource request resolution", () => {
+  const availableUris = [
+    "skill://wechat-post-craft/references/writing-guide.md",
+    "skill://wechat-post-craft/templates/article-outline.md",
+  ];
+
+  it.each([
+    [
+      "skill://wechat-post-craft/references/writing-guide.md",
+      "skill://wechat-post-craft/references/writing-guide.md",
+    ],
+    [
+      "references/writing-guide.md",
+      "skill://wechat-post-craft/references/writing-guide.md",
+    ],
+    [
+      "./references/writing-guide.md",
+      "skill://wechat-post-craft/references/writing-guide.md",
+    ],
+    [
+      "writing-guide.md",
+      "skill://wechat-post-craft/references/writing-guide.md",
+    ],
+  ])("resolves %s to the canonical active-Skill URI", (requested, uri) => {
+    expect(
+      resolveSkillResourceRequest({
+        skillId: "wechat-post-craft",
+        requested,
+        availableUris,
+      }),
+    ).toEqual({ status: "resolved", uri });
+  });
+
+  it("rejects cross-Skill resource access without resolving it", () => {
+    expect(
+      resolveSkillResourceRequest({
+        skillId: "wechat-post-craft",
+        requested: "skill://wechat-article-layout/scripts/build_wechat_html.py",
+        availableUris,
+      }),
+    ).toMatchObject({
+      status: "rejected",
+      requested: "skill://wechat-article-layout/scripts/build_wechat_html.py",
+      availableUris,
+    });
+  });
+
+  it("returns a recoverable not_found result for an unavailable resource", () => {
+    expect(
+      resolveSkillResourceRequest({
+        skillId: "wechat-post-craft",
+        requested: "references/missing.md",
+        availableUris,
+      }),
+    ).toMatchObject({
+      status: "not_found",
+      requested: "references/missing.md",
+      availableUris,
+    });
+  });
+});
+
 describe("prepareSubAgent GitHub exposure", () => {
-  it("binds all registered GitHub tools for a built-in Skill even when Main exposure is empty", () => {
+  it("binds registered GitHub tools without a fake resource reader when the Skill has no resources", () => {
     registerGitHubTools();
 
     const prepared = prepareSubAgent({
@@ -111,12 +186,49 @@ describe("prepareSubAgent GitHub exposure", () => {
       exposedHarnessToolIds: [],
     });
 
+    expect(prepared.tools.map((tool) => tool.id)).toEqual(githubTools);
+    expect(prepared.availableCapabilityCount).toBe(4);
+    expect(prepared.missingCapabilities).toEqual([]);
+  });
+
+  it("adds the resource reader only when the active Skill actually has resources", () => {
+    registerGitHubTools();
+
+    const prepared = prepareSubAgent({
+      goal: "Inspect dangjingtao/uichat-mira",
+      skillContext: createGitHubSkillContext("built-in", true),
+      exposedHarnessToolIds: [],
+    });
+
     expect(prepared.tools.map((tool) => tool.id)).toEqual([
       "skill_read_resource",
       ...githubTools,
     ]);
-    expect(prepared.availableCapabilityCount).toBe(4);
-    expect(prepared.missingCapabilities).toEqual([]);
+  });
+
+  it("returns a recoverable tool result instead of throwing for a missing resource", async () => {
+    const prepared = prepareSubAgent({
+      goal: "Read the writing guide",
+      skillContext: createGitHubSkillContext("built-in", true),
+      exposedHarnessToolIds: [],
+    });
+    const resourceTool = prepared.tools.find(
+      (tool) => tool.id === "skill_read_resource",
+    );
+    expect(resourceTool).toBeDefined();
+
+    const executed = await resourceTool!.execute({
+      uri: "references/missing.md",
+    });
+
+    expect(executed.result).toMatchObject({
+      status: "not_found",
+      requested: "references/missing.md",
+      availableUris: [
+        "skill://github-collaboration/references/project-pulse.md",
+      ],
+    });
+    expect(executed.evidence).toBeUndefined();
   });
 
   it("binds the canonical oneOf schema before provider-specific projection", () => {
@@ -146,7 +258,7 @@ describe("prepareSubAgent GitHub exposure", () => {
       exposedHarnessToolIds: [],
     });
 
-    expect(prepared.tools.map((tool) => tool.id)).toEqual(["skill_read_resource"]);
+    expect(prepared.tools.map((tool) => tool.id)).toEqual([]);
     expect(prepared.availableCapabilityCount).toBe(0);
     expect(prepared.missingCapabilities).toHaveLength(4);
   });
