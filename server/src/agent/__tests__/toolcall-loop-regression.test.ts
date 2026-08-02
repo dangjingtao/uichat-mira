@@ -137,8 +137,7 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },
-});
+  },});
 
 const setupToolExposure = (
   query: string,
