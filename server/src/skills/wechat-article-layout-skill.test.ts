@@ -47,7 +47,7 @@ describe("WeChat article layout Skill", () => {
     ]);
   });
 
-  it("keeps natural Chinese style clarification and terminal execution inside the Skill contract", async () => {
+  it("keeps the agent instructions concise and operational", async () => {
     const manifest = await loadManifest();
     const registry = new SkillRegistry({
       scan: async () => [manifest],
@@ -62,17 +62,21 @@ describe("WeChat article layout Skill", () => {
         },
       ],
     });
+    const body = context?.primary?.body ?? "";
 
     expect(context?.primary?.id).toBe("wechat-article-layout");
-    expect(context?.primary?.body).toContain("唯一必问项");
-    expect(context?.primary?.body).toContain(
+    expect(body.length).toBeLessThan(3_000);
+    expect(body).toContain(
       "请选择排版风格：终端暗黑、清爽简约、杂志暖调、学术规整",
     );
-    expect(context?.primary?.body).toContain("杂志暖调");
-    expect(context?.primary?.body).toContain("`magazine-warm`");
-    expect(context?.primary?.body).toContain("不要要求用户输入内部英文枚举");
-    expect(context?.primary?.body).toContain("terminal_session");
-    expect(context?.primary?.body).toContain("不注册专用 Runtime");
+    expect(body).toContain("杂志/暖调/暖色 → `magazine-warm`");
+    expect(body).toContain("不要要求用户输入英文枚举");
+    expect(body).toContain("本轮上传文件");
+    expect(body).toContain("skill_read_resource");
+    expect(body).toContain("terminal_session");
+    expect(body).toContain("没有真实文件 Evidence 不得宣称完成");
+    expect(body).not.toContain("不注册专用 Runtime");
+    expect(body).not.toContain("Harness");
   });
 
   it("uses only Python standard-library imports", async () => {
