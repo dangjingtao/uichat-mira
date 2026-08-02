@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.99.6",
+  "version": "0.99.7",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
@@ -38,11 +38,11 @@
         {
           "version": "0.99.6",
           "commit": {
-            "hash": "ee5ceeb2f65cc388dab317d9e73102931682d2f3",
-            "shortHash": "ee5ceeb",
-            "message": "fix(miradocs): 固化建站步骤并默认部署 GitHub Pages (#68)",
+            "hash": "ba2c36634f7cd502e000ebec813207c13e92bb78",
+            "shortHash": "ba2c366",
+            "message": "fix(chat): preserve ordinary assistant message parts",
             "author": "DangJingtao",
-            "date": "2026-08-02T19:58:47+08:00"
+            "date": "2026-08-03T06:30:23+08:00"
           }
         },
         {

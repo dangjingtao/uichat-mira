@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-mira/core",
-  "version": "0.99.6",
+  "version": "0.99.7",
   "private": true,
   "type": "module",
   "author": "Tomz Dang <dangjingtao@163.com>",
