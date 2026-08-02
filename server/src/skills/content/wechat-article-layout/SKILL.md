@@ -54,19 +54,15 @@ execution.workspaceBound: true
 
 ## 2. 生成 HTML
 
-用 `skill_read_resource` 读取脚本，原样写到：
+用 `skill_read_resource` 读取脚本。脚本会自动物化到工作区，结果返回 `workspacePath`。
+
+直接执行该路径：
 
 ```text
-.mira/staging/wechat-article-layout/build_wechat_html.py
+python <workspacePath> --input <article.md> --output <article-wechat.html> --style <style> --title <title> --source <source>
 ```
 
-使用现有 Python：
-
-```text
-python build_wechat_html.py --input <article.md> --output <article-wechat.html> --style <style> --title <title> --source <source>
-```
-
-Windows 可回退 `py -3`。不得运行 `pip`、`conda` 或创建虚拟环境；脚本只用 `argparse`、`os`、`re`。没有 Python 时返回 capability 缺口。
+禁止把脚本源码拼进 `terminal_session.command`，也不要再次复制或重写脚本。Windows 可回退 `py -3`。不得运行 `pip`、`conda` 或创建虚拟环境；脚本只用 `argparse`、`os`、`re`。没有 Python 时返回 capability 缺口。
 
 ## 3. 处理图片
 
