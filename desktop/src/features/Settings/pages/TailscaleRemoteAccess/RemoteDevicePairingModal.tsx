@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { QRCodeSVG } from "qrcode.react";
 import {
   Check,
   Clipboard,
-  KeyRound,
   LoaderCircle,
   ShieldCheck,
   Smartphone,
@@ -19,7 +19,7 @@ import {
   type RemoteDeviceScope,
 } from "@/shared/api/remoteAccess";
 import { ApiError } from "@/shared/lib/request";
-import { Badge, Button } from "@/shared/ui";
+import { Button } from "@/shared/ui";
 import { ModalShell } from "@/shared/ui/Modal";
 import SettingsNotice from "../../components/SettingsNotice";
 
@@ -54,6 +54,10 @@ export default function RemoteDevicePairingModal({
   const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<"code" | "uri" | null>(null);
+  const [scopeSelection, setScopeSelection] = useState<{
+    claimId: string | null;
+    scopes: RemoteDeviceScope[];
+  }>({ claimId: null, scopes: [] });
 
   const copy = useMemo(
     () =>
@@ -61,25 +65,28 @@ export default function RemoteDevicePairingModal({
         ? {
             title: "配对手机设备",
             intro:
-              "手机必须已经加入同一 Tailnet。配对码只在本机显示，五分钟后失效。",
+              "手机必须已经加入同一 Tailnet。配对挑战五分钟后失效。",
             loading: "正在创建一次性配对挑战...",
             failed: "创建配对挑战失败",
-            code: "配对码",
             uri: "配对链接",
+            scan: "使用 Mira Mobile 扫描",
+            fallback: "无法扫码时，复制完整配对链接到手机端。",
             copy: "复制",
             copied: "已复制",
             waiting: "等待手机提交设备信息",
             waitingHint:
-              "在 uichat-mira-mobile 中输入上面的地址与配对码。手机提交后，这里会出现确认信息。",
+              "在 Mira Mobile 中扫描二维码，或粘贴完整配对链接。手机提交后，这里会出现确认信息。",
             requestTitle: "设备请求",
             fingerprint: "公钥指纹",
             scopes: "申请权限",
+            scopeHint: "批准前可以缩减权限，不能增加手机未申请的权限。",
+            scopeRequired: "至少保留一项权限才能批准设备。",
             approve: "批准设备",
             reject: "拒绝",
             approved: "设备已批准，等待手机领取凭证",
             delivered: "手机已经领取设备凭证",
             rejected: "本次配对已拒绝",
-            expired: "配对码已过期，请重新生成",
+            expired: "配对挑战已过期，请重新生成",
             close: "关闭",
             approveFailed: "批准设备失败",
             rejectFailed: "拒绝设备失败",
@@ -87,25 +94,29 @@ export default function RemoteDevicePairingModal({
         : {
             title: "Pair a mobile device",
             intro:
-              "The phone must already be on the same Tailnet. This one-time code expires in five minutes.",
+              "The phone must already be on the same Tailnet. This pairing challenge expires in five minutes.",
             loading: "Creating a one-time pairing challenge...",
             failed: "Failed to create pairing challenge",
-            code: "Pairing code",
             uri: "Pairing URI",
+            scan: "Scan with Mira Mobile",
+            fallback: "If scanning is unavailable, paste the complete pairing URI on the phone.",
             copy: "Copy",
             copied: "Copied",
             waiting: "Waiting for the phone to submit device details",
             waitingHint:
-              "Enter the address and code in uichat-mira-mobile. The device request will appear here for confirmation.",
+              "Scan the QR code in Mira Mobile, or paste the complete pairing URI. The device request will appear here for confirmation.",
             requestTitle: "Device request",
             fingerprint: "Public-key fingerprint",
             scopes: "Requested access",
+            scopeHint:
+              "You may reduce access before approval, but cannot add permissions the phone did not request.",
+            scopeRequired: "Select at least one permission before approval.",
             approve: "Approve device",
             reject: "Reject",
             approved: "Device approved; waiting for mobile to collect its credential",
             delivered: "Mobile collected the device credential",
             rejected: "This pairing request was rejected",
-            expired: "The pairing code expired. Generate a new one.",
+            expired: "The pairing challenge expired. Generate a new one.",
             close: "Close",
             approveFailed: "Failed to approve device",
             rejectFailed: "Failed to reject device",
@@ -119,6 +130,7 @@ export default function RemoteDevicePairingModal({
       setCurrent(null);
       setError("");
       setCopied(null);
+      setScopeSelection({ claimId: null, scopes: [] });
       return;
     }
 
@@ -178,6 +190,26 @@ export default function RemoteDevicePairingModal({
     };
   }, [challenge, copy.failed, current, open]);
 
+  const requestedScopes = current?.claim?.requestedScopes ?? [];
+  const selectedScopes =
+    scopeSelection.claimId === current?.claim?.claimId
+      ? scopeSelection.scopes
+      : requestedScopes;
+
+  const toggleScope = (scope: RemoteDeviceScope, checked: boolean) => {
+    if (!current?.claim) return;
+    const nextScopes = checked
+      ? requestedScopes.filter(
+          (requestedScope) =>
+            requestedScope === scope || selectedScopes.includes(requestedScope),
+        )
+      : selectedScopes.filter((selectedScope) => selectedScope !== scope);
+    setScopeSelection({
+      claimId: current.claim.claimId,
+      scopes: nextScopes,
+    });
+  };
+
   const handleCopy = async (kind: "code" | "uri", value: string) => {
     await navigator.clipboard.writeText(value);
     setCopied(kind);
@@ -185,13 +217,13 @@ export default function RemoteDevicePairingModal({
   };
 
   const handleApprove = async () => {
-    if (!current?.claim) return;
+    if (!current?.claim || selectedScopes.length === 0) return;
     setApproving(true);
     setError("");
     try {
       const next = await approveRemotePairingClaim(
         current.claim.claimId,
-        current.claim.requestedScopes,
+        selectedScopes,
       );
       setCurrent(next);
       await onPaired();
@@ -244,46 +276,55 @@ export default function RemoteDevicePairingModal({
         {error ? <SettingsNotice tone="danger">{error}</SettingsNotice> : null}
 
         {loading ? (
-          <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-text-secondary">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-            {copy.loading}
+          <div className="grid gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="flex flex-col items-center text-center">
+              <div
+                aria-label={copy.loading}
+                className="h-[220px] w-[220px] animate-pulse rounded-ui-control border border-border bg-surface-secondary"
+              />
+              <div className="mt-3 h-4 w-32 animate-pulse rounded bg-surface-secondary" />
+            </div>
+            <div className="min-w-0 space-y-3">
+              <div className="h-24 animate-pulse rounded-ui-panel border border-border bg-surface-secondary" />
+              <div className="h-36 animate-pulse rounded-ui-panel border border-border bg-surface-secondary" />
+            </div>
           </div>
         ) : challenge ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
-              <div className="rounded-ui-panel border border-primary/20 bg-primary/5 p-4 text-center">
-                <div className="flex items-center justify-center gap-2 text-xs font-medium text-text-secondary">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  {copy.code}
+            <div className="grid gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
+              <div className="flex flex-col items-center text-center">
+                <QRCodeSVG
+                  value={challenge.pairingUri}
+                  size={204}
+                  level="M"
+                  marginSize={2}
+                  title={copy.scan}
+                  className="rounded-ui-control border border-border bg-white p-2"
+                />
+                <div className="mt-3 text-sm font-medium text-text-primary">
+                  {copy.scan}
                 </div>
-                <div className="mt-3 select-all font-mono text-2xl font-semibold tracking-[0.18em] text-text-primary">
-                  {challenge.code}
-                </div>
-                <Button
-                  className="mt-3"
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => void handleCopy("code", challenge.code)}
-                >
-                  {copied === "code" ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
-                  {copied === "code" ? copy.copied : copy.copy}
-                </Button>
               </div>
 
-              <div className="min-w-0 rounded-ui-panel border border-border bg-surface-secondary p-4">
-                <div className="text-xs font-medium text-text-secondary">{copy.uri}</div>
-                <div className="mt-2 max-h-20 overflow-auto break-all font-mono text-xs leading-5 text-text-primary">
-                  {challenge.pairingUri}
+              <div className="min-w-0 space-y-3">
+                <div className="min-w-0 rounded-ui-panel border border-border bg-surface-secondary p-4">
+                  <div className="text-xs font-medium text-text-secondary">{copy.uri}</div>
+                  <div className="mt-2 max-h-20 overflow-auto break-all font-mono text-xs leading-5 text-text-primary">
+                    {challenge.pairingUri}
+                  </div>
+                  <Button
+                    className="mt-3"
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => void handleCopy("uri", challenge.pairingUri)}
+                  >
+                    {copied === "uri" ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+                    {copied === "uri" ? copy.copied : copy.copy}
+                  </Button>
+                  <div className="mt-2 text-xs leading-5 text-text-tertiary">
+                    {copy.fallback}
+                  </div>
                 </div>
-                <Button
-                  className="mt-3"
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => void handleCopy("uri", challenge.pairingUri)}
-                >
-                  {copied === "uri" ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
-                  {copied === "uri" ? copy.copied : copy.copy}
-                </Button>
               </div>
             </div>
 
@@ -314,13 +355,33 @@ export default function RemoteDevicePairingModal({
                       <ShieldCheck className="h-3.5 w-3.5" />
                       {copy.scopes}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {current.claim.requestedScopes.map((scope) => (
-                        <Badge key={scope} variant="muted" outline>
+                    <div className="mt-1 text-xs leading-5 text-text-tertiary">
+                      {copy.scopeHint}
+                    </div>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {requestedScopes.map((scope) => (
+                        <label
+                          key={scope}
+                          className="flex items-center gap-2 rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-xs text-text-secondary"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedScopes.includes(scope)}
+                            aria-label={scopeLabels[scope][zh ? "zh" : "en"]}
+                            className="h-4 w-4 rounded border-border accent-primary focus:ring-primary/20"
+                            onChange={(event) =>
+                              toggleScope(scope, event.target.checked)
+                            }
+                          />
                           {scopeLabels[scope][zh ? "zh" : "en"]}
-                        </Badge>
+                        </label>
                       ))}
                     </div>
+                    {selectedScopes.length === 0 ? (
+                      <div className="mt-2 text-xs text-status-danger">
+                        {copy.scopeRequired}
+                      </div>
+                    ) : null}
 
                     <div className="mt-4 flex justify-end gap-2">
                       <Button
@@ -335,7 +396,9 @@ export default function RemoteDevicePairingModal({
                       <Button
                         size="sm"
                         variant="primary"
-                        disabled={approving || rejecting}
+                        disabled={
+                          approving || rejecting || selectedScopes.length === 0
+                        }
                         onClick={() => void handleApprove()}
                       >
                         {approving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

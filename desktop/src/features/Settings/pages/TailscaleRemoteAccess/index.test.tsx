@@ -19,6 +19,7 @@ const messageMocks = vi.hoisted(() => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     i18n: { resolvedLanguage: "zh-CN" },
+    t: (key: string) => key,
   }),
 }));
 
@@ -34,6 +35,7 @@ vi.mock("@/shared/ui/Message", () => ({
 }));
 
 vi.mock("@/shared/platform/desktopRuntime", () => ({
+  getApiBaseUrl: vi.fn(() => "http://localhost"),
   openExternalUrl: vi.fn(),
 }));
 
@@ -93,8 +95,17 @@ beforeEach(() => {
 });
 
 describe("TailscaleRemoteAccessSettings", () => {
-  it("renders runtime-discovered connection data instead of editable preview fields", async () => {
+  it("keeps runtime-discovered device configuration inside diagnostics", async () => {
     render(<TailscaleRemoteAccessSettings />);
+
+    expect(await screen.findAllByText("已连接")).toHaveLength(2);
+    expect(screen.queryByDisplayValue("studio-pc")).not.toBeInTheDocument();
+    expect(screen.queryByText("设备配置")).not.toBeInTheDocument();
+    expect(screen.queryByText("访问边界")).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "诊断环境" }),
+    );
 
     expect(await screen.findByDisplayValue("studio-pc")).toBeDisabled();
     expect(screen.getByDisplayValue("real-tailnet.ts.net")).toBeDisabled();
@@ -116,22 +127,19 @@ describe("TailscaleRemoteAccessSettings", () => {
     expect(await screen.findAllByText("已连接")).toHaveLength(2);
 
     await userEvent.click(
-      screen.getByRole("button", { name: "检查连接" }),
-    );
-    await waitFor(() => expect(apiMocks.check).toHaveBeenCalledTimes(1));
-
-    const saveButton = screen.getByRole("button", { name: "保存设置" });
-    expect(saveButton).toBeDisabled();
-
-    await userEvent.click(
       screen.getByRole("switch", { name: "启用远程连接" }),
     );
-    expect(saveButton).toBeEnabled();
-
-    await userEvent.click(saveButton);
+    await userEvent.click(
+      screen.getByRole("button", { name: "诊断环境" }),
+    );
+    await waitFor(() => expect(apiMocks.check).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMocks.update).toHaveBeenCalledWith(true));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("诊断信息")).toBeInTheDocument();
+    expect(screen.getByText("1.90.0")).toHaveClass("break-words");
+    expect(screen.getByText("1.90.0")).not.toHaveClass("break-all");
 
     await waitFor(() => {
-      expect(apiMocks.update).toHaveBeenCalledWith(true);
       expect(messageMocks.success).toHaveBeenCalledWith(
         "远程连接设置已保存",
       );
@@ -141,7 +149,7 @@ describe("TailscaleRemoteAccessSettings", () => {
 
   it("opens help with the explicit private-network and authentication boundary", async () => {
     render(<TailscaleRemoteAccessSettings />);
-    await screen.findByDisplayValue("studio-pc");
+    await screen.findAllByText("已连接");
 
     await userEvent.click(
       screen.getByRole("button", { name: "帮助说明" }),

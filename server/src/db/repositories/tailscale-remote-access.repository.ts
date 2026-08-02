@@ -612,15 +612,15 @@ export const tailscaleRemoteAccessRepository = {
       return null;
     }
 
-    getSqlite()
+    const result = getSqlite()
       .prepare(
         `UPDATE tailscale_pairing_challenges
          SET status = 'delivered', credential_encrypted = NULL, delivered_at = ?
-         WHERE claim_id = ? AND status = 'approved'`,
+         WHERE claim_id = ? AND status = 'approved' AND credential_encrypted = ?`,
       )
-      .run(input.deliveredAt, input.claimId);
+      .run(input.deliveredAt, input.claimId, current.credentialEncrypted);
 
-    return current;
+    return result.changes === 1 ? current : null;
   },
 
   expirePairingChallenge(id: string, at = new Date().toISOString()) {

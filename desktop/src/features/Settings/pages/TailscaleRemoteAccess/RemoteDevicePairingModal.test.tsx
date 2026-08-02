@@ -17,6 +17,12 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
+vi.mock("qrcode.react", () => ({
+  QRCodeSVG: ({ value, title }: { value: string; title: string }) => (
+    <svg title={title} data-value={value} />
+  ),
+}));
+
 vi.mock("@/shared/api/remoteAccess", () => ({
   createRemotePairingChallenge: apiMocks.create,
   getRemotePairingChallenge: apiMocks.get,
@@ -73,7 +79,7 @@ beforeEach(() => {
 });
 
 describe("RemoteDevicePairingModal", () => {
-  it("shows the real one-time code and claimed device request", async () => {
+  it("shows the pairing QR and claimed device request", async () => {
     render(
       <RemoteDevicePairingModal
         open
@@ -82,11 +88,17 @@ describe("RemoteDevicePairingModal", () => {
       />,
     );
 
-    expect(await screen.findByText("ABCD2345")).toBeInTheDocument();
+    expect(await screen.findByTitle("使用 Mira Mobile 扫描")).toBeInTheDocument();
+    expect(screen.getByTitle("使用 Mira Mobile 扫描")).toHaveAttribute(
+      "data-value",
+      claimedChallenge.pairingUri,
+    );
     expect(screen.getByText("K70 · android")).toBeInTheDocument();
-    expect(screen.getByText("0123456789abcdef")).toBeInTheDocument();
+    expect(screen.getByText(/0123456789abcdef/)).toBeInTheDocument();
     expect(screen.getByText("读取会话")).toBeInTheDocument();
     expect(screen.getByText("读取消息")).toBeInTheDocument();
+    expect(screen.getByText(claimedChallenge.pairingUri)).toBeInTheDocument();
+    expect(screen.queryByText("ABCD2345")).not.toBeInTheDocument();
     expect(apiMocks.create).toHaveBeenCalledTimes(1);
   });
 
@@ -112,5 +124,56 @@ describe("RemoteDevicePairingModal", () => {
       expect(onPaired).toHaveBeenCalledTimes(1);
     });
     expect(screen.getByText("设备已批准，等待手机领取凭证")).toBeInTheDocument();
+  });
+
+  it("allows desktop users to reduce requested scopes before approval", async () => {
+    render(
+      <RemoteDevicePairingModal
+        open
+        onClose={() => void 0}
+        onPaired={() => void 0}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "读取消息" }));
+    await userEvent.click(screen.getByRole("button", { name: "批准设备" }));
+
+    await waitFor(() => {
+      expect(apiMocks.approve).toHaveBeenCalledWith("claim-1", [
+        "threads:read",
+      ]);
+    });
+  });
+
+  it("requires at least one selected scope before approval", async () => {
+    render(
+      <RemoteDevicePairingModal
+        open
+        onClose={() => void 0}
+        onPaired={() => void 0}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: "读取会话" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "读取消息" }));
+
+    expect(screen.getByText("至少保留一项权限才能批准设备。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "批准设备" })).toBeDisabled();
+    expect(apiMocks.approve).not.toHaveBeenCalled();
+  });
+
+  it("shows the create error when the pairing challenge cannot be created", async () => {
+    apiMocks.create.mockRejectedValueOnce(new Error("pairing unavailable"));
+
+    render(
+      <RemoteDevicePairingModal
+        open
+        onClose={() => void 0}
+        onPaired={() => void 0}
+      />,
+    );
+
+    expect(await screen.findByText("pairing unavailable")).toBeInTheDocument();
+    expect(screen.queryByText(claimedChallenge.pairingUri)).not.toBeInTheDocument();
   });
 });

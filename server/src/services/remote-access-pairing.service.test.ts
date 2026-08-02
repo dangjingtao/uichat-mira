@@ -241,6 +241,29 @@ describe("RemoteAccessPairingService", () => {
     ).toBeNull();
   });
 
+  it("does not return a credential when another poll wins atomic delivery", () => {
+    const service = new RemoteAccessPairingService();
+    const challenge = service.createChallenge({
+      userId: 7,
+      hostUrl: "https://mira.example.ts.net",
+    });
+    const claim = service.claim({
+      challengeId: challenge.challengeId,
+      code: challenge.code,
+      requestedScopes: ["threads:read"],
+    });
+    service.approve({
+      claimId: claim.claimId,
+      userId: 7,
+      scopes: ["threads:read"],
+    });
+    repositoryMock.consumePairingCredential.mockReturnValueOnce(null);
+
+    const result = service.poll(claim.claimId, claim.pollToken);
+
+    expect(result).not.toHaveProperty("credential");
+  });
+
   it("does not let a different desktop user approve the claim", () => {
     const service = new RemoteAccessPairingService();
     const challenge = service.createChallenge({

@@ -28,18 +28,8 @@ const zh = {
     name: "设备名称",
     tailnet: "Tailnet 域名",
     accessAddress: "访问地址",
-    autoDetected: "由 Tailscale 运行时自动识别，不再依赖手工拼接。",
     unavailable: "等待 Tailscale 提供",
     open: "打开地址",
-  },
-  access: {
-    title: "访问边界",
-    network: "网络范围",
-    networkValue: "仅 Tailnet",
-    auth: "应用认证",
-    authValue: "仍需 Mira 登录或设备凭证",
-    policy: "访问策略",
-    policyValue: "沿用 Tailscale ACL / Grants；Mira 不自动改写",
   },
   devices: {
     title: "已配对设备",
@@ -68,9 +58,8 @@ const zh = {
   },
   actions: {
     help: "帮助说明",
-    check: "检查连接",
+    diagnose: "诊断环境",
     checking: "检查中...",
-    save: "保存设置",
     saving: "保存中...",
   },
   messages: {
@@ -120,18 +109,8 @@ const en = {
     name: "Device name",
     tailnet: "Tailnet domain",
     accessAddress: "Access address",
-    autoDetected: "Detected from the Tailscale runtime instead of being assembled from manual fields.",
     unavailable: "Waiting for Tailscale",
     open: "Open address",
-  },
-  access: {
-    title: "Access boundary",
-    network: "Network scope",
-    networkValue: "Tailnet only",
-    auth: "Application authentication",
-    authValue: "Mira login or device credentials are still required",
-    policy: "Network policy",
-    policyValue: "Uses Tailscale ACLs / Grants; Mira does not rewrite them",
   },
   devices: {
     title: "Paired devices",
@@ -160,9 +139,8 @@ const en = {
   },
   actions: {
     help: "Help",
-    check: "Check connection",
+    diagnose: "Diagnose environment",
     checking: "Checking...",
-    save: "Save settings",
     saving: "Saving...",
   },
   messages: {

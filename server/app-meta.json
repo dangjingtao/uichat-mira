@@ -38,11 +38,11 @@
         {
           "version": "0.99.6",
           "commit": {
-            "hash": "7466a8631aef8fd046396a2b6c5daa5afadd43ab",
-            "shortHash": "7466a86",
-            "message": "docs(role): establish workbench and runtime truth",
+            "hash": "ee5ceeb2f65cc388dab317d9e73102931682d2f3",
+            "shortHash": "ee5ceeb",
+            "message": "fix(miradocs): 固化建站步骤并默认部署 GitHub Pages (#68)",
             "author": "DangJingtao",
-            "date": "2026-08-01T04:13:12+08:00"
+            "date": "2026-08-02T19:58:47+08:00"
           }
         },
         {
