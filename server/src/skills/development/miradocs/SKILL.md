@@ -95,7 +95,7 @@ deferred
 位置：新建 dangjingtao/tomz-lab
 内容：文档 + 博客
 风格：默认简洁
-部署：暂不部署
+部署：GitHub Pages（GitHub 目标默认）
 ```
 
 草案用于纠正参数，不替代 Harness、GitHub 或其他执行能力的审批合同。
@@ -125,17 +125,21 @@ deferred
 
 ```text
 skill://miradocs/references/create-site.md
+skill://miradocs/templates/create-site-v0.1.1.md
 skill://miradocs/templates/site-draft.md
 skill://miradocs/examples/conversations.md
 ```
 
-安全默认：
+稳定默认：
 
 ```yaml
 contentMode: docs_and_blog
 appearancePreset: minimal
-deployment: none
+local.deployment: none
+github.deployment: github_pages
 ```
+
+GitHub 目标默认完成 GitHub Pages 建站。只有用户明确表达“先不部署”“只生成源码”“只搭项目”“先在本地看看”或“暂时不要上线”时，GitHub 目标才使用 `deployment: none`。本地目标仍默认 `deployment: none`。
 
 新 GitHub 仓库的公开或私有不可默认，必须询问。已有非空仓库必须先读取并展示影响，不能直接覆盖。
 
@@ -148,7 +152,30 @@ github_repository.get_pages
 github_repository.configure_pages
 ```
 
-仓库创建、installation 检查、文件写入、PR、Actions 和 Pages 是不同 invocation。每个远程写入仍须走现有审批和回读合同。
+仓库创建、installation 检查、文件写入、Actions 和 Pages 是不同 invocation。每个远程写入仍须走现有审批和回读合同。PR 只在用户明确要求或仓库既有交付策略要求时使用。
+
+### create_site 的确定性施工约束
+
+`create_site` 不允许临场研究 MiraDocs API、npm README、`node_modules` 类型声明或 GitHub Pages workflow 写法。必须读取版本化模板 `skill://miradocs/templates/create-site-v0.1.1.md`，并按 `references/create-site.md` 中的固定阶段执行。
+
+固定阶段为：
+
+```text
+inspect_target
+→ prepare_staging
+→ render_scaffold
+→ install_dependencies
+→ typecheck
+→ build
+→ render_pages_workflow
+→ write_remote
+→ verify_actions
+→ configure_pages
+→ verify_pages
+→ deliver
+```
+
+每次审批恢复后，先读取已有 checkpoint / working state 和远程事实，只执行第一个未完成阶段。已完成的安装、类型检查、构建和远程写入不得重复。`deployment: none` 时从 `write_remote` 直接进入 `deliver`，并把 Actions / Pages 标为 `not_run`。
 
 ## B. 发布博客或文档
 
@@ -227,10 +254,10 @@ create_site / local
 → read_discover + read_open + terminal_session
 
 create_site / github
-→ github_repository：仓库、installation、分支、文件、Pages
-→ terminal_session：受管本地 staging、依赖安装、类型检查和静态构建
-→ 用户要求 PR 时再取 github_pull_request
-→ 用户要求上线或需要诊断 CI 时再取 github_actions
+→ github_repository：仓库、installation、远程文件和 Pages
+→ terminal_session：受管本地 staging、模板落盘、依赖安装、类型检查和静态构建
+→ github_actions：默认 GitHub Pages 建站的 workflow / run / job 验证
+→ 用户要求 PR 或仓库策略要求 PR 时再取 github_pull_request
 
 publish_content / local
 → read_open + terminal_session
@@ -337,18 +364,18 @@ staging 已创建，但本地安装或构建失败
 → 不配置 Pages，不声称站点可发布
 → 修复后从失败验证层继续
 
-站点文件已写入远程分支，但本地验证失败
+站点文件已写入远程，但本地验证失败
 → 保留远程 checkpoint 和 staging
-→ 不重复创建仓库或分支
-→ 修复并重新验证后再继续 PR / Pages
+→ 不重复写入已完成文件
+→ 修复并重新验证后再继续 Actions / Pages
 
-PR 已创建，但 Actions 失败
-→ 保留 PR
+Actions 失败
+→ 保留当前 commit 和 workflow run
 → 读取失败 run、job、step 和必要日志
-→ 在同一施工分支修复并重新验证
+→ 只修复失败层，不重复前面的安装、构建或仓库初始化
 
-内容和 PR 已完成，但 Pages 配置失败
-→ 保留仓库、分支、内容和 PR
+内容已完成，但 Pages 配置失败
+→ 保留仓库、内容和 commit
 → 先调用 get_pages 回读当前远程事实
 → 只重试未完成的 Pages 配置
 → 不重复写内容或重新创建仓库
@@ -364,8 +391,8 @@ PR 已创建，但 Actions 失败
 4. 不注册新 Tool，不扩大 ToolExposure，不复制 GitHub API。
 5. 不修改 Main Agent、Planner、Agent Graph、Harness 审批或 C contract。
 6. 修改前读取当前事实；写入后回读文件与相关构建、路由、CI 或部署结果。
-7. 默认使用独立分支和 PR，不直接写目标主分支。
-8. `deployment: none` 是安全默认；没有用户要求不得自动上线。
+7. 远程写入遵循用户明确要求或仓库既有策略；允许直接写默认分支，PR 不是 create_site 的强制完成条件。
+8. GitHub `create_site` 默认 `deployment: github_pages`；本地目标及用户明确要求暂不上线时使用 `deployment: none`。
 9. 新 GitHub 仓库可见性必须询问，不默认公开。
 10. 已有非空仓库未经读取和明确确认不得覆盖。
 11. 不覆盖同名内容，不擅自改变已有 slug、永久链接、作者、日期或用户正文语气。
@@ -376,6 +403,8 @@ PR 已创建，但 Actions 失败
 16. fork 执行不得调用 `execution.allowedTools` 之外的工具；只在当前步骤关键工具缺失时报告 capability 缺口，不得因未使用的可选工具缺失而阻塞。
 17. GitHub 模式需要本地验证时必须使用独立 staging，不得直接污染 Workspace 根目录。
 18. 不得让 Workspace getter、environment snapshot 或 Skill 通过隐藏 mkdir 复活缺失的自定义目录。
+19. `create_site` 必须使用 Skill 内置的版本化脚手架和 Pages workflow，不得通过反复探索第三方文档临场拼装。
+20. 审批恢复后只推进第一个未完成阶段，不得重新执行已经有回读证据的阶段。
 
 # Completion Criteria
 
@@ -389,7 +418,8 @@ PR 已创建，但 Actions 失败
 - 修改后的本地或远程文件已回读；
 - 新 GitHub 仓库已回读创建结果并检查 installation 授权；
 - 依赖安装、类型检查、静态构建及必要路由验证结果明确；
-- 用户要求 Pages 上线时，Pages 最终状态、Actions 和 URL 已回读；
+- GitHub `create_site` 使用 `deployment: github_pages` 时，workflow 文件、远程 commit、Actions 成功状态、Pages workflow 模式、最终 URL 和 HTTPS 状态均已回读；
+- `deployment: none` 时，Actions 与 Pages 必须明确标记为 `not_run`，不得声称站点已上线；
 - 用户获得路径、地址、分支、commit、PR 或远程状态等可核验证据；
 - 失败步骤、剩余配置和需要人工决定的事项被清楚列出；
 - 恢复执行没有重复已完成的不可幂等动作；
