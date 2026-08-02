@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   Check,
@@ -100,6 +102,91 @@ const formatMetadataValue = (value: unknown) => {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return stringifyYaml(value).trim();
+};
+
+const METADATA_LABEL_KEYS: Record<string, string> = {
+  id: "settings.skills.metadata.labels.id",
+  name: "settings.skills.metadata.labels.name",
+  displayName: "settings.skills.metadata.labels.displayName",
+  description: "settings.skills.metadata.labels.description",
+  version: "settings.skills.metadata.labels.version",
+  category: "settings.skills.metadata.labels.category",
+  visibility: "settings.skills.metadata.labels.visibility",
+  source: "settings.skills.metadata.labels.source",
+  status: "settings.skills.metadata.labels.status",
+  "execution.context": "settings.skills.metadata.labels.executionContext",
+  "execution.agent": "settings.skills.metadata.labels.executionAgent",
+  "execution.allowedTools": "settings.skills.metadata.labels.allowedTools",
+  "execution.runtimeBindings": "settings.skills.metadata.labels.runtimeBindings",
+  "execution.workspaceBound": "settings.skills.metadata.labels.workspaceBound",
+};
+
+const METADATA_VALUE_KEYS: Record<string, Record<string, string>> = {
+  visibility: {
+    public: "settings.skills.metadata.values.visibility.public",
+    private: "settings.skills.metadata.values.visibility.private",
+  },
+  status: {
+    active: "settings.skills.metadata.values.status.active",
+    review: "settings.skills.metadata.values.status.review",
+    draft: "settings.skills.metadata.values.status.draft",
+    deprecated: "settings.skills.metadata.values.status.deprecated",
+  },
+  "execution.context": {
+    fork: "settings.skills.metadata.values.executionContext.fork",
+    inline: "settings.skills.metadata.values.executionContext.inline",
+  },
+  "execution.agent": {
+    subAgent: "settings.skills.metadata.values.executionAgent.subAgent",
+    mainAgent: "settings.skills.metadata.values.executionAgent.mainAgent",
+  },
+  "execution.workspaceBound": {
+    true: "settings.skills.metadata.values.workspaceBound.true",
+    false: "settings.skills.metadata.values.workspaceBound.false",
+  },
+};
+
+const METADATA_TOOL_KEYS: Record<string, string> = {
+  read_discover: "settings.skills.metadata.values.tools.readDiscover",
+  read_open: "settings.skills.metadata.values.tools.readOpen",
+  terminal_session: "settings.skills.metadata.values.tools.terminalSession",
+  github_repository: "settings.skills.metadata.values.tools.githubRepository",
+  github_pull_request: "settings.skills.metadata.values.tools.githubPullRequest",
+  github_actions: "settings.skills.metadata.values.tools.githubActions",
+};
+
+const translateMetadata = (t: TFunction, key: string, fallback: string) =>
+  String(t(key, { defaultValue: fallback }));
+
+const formatMetadataLabel = (key: string, t: TFunction) => {
+  const translationKey = METADATA_LABEL_KEYS[key];
+  return translationKey ? translateMetadata(t, translationKey, key) : key;
+};
+
+const formatLocalizedMetadataValue = (key: string, value: unknown, t: TFunction) => {
+  const fallback = formatMetadataValue(value);
+
+  if (key === "execution.allowedTools") {
+    const tools = Array.isArray(value)
+      ? value.map(String)
+      : typeof value === "string"
+        ? value.split(",")
+        : [];
+    const localizedTools = tools
+      .map((tool) => tool.trim())
+      .filter(Boolean)
+      .map((tool) => {
+        const translationKey = METADATA_TOOL_KEYS[tool];
+        return translationKey ? translateMetadata(t, translationKey, tool) : tool;
+      });
+    return localizedTools.length > 0 ? localizedTools.join("、") : fallback;
+  }
+
+  const normalizedValue = typeof value === "string" || typeof value === "boolean"
+    ? String(value).trim()
+    : fallback;
+  const translationKey = METADATA_VALUE_KEYS[key]?.[normalizedValue];
+  return translationKey ? translateMetadata(t, translationKey, fallback) : fallback;
 };
 
 type SkillView = SkillCatalogItem & {
@@ -376,6 +463,7 @@ function SkillDetailModal({
   onDelete: () => void;
   onNotice: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(["reference", "references", "runtime", "scripts", "templates", "examples"]));
   const [selectedFile, setSelectedFile] = useState("SKILL.md");
   const [fileContent, setFileContent] = useState<string>("");
@@ -588,7 +676,16 @@ function SkillDetailModal({
                   ) : selectedDescriptor.extension === ".md" && (markdownDocument.body || markdownDocument.metadata.length > 0) ? (
                     <>
                       {fileTruncated ? <p className="mb-4 rounded-[8px] bg-surface-secondary px-3 py-2 text-xs text-text-secondary">文件较大，当前只展示前 512 KB。</p> : null}
-                      {markdownDocument.metadata.length > 0 ? <dl className="mb-6 grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 border-b border-border pb-5 text-sm">{markdownDocument.metadata.map(([key, value]) => <div key={key} className="contents"><dt className="font-mono text-xs leading-6 text-text-tertiary">{key}</dt><dd className="min-w-0 whitespace-pre-wrap leading-6 text-text-secondary">{formatMetadataValue(value)}</dd></div>)}</dl> : null}
+                      {markdownDocument.metadata.length > 0 ? (
+                        <dl className="mb-6 space-y-2 border-b border-border pb-5 text-sm">
+                          {markdownDocument.metadata.map(([key, value]) => (
+                            <div key={key} className="grid min-w-0 grid-cols-[112px_minmax(0,1fr)] gap-x-4">
+                              <dt className="min-w-0 break-words text-xs leading-6 text-text-tertiary">{formatMetadataLabel(key, t)}</dt>
+                              <dd className="min-w-0 whitespace-pre-wrap break-words leading-6 text-text-secondary">{formatLocalizedMetadataValue(key, value, t)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
                       {markdownDocument.body ? <MarkdownText features="basic" className="[&_h1]:mt-7 [&_h1:first-child]:mt-0 [&_h1]:text-xl [&_h1]:font-semibold [&_h1]:leading-8 [&_h1]:tracking-normal [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:tracking-normal [&_h3]:mt-5 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:tracking-normal">{markdownDocument.body}</MarkdownText> : null}
                     </>
                   ) : fileContent ? (
