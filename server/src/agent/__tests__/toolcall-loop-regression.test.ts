@@ -137,7 +137,8 @@ const makeToolIntentResult = (
     exposedDefinitions: definitions,
     reason: [],
     blockedCapabilityIds: [],
-  },});
+  },
+});
 
 const setupToolExposure = (
   query: string,
@@ -469,7 +470,9 @@ test("toolCall loop lets Planner decide how to proceed after recoverable failure
       startedAt: "2026-07-05T00:00:00.000Z",
       finishedAt: "2026-07-05T00:00:01.000Z",
     } as never);
-  const generateSpy = vi.spyOn(runnablesModule.agentGenerateTextRunnable, "invoke");
+  const generateSpy = setupGenerate(
+    "README.md could not be opened because the file was not found.",
+  );
 
   const result = await runToolLoop({
     runId: "run-regression-failed-tool",
@@ -486,6 +489,7 @@ test("toolCall loop lets Planner decide how to proceed after recoverable failure
   });
   assert.equal(executeSpy.mock.calls.length, 1);
   assert.equal(generateSpy.mock.calls.length, 1);
+  assert.match(result.answer, /not found/i);
   assert.equal(result.lastToolExecution?.status, "failed");
   assert.equal(result.lastToolExecution?.failureKind, "recoverable");
   assert.equal(result.evidence.latestSummary?.status, "failed");
