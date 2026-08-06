@@ -1,211 +1,160 @@
-# Skill Package Lifecycle Contract
+---
+status: current
+owner: skill-runtime / desktop
+last_verified: 2026-08-06
+layer: raw-source
+module: SKILL
+feature: SkillPackageLifecycle
+doc_type: current-contract
+canonical: true
+related:
+  - skill-discovery-layout-contract.md
+  - skill-package-runtime-contract.md
+  - skill-context-design.md
+---
 
-Status: Current
-Protocol: V1 Settled
-Owner: chat / runtime / desktop
-Last verified: 2026-07-24
-Layer: raw-source
-Module: SKILL
-Feature: SkillPackageLifecycle
-Doc Type: current-contract
-Canonical: true
-Related:
-  - ./skill-discovery-layout-contract.md
-  - ./skill-package-runtime-contract.md
-  - ./skill-context-design.md
-
-## Purpose
-
-本合同定义 Skill Package 在 Skills 页面中的存在语义、用户导入 Skill 的删除语义，以及 built-in Skill 与 Runtime Pack 的生命周期边界。
+# Skill Package 生命周期合同
 
 ## 1. Catalog presence is existence
 
-进入当前 Skills Catalog 的 Skill Package 已经真实存在于 Mira 的 Skill 世界中。
-
-因此：
+进入当前 Skills Catalog 的 Skill Package 已经存在于 Mira 的 Skill 世界中：
 
 ```text
 Catalog visible
 = Skill Package exists
 ```
 
-当前 Catalog 不是 Marketplace，不存在：
-
-```text
-visible but not added
-```
-
-所以 V1 不定义用户可见的：
+当前 Catalog 不是 Marketplace，不建立持续的：
 
 ```text
 added / not-added
 package installed / package not-installed
 ```
 
-状态。
+UI 不显示“已添加”Tab 或 Badge。
 
-UI 不得显示：
-
-```text
-已添加
-```
-
-作为 Skill 卡片 Badge、详情 Badge 或筛选 Tab。
-
-Skills 页面默认集合使用：
-
-```text
-全部技能
-```
-
-`packageStatus` 不属于 canonical Skill presentation API。
-
-## 2. Origin is identity, not lifecycle state
-
-Skill Package 只保留来源语义：
+## 2. Origin 是身份，不是生命周期状态
 
 ```text
 origin = built-in | user | external
 ```
 
-含义：
+- `built-in`：随产品分发；
+- `user`：位于受管 user Skill root；
+- `external`：其它允许发现的 package root。
 
-- `built-in`：随 Mira 产品分发的内置 Skill；
-- `user`：位于受管用户 Skill 根目录中的用户导入 Skill；
-- `external`：其它被允许发现的外部来源 Skill。
+Origin 不表示 Runtime ready，也不表示当前任务已经激活 Skill。
 
-`origin` 不表示“是否添加”。
-
-## 3. User Skill deletion
-
-用户导入 Skill 的删除语义是：
+## 3. Built-in Skill
 
 ```text
-Delete Skill
--> physical delete whole Skill Package directory
-```
-
-例如：
-
-```text
-<user-skills-root>/内容创作/my-skill/
-  SKILL.md
-  references/
-  scripts/
-  templates/
-```
-
-删除 `my-skill` 必须物理删除整个：
-
-```text
-my-skill/
-```
-
-不能只：
-
-- 从 Registry 隐藏；
-- 标记 disabled；
-- 删除 `SKILL.md` 而留下 resources；
-- 保留一个“未添加”卡片。
-
-删除后必须 invalidate Skill discovery/context cache，使它退出 Catalog 与 Agent Matcher 候选。
-
-如果删除后 `<category>/` 已为空，可以删除空分类目录；不得删除仍包含其它 Skill 的分类目录。
-
-用户 Skill 删除默认**不删除共享 Runtime Pack**。Skill Package 生命周期与 Runtime Pack 生命周期分离。
-
-## 4. Built-in Skill lifecycle
-
-Built-in Skill 是 Mira 产品内容：
-
-```text
-built-in Skill
--> always exists
--> always discoverable when product ships it
+built-in Package
+-> product content
+-> always exists when shipped
 -> no delete action
 ```
 
-因此不存在：
+Built-in Skill 可以存在且其 Runtime requirement 尚未满足。
+
+## 4. User Skill deletion
+
+用户删除 Skill：
 
 ```text
-删除 built-in Skill
-卸载 built-in Skill Package
+Delete Skill
+-> physically delete the whole managed package directory
+-> invalidate registry / loader / matcher caches
 ```
 
-UI 不得为 `origin = built-in` 提供删除入口。
+不得只删除 `SKILL.md`、隐藏 Registry 条目或留下 references/scripts 残骸。
 
-服务端删除 API 也必须拒绝非 `origin = user` 的 Skill。
+删除空 package 后可以清理空 category 目录，但不得影响同分类其它 Skill。
 
-## 5. Runtime dependency lifecycle is separate
+删除 user Skill 默认不删除共享 Runtime Pack。
 
-Skill 可以声明：
+## 5. User Skill enable / disable
+
+若产品提供 enable / disable，它只影响 user Package 是否参与 discovery / matching，不改变：
+
+- 文件来源身份；
+- Tool 权限；
+- Runtime binding；
+- 共享 Runtime Pack。
+
+Disabled 不等于 deleted；UI 和 API 必须清楚区分。
+
+## 6. Runtime lifecycle 独立
+
+Skill 可声明：
 
 ```text
 runtimeRequirements
 ```
 
-例如：
-
-```text
-xlsx/pdf/pptx
--> wenshu-office@1.0.0
-```
-
-Runtime 状态独立表达：
+Runtime Pack 状态：
 
 ```text
 not-required
 not-installed
+installing
 available
 broken
 unknown
 ```
 
-因此：
+Private binding 状态另行表达：
 
 ```text
-built-in Skill visible
-+ runtime not-installed
+ready
+pending
+unavailable
 ```
 
-是完全合法状态。
+因此以下状态完全合法：
 
-用户点击「去使用」时，可以按需安装 Runtime Pack；这不改变 Skill Package 的“存在”状态。
+```text
+built-in Package visible
++ Runtime Pack available
++ one required private binding pending
+```
 
-Runtime Pack 卸载能力可以后续实现；在实现前不得用“卸载 Skill”代替这个概念。
+当前 XLSX 就存在这种情况：`wenshu-office` 可以存在，但 `wenshu_xlsx_xml_runtime` 仍为 pending。
 
-## 6. UI contract
+## 7. “去使用”语义
+
+```text
+Go use
+-> inspect runtimeRequirements
+-> prepare missing Runtime Pack if needed
+-> re-evaluate exact private binding readiness
+-> enter Chat or MicroAPP surface
+```
+
+“去使用”不是添加 Package，也不能因为安装成功就把所有 binding 标为 ready。
+
+## 8. UI contract
 
 Skills 页面：
 
 ```text
 全部技能
 精选技能
-<动态分类...>
+<动态分类>
 ```
 
-卡片可展示：
+卡片可以展示：
 
-```text
-名称
-来源
-描述
-Runtime 状态（仅有信息价值时）
-```
-
-不得展示统一的：
-
-```text
-已添加
-```
-
-因为所有当前可见 Skill 都已经存在。
+- 名称；
+- 来源；
+- 描述；
+- Runtime requirement / readiness（有信息价值时）。
 
 详情操作：
 
 ```text
 origin=user
   -> 编辑
+  -> 启用 / 停用（若支持）
   -> 删除
   -> 去使用
 
@@ -215,23 +164,28 @@ origin=built-in
   -> 不显示删除
 ```
 
-导入完成后的动作反馈使用：
+导入完成反馈使用“已导入”，不是持续“已添加”状态。
 
-```text
-已导入
-```
+## 9. API contract
 
-而不是把“已添加”建模成持续状态。
+Canonical catalog API：
 
-## 7. Hard Rules
+- list payload 保持轻量；
+- `origin` 与 `runtimeRequirements` 分离；
+- 不提供 `packageStatus=added`；
+- detail 按需列 package files；
+- file content 按需读取；
+- 非 user origin 的删除请求必须拒绝。
 
-1. Catalog 可见即表示 Skill Package 已存在，不建立 `added/not-added` 展示状态。
-2. canonical presentation API 不提供 `packageStatus`。
-3. 用户 Skill 删除必须物理删除整个受管 Skill Package。
-4. 最后一个 Skill 删除后允许清理空分类目录，但不得影响同分类其它 Skill。
-5. 用户 Skill 删除不得隐式删除共享 Runtime Pack。
-6. Built-in Skill 不可删除，也不存在“卸载 Skill Package”。
-7. Runtime 安装/未来卸载只操作 Skill 声明的执行依赖，不改变 built-in Skill 卡片存在性。
-8. UI 不显示“已添加”Tab 或 Badge。
-9. 非 `origin=user` 的 Skill 必须被服务端删除 API 拒绝。
-10. Runtime 卸载能力属于后续实现，不在本次合同中伪装完成。
+## 10. Hard Rules
+
+1. Catalog 可见表示 Package 存在，不表示 Runtime ready 或 Skill active。
+2. Origin 是身份，不是 added / installed 状态。
+3. Built-in Package 不可删除。
+4. User Skill 删除必须物理删除完整受管目录。
+5. Disabled 与 deleted 必须分开。
+6. 删除 Package 不隐式删除共享 Runtime Pack。
+7. Runtime Pack 状态与 private binding readiness 分开。
+8. “去使用”只准备执行依赖，不改变 Package 存在语义。
+9. UI 不显示统一“已添加”Badge。
+10. Runtime 安装成功不能伪造 pending binding 为 ready。
