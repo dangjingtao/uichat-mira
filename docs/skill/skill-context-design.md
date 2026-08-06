@@ -1,86 +1,74 @@
-# Skill Context / Progressive Disclosure 设计
+---
+status: current
+owner: skill-runtime
+last_verified: 2026-08-06
+layer: raw-source
+module: SKILL
+feature: SkillContext
+doc_type: current-contract
+canonical: true
+related:
+  - README.md
+  - pi-skill-agent-execution.md
+  - skill-runtime-design.md
+  - skill-package-runtime-contract.md
+  - skill-discovery-layout-contract.md
+---
 
-Status: Current
-Protocol: V1 Settled
-Owner: chat / runtime / docs
-Last verified: 2026-07-23
-Layer: raw-source
-Module: SKILL
-Feature: SkillContext
-Doc Type: design
-Canonical: true
-Related:
-  - ./README.md
-  - ./skill-runtime-design.md
-  - ./skill-package-runtime-contract.md
-  - ../harness/agentgraph-harness-protocol.md
+# Skill Context 与渐进式披露当前合同
 
-## Purpose
+## 1. Purpose
 
-这页定义 Mira Base Skill 的发现、匹配、渐进式披露、动态上下文注入、多轮连续性与 Trace 合同。
+本页定义 Skill 的发现、匹配、渐进式披露、连续性和 execution profile 投影。
 
 核心定义：
 
-> **Skill 是通过渐进式披露向 Agent 动态注入领域知识、执行策略和能力使用说明的可复用上下文能力包。**
+> SkillContext 回答“这类任务应该怎样做”；ExecutionProfile 回答“Skill-owned SubAgent 希望在什么最大能力边界内做”。两者都不等于真实权限。
 
-`SkillInstance / state / reducer / checkpoint` 属于可选 Stateful Skill Runtime，不属于 Base Skill V1 的最低合同。
-
----
-
-## 1. 总体链路
+## 2. 当前完整链路
 
 ```text
 SkillScanner
-  ↓
-SkillRegistry
-  ↓
-SkillMatcher
-  ↓
-SkillLoader
-  ↓
-DisclosurePlan
-  ↓
-SkillContext
-  ↓
-Prepare Context / currentTaskFrame
-  ↓
-Planner
+  -> SkillRegistry
+  -> SkillMatcher
+  -> SkillLoader
+  -> DisclosurePlan
+  -> SkillContext
+  -> SubAgent ExecutionProfile
+  -> one Skill-owned SubAgent
+  -> Evidence / Artifact / Requirement
+  -> Parent delivery
 ```
 
-并行存在：
+并行存在真实能力链：
 
 ```text
-Environment / Harness
-  ↓
-capability registry
-  ↓ matcher / Policy
-state.toolExposure
-  ↓
-Planner
+Environment / Harness / Runtime adapters
+  -> registered and ready capabilities
+  -> exposure / binding
+  -> Policy / Approval
 ```
 
-两个真相源在 Planner 汇合，但互不替代。
+两条链在执行前求交集，互不替代。
 
----
-
-## 2. 渐进式披露
+## 3. 渐进式披露
 
 ```text
 L0 Manifest
-  ↓ match
+  -> match
 L1 SKILL.md
-  ↓ on demand
-L2 Resource / Reference / Template / Example
-  ↓ execution need
+  -> task rules / completion contract
+L2 Resource
+  -> reference / template / example / script metadata
 Execution Boundary
-Tool / MCP / Script / Runtime
+  -> governed Harness Tool / managed private Runtime
 ```
 
 ### L0 Manifest
 
-Scanner 只读取轻量 frontmatter，不预加载正文和 references。
+Scanner 只 bounded 读取 frontmatter，不预加载正文和 references。
 
-最低字段：
+当前 Manifest 至少包含：
 
 ```ts
 type SkillManifest = {
@@ -89,177 +77,156 @@ type SkillManifest = {
   description: string
   version: string
   entry: string
+  origin: "built-in" | "user" | "external"
   source?: string
+  category?: string
   license?: string
   runtimeRequirements?: string[]
+  execution?: SkillExecutionManifest
 }
 ```
 
-`priority / conflicts / dependencies / sticky lifecycle / maxTokens` 不属于 V1 必需字段。
+### Canonical execution frontmatter
+
+源码 Skill 新增或整理 execution metadata 时统一使用：
+
+```yaml
+execution.agent: subAgent
+execution.allowedTools: read_open, github_repository
+execution.runtimeBindings: office_document
+execution.workspaceBound: true
+```
+
+当前 `execution.context` 不作为可配置路由；Scanner 会把 discovered Skill 统一规范化为：
+
+```text
+context = fork
+agent = subAgent
+```
+
+兼容字段仍可被解析，但新文档不得继续扩散：
+
+```text
+agent
+allowedTools
+runtimeBindings
+workspaceBound
+```
+
+`executionContext` 当前不会决定执行模式，不能继续作为规范字段。
 
 ### L1 SKILL.md
 
-命中 primary Skill 后加载。
+正文负责表达：
 
-正文主要表达：Routing、Hard Rules、领域策略、能力边界、质量标准、完成标准、Resource URI。
+- Routing；
+- domain rules；
+- execution strategy；
+- capability boundary；
+- quality rules；
+- completion criteria；
+- Resource URI。
 
 ### L2 Resource
 
-默认只列清单，不自动全量加载。
-
-稳定 URI：
+默认只建立目录，按需读取：
 
 ```text
-skill://<skill-id>/<relative-resource-path>
+skill://<skill-id>/<relative-path>
 ```
 
-示例：
+Resource 是上下文，不是新 Tool。
+
+## 4. Discovery layout
+
+当前公开源码布局：
 
 ```text
-skill://xlsx/reference/DCF_SKILL.md
-skill://docx/references/office-runtime-reference.md
-skill://pptx/reference/pptx-swarm.md
+<root>/<category>/<skill-id>/SKILL.md
 ```
 
-当前 `read_open` 可以只读 `skill://` virtual resource，不新增 `skill_read` Tool。
-
-### Execution Boundary
-
-Tool / MCP / Script / Runtime 不是 DisclosureLevel。
-
-Skill 可以声明依赖，但真实可用性、权限、approval、sandbox、side effect 继续由既有执行体系决定。
-
----
-
-## 3. SkillScanner
-
-职责：
-
-- 发现 `SKILL.md`；
-- bounded 读取文件头；
-- 解析 Manifest；
-- 不加载正文；
-- 不加载 Reference 内容；
-- 不执行 Script；
-- 不注册 Tool。
-
-概念接口：
-
-```ts
-interface SkillScanner {
-  scan(paths: string[]): Promise<SkillManifest[]>
-}
-```
-
----
-
-## 4. SkillRegistry
-
-```ts
-interface SkillRegistry {
-  get(id: string, version?: string): SkillManifest | null
-  listAvailable(): SkillManifest[]
-}
-```
-
-Registry 是 Skill Manifest 真相，不复制 Tool Registry。
-
----
-
-## 5. SkillMatcher
-
-```ts
-type SkillMatchSource =
-  | "explicit"
-  | "resource"
-  | "exact"
-  | "semantic"
-  | "embedding"
-  | "continuation"
-```
-
-正常首轮匹配优先级：
+兼容布局：
 
 ```text
-0. explicit trigger
-1. deterministic attachment / MIME / extension
-2. exact semantic hint
-3. lightweight semantic match
-4. embedding / task model fallback
+<user-root>/<skill-id>/SKILL.md
+<system-root>/<skill-id>/SKILL.md  # 仅 registered built-in
 ```
 
-V1 自动注入最多一个 primary Skill。
+一个目录包含 `SKILL.md` 后即成为完整 package boundary，不再向下把 references/scripts 误识别为独立 Skill。
 
-`secondary` 只用于候选 / trace，不默认同时注入多个 Skill 正文。
+系统/package roots 先于 user root；相同 id 的用户 Skill 不能 shadow built-in / external identity。
 
----
+## 5. Origin 与执行安全
 
-## 6. 多轮 Task-Context Continuity
+### built-in / external
 
-### 目标
+可以声明 Harness Tool 和 private Runtime requirements，但真实能力仍取决于环境、binding、Policy 和 approval。
 
-用户回答 Planner 追问时，不能因为本轮没有再次出现 `Excel / DCF / PPT` 等关键词就丢失 SkillContext。
+### user
 
-### 规则
+用户导入 Skill 固定规范化为：
 
 ```text
-A. 本轮正常 Matcher 命中 primary
-→ 使用本轮 primary
-
-B. 本轮未命中
-+ 本轮明显是补参数 / 继续 / 确认 / 修改上一任务
-→ 向最近用户轮回看最近有效 primary
-→ source = continuation
-
-C. 本轮明确新任务 / 换话题 / 取消 / 结束
-→ 禁止继承旧 Skill
+context = fork
+agent = subAgent
+allowedTools = []
+runtimeBindings = []
+workspaceBound = false
 ```
 
-### 不变量
+用户 Skill frontmatter 中声明的 Tool 或 Runtime 不构成授权。
 
-- continuation 不创建 SkillInstance；
-- continuation 不创建 hidden lifecycle state machine；
-- 继承的是任务语义上下文，不是长期 Memory；
-- 新的明确 Skill 命中始终优先于 continuation；
-- continuity 只在有限近期用户轮内回看，避免陈旧 Skill 污染。
+## 6. Matching
 
-### Reference continuity
+当前最多一个 primary Skill。
 
-继承 primary 时，DisclosurePlan 必须同时保留原始任务的披露语义。
-
-例如：
+优先级：
 
 ```text
-Turn 1: 帮我做一个 DCF Excel 模型
-→ xlsx / exact
-→ DCF_SKILL.md
-
-Turn 2: 虚拟科技公司，历史3年，预测5年，其余默认
-→ xlsx / continuation
-→ disclosure query = anchor task + current reply
-→ DCF_SKILL.md 继续披露
+explicit trigger
+-> attachment / MIME / extension
+-> exact semantic hint
+-> lightweight semantic match
+-> embedding / task-model fallback
 ```
 
----
+Match source：
 
-## 7. SkillLoader
-
-```ts
-interface SkillLoader {
-  loadContent(manifest: SkillManifest): Promise<SkillContent>
-  listResources(manifest: SkillManifest): Promise<SkillResource[]>
-  loadResource(uri: string): Promise<LoadedSkillResource>
-  invalidate(skillId: string): void
-}
+```text
+explicit
+resource
+exact
+semantic
+embedding
+continuation
 ```
 
-Loader cache 仅是 IO 优化，不是 Skill 生命周期。
+secondary 只用于候选和 trace，不默认同时注入多份 Skill 正文。
 
-Resource 合同应使用可序列化数组 / 对象，不使用 `Map` 作为跨边界合同。
+## 7. Task-context continuity
 
----
+```text
+本轮明确命中新 Skill
+-> 使用新 primary
 
-## 8. DisclosurePlan / SkillContext
+本轮无新 Skill
++ 明显是补参数 / 确认 / 修改 / 继续同一任务
+-> 继承最近有效 primary
+-> source = continuation
+
+明确新任务 / 换话题 / 取消
+-> 不继承旧 Skill
+```
+
+continuation 继承：
+
+- primary Skill identity；
+- 原任务的 disclosure 语义；
+- 当前任务相关的 resource selection。
+
+它不等于长期 Memory，也不自动激活 Stateful Flow。
+
+## 8. DisclosurePlan 与 SkillContext
 
 ```ts
 type SkillDisclosurePlan = {
@@ -278,6 +245,7 @@ type SkillContext = {
     version: string
     name: string
     body: string
+    execution?: SkillExecutionManifest
   }
   resources: SkillResource[]
   disclosedResources: Array<{
@@ -293,221 +261,112 @@ type SkillContext = {
 }
 ```
 
-SkillContext 是结构化 Agent Context，不直接操作 Tool Registry。
+SkillContext 不直接修改 Tool registry 或 approval state。
 
----
+## 9. 当前执行投影
 
-## 9. Reference 按需披露
+每个 discovered Skill 都解析为：
 
-原则：
-
-```text
-primary matched
-→ load SKILL.md
-→ list resources
-→ only disclose resources required by current task
+```ts
+{
+  skillId,
+  mode: "forked-agent",
+  engine: "pi-agent-core",
+  allowedHarnessToolIds,
+  runtimeBindings,
+  workspaceBound
+}
 ```
 
-当前确定性披露：
+这是一份 requirement envelope，不是 permission grant。
+
+真实 Child 能力为：
 
 ```text
-XLSX DCF
-→ DCF_SKILL.md only
+allowedHarnessToolIds
+∩ current registered/exposed tools
+∩ Policy / Approval
 
-XLSX three-statement
-→ 3_statement_model.md only
++
 
-XLSX comps
-→ COMPS_SKILL.md only
-
-20+ / batch PPTX
-→ pptx-swarm.md only
+ready managed private runtime bindings
 ```
 
-禁止：
+没有声明 Tool/Runtime 的规则型 Skill 仍进入同一 SubAgent 外壳，只是执行面为空。
 
-```text
-match xlsx
-→ automatically inject all references
-```
+## 10. Context budget
 
----
-
-## 10. Context Budget
-
-预算属于 Agent Context Policy，不属于 Skill 生命周期。
-
-原则：
-
-1. Manifest 轻量；
-2. 自动只加载 primary SKILL.md；
-3. Reference 按需；
+1. Manifest 保持轻量；
+2. 自动只加载 primary `SKILL.md`；
+3. Resource 按需；
 4. 大资源使用 URI / artifact / file reference；
-5. 超预算时优先保留 Routing / Hard Rules / Completion；
-6. continuation 不应复制多份历史 Skill 正文，只重建当前需要的 SkillContext。
+5. 超预算优先保留 Routing / Hard Rules / Completion；
+6. continuation 重建当前上下文，不复制历史多份正文。
 
----
+## 11. Workspace
 
-## 11. 与 Harness / AgentGraph 的边界
+`skillRoot`、`runtimeRoot`、`workspaceRoot` 独立。
+
+`workspaceBound=true` 只表示该 execution profile 需要有效任务 workspace。没有 workspace 时应返回 capability requirement / structured failure，不得退化写到 Skill package 或 Runtime Pack 目录。
+
+## 12. Optional Conversation Flow
+
+SkillContext 命中后，宿主可按 primary id 查询专用 Flow binding。
+
+当前只有：
 
 ```text
-currentTaskFrame.skillContext
-= how to do this task
-
-state.toolExposure
-= what the Agent can actually call now
+fertility-assessment
 ```
 
-SkillContext：
+Flow 是该 Skill 的确定性 SubAgent controller，不是第二个可发现 Skill，也不在普通 SkillContext 中复制完整业务状态。
 
-- 不注册 Tool；
-- 不扩大 ToolExposure；
-- 不授予权限；
-- 不创建 `pendingToolCall`；
-- 不绕过 Normalize / Policy / ToolNode / Evidence。
+## 13. Trace
 
-主循环保持：
+必须记录：
 
 ```text
-Planner -> Normalize -> Policy -> Tool/Retrieve -> Evidence -> Planner
-```
-
-不新增 `use_skill` action，不新增第二 Agent Loop。
-
----
-
-## 12. Runtime Pack / Execution Eligibility
-
-Skill 匹配和 Tool 注册是两条独立链。
-
-```text
-SkillScanner / Matcher / Loader
-→ SkillContext
-
-Runtime Pack / Environment
-→ Harness capability reconciliation
-→ capability registry
-→ matcher / Policy
-→ state.toolExposure
-```
-
-文枢当前：
-
-```text
-office_document
-→ built-in runtime capability
-
-wenshu-office verified ready
-→ office_pdf
-→ office_spreadsheet
-→ office_presentation
-eligible for Harness registry
-```
-
-Skill 命中不参与 capability 注册决策。
-
----
-
-## 13. Trace 合同
-
-必须存在独立 `技能上下文` Trace 节点。
-
-matched 时至少记录：
-
-```text
-primary id / name / version
-match.source
-match.reason
-match.score
+matched / not_matched
+primary id / name / version / origin
+match source / reason / score
 secondarySkillIds
 skillBodyLoaded
 availableResourceUris
 disclosedResourceUris
-toolExposureMutation=false
-```
-
-not_matched 时也必须明确记录，而不是无声缺失。
-
-`continuation` 必须可见为独立 match source，不能伪装成新的 exact / semantic 命中。
-
----
-
-## 14. 当前真实烟测结论
-
-### 单轮 DCF
-
-```text
-query = 帮我做一个 DCF Excel 模型
-primary = xlsx
-source = exact
-score = 0.96
-availableResourceCount = 3
-disclosedResourceCount = 1
-disclosedResourceUris = [skill://xlsx/reference/DCF_SKILL.md]
-```
-
-### 多轮 DCF
-
-```text
-next query = 用一家虚拟科技公司，历史3年，预测5年，其余参数合理默认
-primary = xlsx
-source = continuation
-disclosedResourceUris = [skill://xlsx/reference/DCF_SKILL.md]
-```
-
-说明：
-
-- primary continuity 已工作；
-- DCF Reference continuity 已工作；
-- 没有把三份 XLSX Reference 全量注入。
-
-### ToolExposure
-
-Runtime Pack ready 后，真实 trace 已观察到 Office optional capabilities 进入正常 exposed tool candidate 路径，同时：
-
-```text
+execution profile
+allowedHarnessToolIds
+runtime bindings and readiness
+workspaceBound
 toolExposureMutation = false
 ```
 
-### 非 Skill 阻断
+`continuation` 必须保留为独立 source。
 
-`Planner output was invalid JSON` 属于 Planner structured-output / recovery 问题。
+## 14. 当前 Acceptance
 
-除非证据显示 SkillContext 输入合同直接导致错误，否则不得把该问题归因于 Skill 协议并重构 SkillContext。
+1. L0 bounded Manifest scan；
+2. canonical package boundary；
+3. 单 primary 匹配；
+4. SKILL.md 动态加载；
+5. stable `skill://` URI；
+6. selective Resource disclosure；
+7. task-context continuation；
+8. execution manifest 投影；
+9. 每个 discovered Skill 解析为一个 forked SubAgent profile；
+10. user Skill 不继承系统能力；
+11. SkillContext 不扩大 ToolExposure；
+12. Flow binding 与普通 SkillContext 分离；
+13. 独立 Trace。
 
----
+## 15. Hard Rules
 
-## 15. V1 Acceptance
-
-当前协议层已满足 / 已实现：
-
-1. L0 轻量 Manifest scan；
-2. 单 primary 匹配；
-3. SKILL.md 动态注入；
-4. stable `skill://` Resource URI；
-5. selective Reference disclosure；
-6. `currentTaskFrame.skillContext` 注入；
-7. SkillContext 不扩大 ToolExposure；
-8. 独立 Skill Trace；
-9. 多轮 `continuation`；
-10. Runtime Pack / Tool eligibility 与 Skill match 解耦。
-
-仍需按各业务分别验证的是**具体 Domain Runtime 输出质量和 Planner 执行稳定性**，不是 Base Skill 协议本身。
-
----
-
-## 16. Hard Rules
-
-1. **Skill 本体 = 渐进式披露的动态上下文能力包。**
-2. Base Skill 不等于 Tool / Agent / Workflow / Runtime。
-3. 自动注入最多一个 primary Skill。
-4. Reference 默认按需披露。
-5. SkillContext 与 ToolExposure 是两个独立真相源。
-6. Skill 命中不得主动扩大 `state.toolExposure`。
-7. `continuation` 是轻量任务上下文继承，不是 Stateful Runtime。
-8. 新 Skill 明确命中优先；新任务 / 换话题 / 取消不得继承旧 Skill。
-9. Tool / MCP / Script / Runtime 是 Execution Boundary，不是 DisclosureLevel。
-10. Parent Agent Loop 始终唯一。
-11. Base Skill 不要求 SkillInstance / reducer / checkpoint。
-12. Stateful Skill Runtime 是可选高级层。
-13. Skill 是否生效必须有 Trace 证据。
+1. SkillContext 是领域上下文，不是 Tool、权限或 Runtime。
+2. ExecutionProfile 是最大需求边界，不是授权。
+3. 当前每个 discovered Skill 都通过一个 Skill-owned SubAgent 执行。
+4. 自动激活最多一个 primary Skill。
+5. Resources 默认按需披露。
+6. 用户 Skill 不因 frontmatter 获得能力。
+7. continuation 不是长期 Memory，也不是隐藏状态机。
+8. Tool / MCP / Runtime 是 Execution Boundary，不是 DisclosureLevel。
+9. private Runtime 不暴露给 Main Planner。
+10. Stateful Flow 是可选 controller，不能与自由 Child loop 叠加。
