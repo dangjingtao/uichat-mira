@@ -11,77 +11,99 @@ metadata:
 
 This Skill uses the MiniMax XLSX workflow as its implementation baseline.
 
-SkillContext provides execution instructions and package resources only. It does not expand canonical ToolExposure. The Skill runtime owns all Python-backed XLSX execution through the internal WenShu Python invocation contract. The Agent may materialize OOXML with the exposed file capability, but it must not run package scripts through `terminal_session` or route XLSX work back through the legacy openpyxl `office_spreadsheet` capability.
+## Current execution readiness
 
-The invocation contains only `runtime: "wenshu-office"`, a registered script identifier, operation arguments, and workspace input/output paths. The launcher owns Python selection, managed Runtime Pack `PYTHONPATH`, script resolution, and result status. Never emit a Python executable, `PYTHONPATH`, shell command, `python -m`, `pip install`, or `conda install` instruction.
+The current Skill-owned SubAgent profile requests two distinct private Runtime bindings:
+
+```text
+office_spreadsheet
+= ready compatibility runtime for inspection / recalculation / verification
+
+wenshu_xlsx_xml_runtime
+= XML-first create / edit / fix execution bridge
+= pending
+```
+
+These bindings are not interchangeable.
+
+A ready `office_spreadsheet` binding must never be presented as proof that XML-first create/edit/fix is ready. When the requested route requires XML package mutation and `wenshu_xlsx_xml_runtime` is still pending, return a structured capability gap. Do not silently downgrade to an openpyxl round-trip, legacy spreadsheet writer, terminal script, or model-generated claim of success.
+
+SkillContext provides execution instructions and package resources only. It does not expand canonical ToolExposure. The Skill-owned SubAgent may use exposed read capabilities, but Python-backed XLSX execution must go through a managed private Runtime binding.
+
+The managed invocation contains only a registered runtime/binding id, operation arguments, and workspace input/output paths. The launcher owns Python selection, managed Runtime Pack `PYTHONPATH`, script resolution, and result status. Never emit a Python executable, `PYTHONPATH`, shell command, `python -m`, `pip install`, or `conda install` instruction.
 
 ## Task routing
 
-| Task | Method | Reference |
+| Task | Required method | Current binding |
 |---|---|---|
-| READ / ANALYZE existing data | `scripts/xlsx_reader.py` + pandas when available | `skill://xlsx/references/read-analyze.md` |
-| CREATE new `.xlsx` | copy `templates/minimal_xlsx/`, edit OOXML, pack | `skill://xlsx/references/create.md` + `skill://xlsx/references/format.md` |
-| EDIT existing `.xlsx/.xlsm` | unpack → targeted OOXML edit → pack | `skill://xlsx/references/edit.md` |
-| FIX formulas | unpack → repair `<f>` nodes → pack | `skill://xlsx/references/fix.md` |
-| VALIDATE formulas/package | deterministic scripts | `skill://xlsx/references/validate.md` |
+| READ / ANALYZE existing data | deterministic reader / inspection | `office_spreadsheet` when supported |
+| RECALCULATE / VERIFY | deterministic compatibility runtime | `office_spreadsheet` |
+| CREATE new `.xlsx` | minimal OOXML template → targeted XML → pack | `wenshu_xlsx_xml_runtime` required; currently pending |
+| EDIT existing `.xlsx/.xlsm` | unpack → surgical OOXML edit → pack | `wenshu_xlsx_xml_runtime` required; currently pending |
+| FIX formulas/package | targeted `<f>` / package repair → pack | `wenshu_xlsx_xml_runtime` required; currently pending |
+| VALIDATE XML/package | deterministic scripts through managed binding | route-specific binding required |
 
 Do not load every reference at once. Read only the reference needed for the current route.
 
-## CREATE
+## CREATE contract
 
-Start from `skill://xlsx/templates/minimal_xlsx/`; do not build a package from an ad-hoc ZIP layout.
+When the XML-first binding is ready, CREATE must start from `skill://xlsx/templates/minimal_xlsx/`; do not build a package from an ad-hoc ZIP layout.
 
-Core flow:
+Canonical flow:
 
 ```text
 plan workbook structure
 → copy minimal_xlsx template
 → edit workbook/sharedStrings/styles/worksheet XML
-→ internal WenShu Runtime invocation for pack / formula validation
-→ optional internal WenShu Runtime invocation for LibreOffice recalculation when real recalculation is required
+→ managed XML Runtime pack / formula validation
+→ optional deterministic LibreOffice recalculation when actually available
 → deliver .xlsx
 ```
 
 Every derived value must remain an Excel formula. Hardcode only raw facts, user inputs, and explicit assumptions.
 
-## EDIT / FIX
+Until `wenshu_xlsx_xml_runtime` is ready, this route is unavailable. Do not imitate completion through a different writer.
 
-Never recreate an existing workbook from scratch merely to make an edit. Never use an openpyxl round-trip as the default edit path for an existing complex workbook because it can lose unsupported OOXML structures.
+## EDIT / FIX contract
 
-Use:
+Never recreate an existing workbook from scratch merely to make an edit. Never use an openpyxl round-trip as the default edit path for a complex workbook because it can lose unsupported OOXML structures.
+
+Required flow when the XML-first binding is ready:
 
 ```text
-internal WenShu Runtime invocation for the XLSX unpack operation
-→ edit only the requested OOXML nodes
-→ internal WenShu Runtime invocation for packaging and formula validation
+managed unpack
+→ edit only requested OOXML nodes
+→ managed pack
+→ deterministic formula/package validation
 ```
 
 Preserve sheet names, unrelated cells, VBA/pivot/chart/sparkline/package parts, relationships, and formatting unless the request explicitly changes them.
 
-For `.xlsm`, preserve `vbaProject.bin` and all existing package relationships/content types.
+For `.xlsm`, preserve `vbaProject.bin` and existing package relationships/content types.
+
+Until the required binding is ready, return a capability gap rather than a lossy fallback.
 
 ## READ / ANALYZE
 
-Reading and analysis must not modify the source file. Use the internal WenShu Runtime operation for structure/data discovery. pandas/openpyxl may be used by that deterministic runtime when available; they are not an Agent-selected execution path.
+Reading and analysis must not modify the source file. Use the ready deterministic inspection capability when it supports the requested operation. pandas/openpyxl may be implementation details of a managed Runtime; they are not Agent-selected execution paths.
 
 ## Formula rules
 
 1. Derived/projected/linked values stay as formulas, never Python-computed pasted values.
 2. Cross-sheet references must target real sheet names.
-3. Do not silently replace unsupported formulas, chart types, styles, or workbook structures with guessed alternatives.
-4. A protocol or package construct that cannot be preserved or executed faithfully must fail explicitly.
+3. Do not silently replace unsupported formulas, chart types, styles, or workbook structures.
+4. A construct that cannot be preserved or executed faithfully must fail explicitly.
 
 ## Deterministic validation
 
 Validation is code, not model judgment.
 
-- `scripts/xlsx_pack.py` rejects malformed XML before packing.
-- `scripts/formula_check.py` performs static formula/package checks.
-- `scripts/libreoffice_recalc.py` is an optional Tier-2 recalculation path when LibreOffice is actually available.
+- XML/package validation must reject malformed input before delivery.
+- Formula checks must report actual failures.
+- LibreOffice recalculation is only claimed when it really ran successfully.
+- Missing Tier-2 recalculation must be reported as unavailable, not silently treated as success.
 
-Do not use an LLM to inspect generated values and decide whether deterministic code "probably worked". If a deterministic operation fails, repair the protocol/input or implementation.
-
-Dynamic recalculation is not silently downgraded to success. If LibreOffice is unavailable, report that Tier-2 recalculation was unavailable; do not claim that formulas were recalculated.
+Do not use an LLM to decide that deterministic code “probably worked”.
 
 ## Financial formatting baseline
 
@@ -93,19 +115,29 @@ Read `skill://xlsx/references/format.md` before building a styled financial work
 
 ## Hard rules
 
-1. CREATE uses the OOXML template path.
-2. EDIT/FIX preserve the original package and edit OOXML surgically.
+1. CREATE / EDIT / FIX require the XML-first binding; it is currently pending.
+2. `office_spreadsheet=ready` does not make XML-first write routes ready.
 3. Never flatten live formulas into hardcoded calculated outputs.
 4. Never silently drop workbook structures to make an operation easier.
 5. Never fabricate source citations or business data.
-6. Never treat model visual/readback judgment as an execution-success gate.
-7. Always write the requested final workbook artifact, not only intermediate XML/spec files.
-8. Never invoke `server/src/skills/xlsx/scripts/*.py` or any WenShu Python script through `terminal_session`.
+6. Never treat model judgment as an execution-success gate.
+7. Always deliver the requested final workbook Artifact for supported routes.
+8. Never invoke XLSX Python scripts through `terminal_session`.
+9. Never fall back to openpyxl round-trip for complex create/edit merely to avoid a capability gap.
+10. Skill match does not grant Tool, Runtime, workspace, or approval.
 
 ## Completion
 
-A task is complete when the requested deterministic operation succeeded, the final workbook artifact was written, and the required deterministic validation for that route passed. Optional Tier-2 recalculation is only claimed when it actually ran successfully.
+A supported XLSX task is complete only when:
+
+- the exact required private binding was ready;
+- the deterministic operation succeeded;
+- the final workbook Artifact was written;
+- route-specific validation passed;
+- optional recalculation is claimed only when it actually ran.
+
+A task requiring a pending binding is not complete; return the capability requirement explicitly.
 
 ## Upstream
 
-Implementation baseline: MiniMax `minimax-xlsx`, MIT licensed, pinned to upstream commit `60aaae52bb2af8162732751a4332f62a5fef518b`. Mira-specific changes are limited to Skill routing, capability boundaries, and package paths.
+Implementation baseline: MiniMax `minimax-xlsx`, MIT licensed, pinned to upstream commit `60aaae52bb2af8162732751a4332f62a5fef518b`. Mira-specific changes are limited to Skill routing, capability boundaries, package paths, and managed Runtime integration.
