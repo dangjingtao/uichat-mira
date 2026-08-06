@@ -1,30 +1,33 @@
-# Skill Discovery / Directory Exposure Contract
+---
+status: current
+owner: skill-runtime / desktop
+last_verified: 2026-08-06
+layer: raw-source
+module: SKILL
+feature: SkillDiscovery
+doc_type: current-contract
+canonical: true
+related:
+  - README.md
+  - skill-context-design.md
+  - skill-package-runtime-contract.md
+---
 
-Status: Current
-Protocol: V1 Settled
-Owner: chat / runtime / desktop
-Last verified: 2026-07-24
-Layer: raw-source
-Module: SKILL
-Feature: SkillDiscovery
-Doc Type: current-contract
-Canonical: true
-Related:
-  - ./README.md
-  - ./skill-context-design.md
-  - ./skill-package-runtime-contract.md
+# Skill Discovery 与目录暴露合同
 
-## Purpose
+## 1. Purpose
 
 本合同定义：
 
-1. 什么目录算一个用户可见 / Agent 可匹配的 Skill Package；
-2. Skill 如何按分类组织；
-3. internal helper / reference / script 如何保证不会误入 `SkillRegistry`。
+1. 哪个目录算一个可发现 Skill Package；
+2. category 与 package boundary；
+3. built-in / external / user 的优先级；
+4. internal helper 如何在进入 Registry 前被过滤；
+5. discovery 如何生成安全 execution manifest。
 
-## 1. Canonical 目录结构
+## 2. Canonical layout
 
-新增和现有源码侧用户 Skill 统一使用：
+源码公开 Skill 与新用户导入 Skill统一使用：
 
 ```text
 <skills-root>/
@@ -41,130 +44,136 @@ Related:
 固定语义：
 
 ```text
-一级目录 = category / 展示分组
-二级目录 = 一个独立 Skill Package
+一级目录 = category
+二级目录 = one Skill Package
 ```
 
-因此：
+一个二级 Skill 目录对应：
 
-> **一个二级 Skill 目录 = 一个 Catalog 卡片 = 一个 Registry Manifest。**
+```text
+one Catalog item
+one Registry Manifest
+one primary match identity
+one Skill-owned SubAgent profile
+```
 
-canonical 两级目录下，一级目录名是分类真相源。`SKILL.md` 中的 `category` 作为展示元数据保留，但不得制造另一套目录分类真相。
+## 3. Package boundary
 
-## 2. Package boundary
-
-一旦 Scanner 在某个 Skill 目录发现：
+一旦目录存在：
 
 ```text
 <skill-dir>/SKILL.md
 ```
 
-该目录立即成为完整 Skill Package boundary，Scanner 不得继续把其内部任何 `SKILL.md` 注册成新的顶级 Skill。
+该目录立即成为完整 package boundary。Scanner 不再向下把任何嵌套 `SKILL.md` 注册为顶级 Skill。
 
-例如：
+references / templates / examples / scripts / runtime 都属于同一 package，不是可独立匹配 Skill。
 
-```text
-办公效率/
-  pptx/
-    SKILL.md                  <- 唯一 Skill：pptx
-    reference/
-      pptx-swarm.md           <- Resource，不是 Skill
-      internal-helper/
-        SKILL.md              <- 即使存在，也不得成为独立 Skill
-```
-
-这条边界防止：
-
-- reference/helper 误显示成 Skill；
-- internal helper 被 Agent Matcher 直接命中；
-- scripts/runtime 说明文件污染 Catalog；
-- 一个 Package 因内部目录产生多个“幽灵 Skill”。
-
-## 3. Public exposure gate
-
-进入 `SkillRegistry` 意味着该 Skill 可能同时进入：
+## 4. Public eligibility
 
 ```text
-Skills Catalog
-+
-SkillMatcher / Agent SkillContext
+SKILL.md exists
+!= Registry eligible
 ```
 
-必须保持：
+### Source/package roots
 
-```text
-SKILL.md exists != Registry eligible
-```
-
-### 源码侧 Skill
-
-非 built-in 的源码 Skill 必须同时满足：
+非 registered built-in 的源码 Skill 必须满足：
 
 ```text
 <category>/<skill-id>/SKILL.md
-+
-visibility: public
++ visibility: public
 ```
 
-源码根目录下的平铺包：
+### User root
 
-```text
-<skills-root>/<skill-id>/SKILL.md
-```
-
-只允许 `registry.ts` 明确注册的 built-in Skill 使用兼容路径。
-
-**普通源码用户 Skill 不再允许通过平铺目录或“完整 manifest 看起来像公开 Skill”进入 Registry。**
-
-### 用户安装目录
-
-新导入统一写入：
-
-```text
-<user-skills-root>/<category>/<skill-id>/SKILL.md
-```
-
-用户明确导入的 Skill 默认 public；若 frontmatter 显式声明：
+用户新导入使用 canonical 两级目录。用户明确导入的 package 默认可发现；若声明：
 
 ```yaml
 visibility: internal
+visibility: private
+visibility: hidden
 ```
 
-或 `private / hidden`，则不得进入 Registry。
+则不得进入 Registry。
 
-旧版本已经存在的：
+旧用户目录：
 
 ```text
-<user-skills-root>/<skill-id>/SKILL.md
+<user-root>/<skill-id>/SKILL.md
 ```
 
-仅保留本地升级兼容读取，不作为新安装格式。编辑/迁移时必须整体移动 Package 到 canonical 两级目录，references/templates/scripts 一并迁移。
+仅保留 legacy read/migration compatibility，不作为新安装格式。
 
-## 4. Reserved / internal directories
+### Flat system compatibility
 
-以下一级或二级目录名永远不参与 Skill discovery：
+```text
+<system-root>/<skill-id>/SKILL.md
+```
+
+只允许 `registry.ts` 明确登记的 built-in identity 使用。普通源码 Skill 不得靠平铺目录进入 Registry。
+
+## 5. Reserved directories
+
+以下目录永远不参与 discovery：
 
 ```text
 .<anything>
 _<anything>
 ```
 
-推荐内部包统一放：
+内部 helper 推荐放入：
 
 ```text
-<skills-root>/_internal/<helper-id>/...
+<skills-root>/_internal/
 ```
 
-即使内部文件写了 `visibility: public`，也不得绕过目录边界进入 Registry。
+即使内部文件写了 `visibility: public`，也不得绕过目录 gate。
 
-## 5. 当前源码 Skill 迁移状态
+## 6. Root priority 与身份保护
 
-2026-07-24 已将现有非 built-in 用户可见源码 Skill 迁入 canonical 两级目录：
+Scanner 按以下原则扫描：
 
 ```text
+system / package roots
+-> user root
+```
+
+同一 `id` 只接受第一个合法 Manifest。用户 package 不能通过复用 built-in / external id shadow 系统身份。
+
+用户 root 下的 package 永远保持 `origin=user`，即使 id 与 built-in 相同；它不能继承 built-in metadata、private Runtime 或系统来源。
+
+## 7. 当前 built-in inventory
+
+`server/src/skills/registry.ts` 当前登记：
+
+```text
+docx
+xlsx
+pdf
+pptx
+github-collaboration
+wechat-article-layout
+```
+
+其中：
+
+- DOCX/XLSX/PDF/PPTX 当前允许 flat built-in compatibility；
+- `github-collaboration` 同时存在分类目录 public package，并由同一 id 合并为一个 identity；
+- `wechat-article-layout` 的 Registry 条目必须与实际 package 文件和构建分发持续对账，Registry 条目本身不替代 package existence 验证。
+
+## 8. 当前分类目录 public Skill
+
+已确认的分类 package 包括：
+
+```text
+development/
+  github-collaboration/
+  miradocs/
+
 内容创作/
-  black-mirror-writer/
   deep-interview/
+  black-mirror-writer/
 
 工程研发/
   product-critic/
@@ -173,125 +182,82 @@ _<anything>
   fertility-assessment/
 ```
 
-这些 Skill 的公开 manifest 均显式声明：
+目录名 `development` 当前在展示层归一化为“工程研发”。目录仍是 discovery category 来源；展示归一化不能制造第二套 package identity。
+
+## 9. Internal stage 不是新 Skill
+
+### fertility report
+
+```text
+fertility-assessment
+  -> internal report handoff
+```
+
+不得注册独立 public `fertility-report`。
+
+### pptx swarm
+
+长演示策略属于 `pptx` package 的 L2 Resource，不得注册独立 `pptx-swarm`。
+
+## 10. Canonical frontmatter
+
+公开源码 Skill 至少使用：
 
 ```yaml
+id: example-skill
+displayName: 示例技能
+description: ...
+version: 1.0.0
+source: Mira Lab
+category: 工程研发
 visibility: public
 ```
 
-`fertility-assessment` 的报告生成属于同一个 Skill 的内部阶段：
+需要 execution metadata 时统一使用：
 
-```text
-健康/fertility-assessment/
-  SKILL.md
-  references/
-    assessment-framework.md
-    report-contract.md
+```yaml
+execution.agent: subAgent
+execution.allowedTools: read_open, github_repository
+execution.runtimeBindings: office_document
+execution.workspaceBound: true
 ```
 
-不得再创建独立公开 `fertility-report` Skill。
+当前 Scanner 会统一把 discovered Skill 规范化为 `context=fork`、`agent=subAgent`。`executionContext` 不是 canonical 字段。
 
-## 6. Built-in 兼容边界
+## 11. User Skill execution normalization
 
-当前明确 built-in：
-
-```text
-docx
-xlsx
-pdf
-pptx
-```
-
-它们由 `registry.ts` 明确注册，因此 V1 允许暂时保留源码根目录平铺结构。
-
-该兼容只属于明确 built-in，不扩展给普通用户 Skill 或 helper。
-
-## 7. PPTX / pptx-swarm
-
-`pptx-swarm` 不是独立用户 Skill。
-
-正确结构：
+用户 package 即使声明 Tool/Runtime，也被规范化为：
 
 ```text
-pptx/
-  SKILL.md
-  reference/
-    pptx-swarm.md
+allowedTools = []
+runtimeBindings = []
+workspaceBound = false
 ```
 
-普通 PPT 与 20+ 页 / 多份 / 批量 PPT 都保持：
+Discovery 只确认 package identity，不授予 execution capability。
+
+## 12. Implementation anchors
 
 ```text
-primary Skill = pptx
+server/src/skills/context/scanner.ts
+server/src/skills/context/loader.ts
+server/src/skills/context/matcher.ts
+server/src/skills/registry.ts
+server/src/skills/user-skills.ts
+server/src/skills/user-skill-migration.ts
 ```
 
-需要长演示策略时按需披露 `pptx-swarm` reference。
+## 13. Hard Rules
 
-不得同时存在两个顶级可匹配 Skill：
-
-```text
-pptx
-pptx-swarm
-```
-
-## 8. Agent exposure invariant
-
-必须保持：
-
-```text
-Filesystem content
-  != Public Skill
-
-SKILL.md exists
-  != Registry eligible
-
-Registry eligible
-  -> Catalog visible
-  -> Matcher eligible
-```
-
-安全边界发生在：
-
-```text
-SkillScanner
-  ↓ layout + public eligibility
-SkillRegistry
-  ↓
-Catalog + Matcher
-```
-
-**内部 Skill / helper 必须在进入 Registry 之前被过滤。**
-
-禁止依赖前端隐藏卡片解决 Agent 暴露问题；前端隐藏不会改变 `SkillMatcher` 候选集合。
-
-## 9. Current implementation anchors
-
-- `server/src/skills/context/scanner.ts`
-  - canonical 两级目录发现；
-  - Package boundary 不递归；
-  - `_` / `.` internal directory exclusion；
-  - source public eligibility gate；
-  - 仅 built-in + legacy user install 保留 flat compatibility。
-- `server/src/skills/user-skills.ts`
-  - 新导入写入 `<category>/<skill-id>`；
-  - 分类修改移动整个 package；
-  - legacy 本地用户包编辑时迁移。
-- `server/src/skills/registry.ts`
-  - 明确 built-in Skill 集合。
-- `server/src/skills/context/provider.ts`
-  - Agent 只从 `SkillRegistry.listAvailable()` 获取匹配候选。
-
-## 10. Hard Rules
-
-1. 源码用户 Skill 必须使用 `<category>/<skill-id>/SKILL.md`。
-2. 一个二级 Skill 目录 = 一个 Catalog 卡片 = 一个 Registry Manifest。
-3. 源码非 built-in Skill 必须显式 `visibility: public` 才能进入 Registry。
-4. Skill Package 内部禁止递归发现新的顶级 Skill。
-5. reference/template/example/script/runtime 内部文件不得自动进入 Registry。
-6. `_` / `.` 开头目录永远是非公开发现区域。
-7. 源码平铺兼容只属于 `registry.ts` 明确 built-in。
-8. 用户新安装 Skill 必须写入 `<user-skills-root>/<category>/<skill-id>`。
-9. 用户 `visibility: internal/private/hidden` 必须优先阻断。
-10. 前端隐藏不是安全边界；内部 Skill 必须在 Scanner -> Registry 之前过滤。
-11. `pptx-swarm` 只能作为 `pptx` 的按需 reference。
-12. `fertility-report` 只能作为 `fertility-assessment` 的内部报告阶段，不得作为独立公开 Skill。
+1. Canonical public layout 是 `<category>/<skill-id>/SKILL.md`。
+2. 一个 package boundary 只生成一个 Registry Manifest。
+3. 非 built-in 源码 Skill 必须 `visibility: public`。
+4. Package 内部不递归发现顶级 Skill。
+5. `_` / `.` 目录永远不公开。
+6. Flat system compatibility 只属于 registered built-in。
+7. System/package roots 优先，user Skill 不能 shadow 系统 id。
+8. User package 永远不继承 built-in capability。
+9. Internal report / helper / swarm 不得变成第二个 public Skill。
+10. 新 execution metadata 使用 `execution.*` canonical 字段。
+11. Registry inventory 与实际 package/build 分发必须持续对账。
+12. 前端隐藏不是安全边界；过滤必须发生在 Scanner -> Registry 之前。
