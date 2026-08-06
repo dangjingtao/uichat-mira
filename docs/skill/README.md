@@ -1,7 +1,7 @@
 ---
 status: current
 owner: skill-runtime
-last_verified: 2026-07-30
+last_verified: 2026-08-06
 layer: wiki
 module: SKILL
 feature: SkillSystem
@@ -12,16 +12,17 @@ related:
   - pi-skill-agent-execution.md
   - skill-context-design.md
   - skill-package-runtime-contract.md
+  - skill-runtime-design.md
   - ../harness/agentgraph-harness-protocol.md
 ---
 
 # Skill 模块当前合同
 
-> Skill 的本体、匹配、披露和执行必须分开理解。旧的“Skill 只把说明书注入 Main Planner、Parent 始终亲自施工”已经不是完整现状。
+> 本页是当前 Skill 模块的上位真相。Skill 的本体、上下文披露、执行 profile、真实能力、审批和可选业务 Flow 必须分开理解。
 
-## 1. Skill 本体是什么
+## 1. Skill 本体
 
-Skill 是一个可复用的领域能力包：
+Skill 是可复用的领域能力包：
 
 ```text
 Manifest
@@ -29,39 +30,44 @@ Manifest
 + optional Resources
 + optional Execution Manifest
 + optional Runtime requirements
++ optional Conversation Flow binding
 ```
 
-它通过渐进式披露告诉 Agent：
+它表达：
 
-- 这类事情应该怎样做；
-- 哪些规则必须遵守；
-- 哪些 references / templates / examples 可以继续读取；
-- 什么算完成；
-- 执行需要哪些工具或私有 Runtime。
+- 这类任务如何路由；
+- 哪些领域规则必须遵守；
+- 哪些 references / templates / examples 可按需读取；
+- 希望使用哪些 Harness Tool 或私有 Runtime；
+- 什么算完成。
 
 Skill 不是：
 
 - Tool；
 - MCP server；
 - 权限授予；
+- Runtime Pack；
 - 全局 Tool Registry；
-- 自动可用的 Runtime；
+- 任意脚本执行许可；
 - 必然存在的状态机。
 
-## 2. 四个必须分开的真相源
+## 2. 五个独立真相源
 
 ```text
 SkillContext
-= 当前任务应掌握的领域知识与执行约束
+= 当前任务应掌握的领域知识与约束
 
 ExecutionProfile
-= 该 Skill 希望以什么执行模式、工具面和 Runtime 运行
+= Skill-owned SubAgent 希望使用的最大能力边界
 
-ToolExposure / Runtime availability
-= 当前环境真正提供什么能力
+ToolExposure / Runtime binding
+= 当前环境真正提供的能力
 
 Policy / Approval
 = 本次 exact invocation 是否允许执行
+
+Optional Conversation Flow
+= 该 Skill 是否有确定性的业务状态控制器
 ```
 
 因此：
@@ -72,9 +78,10 @@ Skill match
 != Tool exposure
 != Runtime ready
 != Permission granted
+!= Stateful Flow active
 ```
 
-Skill 声明能力需求，不凭声明获得能力。
+Skill 只声明需求，不凭声明获得能力。
 
 ## 3. 渐进式披露
 
@@ -86,126 +93,40 @@ L1 SKILL.md
 L2 Resource
   -> reference / template / example / script metadata
 Execution Boundary
-  -> governed tool / managed private runtime
+  -> governed Harness Tool / managed private Runtime
 ```
 
-### L0 Manifest
+Scanner 启动时只读取有限 frontmatter，不预加载全部正文和 references。当前自动激活最多一个 primary Skill；L2 Resource 默认按需读取。
 
-只保留发现所需轻量信息，例如：
+## 4. 当前统一执行模型
 
-- id；
-- name；
-- description；
-- version；
-- entry；
-- source / license；
-- execution / runtime requirements。
-
-启动扫描不得预加载全部正文和 references。
-
-### L1 SKILL.md
-
-命中任务后加载，主要表达：
-
-- routing；
-- domain rules；
-- execution strategy；
-- capability boundary；
-- quality rules；
-- completion criteria；
-- 可按需读取的 Resource URI。
-
-### L2 Resource
-
-Reference / Template / Example 默认只建立目录，按需披露，不全量塞进 Main Agent 上下文。
-
-## 4. 当前匹配与连续性
-
-当前自动激活最多一个 primary Skill。
-
-匹配优先级包括：
+当前实现中，**每个被发现并命中的 Skill 都解析为一个 Skill-owned SubAgent profile**：
 
 ```text
-explicit trigger
-  -> attachment / MIME / extension
-  -> exact semantic hint
-  -> lightweight semantic match
-  -> embedding / task-model fallback
-```
-
-同一任务自然续轮可以继承最近有效 primary Skill：
-
-```text
-本轮明确命中新 Skill
-  -> 使用新 primary
-
-本轮没有新 Skill
-+ 明显是补参数 / 继续 / 修改同一任务
-  -> continuation
-
-明确新任务 / 换话题 / 取消
-  -> 不继承旧 Skill
-```
-
-这是 task-context continuity，不代表每个 Skill 都需要 Stateful Runtime。
-
-## 5. 当前执行模式
-
-### 5.1 Context-only / inline use
-
-对于只需要规则、写作规范、搜索策略或轻量上下文增强的任务，SkillContext 可以由 Main Planner 消费，不要求独立执行循环。
-
-这时 Skill 不生成 invocation，也不扩大 ToolExposure。
-
-### 5.2 Forked SubAgent
-
-任务型 Skill 可以声明：
-
-```text
-execution.context = fork
-execution.agent = subAgent
-```
-
-当前 built-in Office Skills 与通用 discovered Skill execution profile 已支持该模式。
-
-```text
-SkillContext + Goal + ExecutionProfile
-  -> isolated SubAgent
-  -> Skill-scoped tools / Runtime
-  -> structured Evidence / Artifact / Requirement
+SkillContext + ExecutionProfile + Goal
+  -> one forked SubAgent
+  -> task-local execution or reasoning
+  -> Evidence / Artifact / Requirement
   -> Parent governance and delivery
 ```
 
-SubAgent 负责 task-local execution，Parent 保留 global goal、approval、recovery、Evidence 与最终交付。
-
-### 5.3 Stateful Skill Flow
-
-真实需要多阶段持久状态、结构化 requirements、checkpoint 或 reducer 的 Skill，可以使用 Stateful Skill Flow。
-
-当前合同不是“再叠一层自由模型”：
+即使一个规则型 Skill 没有声明 Tool 或 Runtime，它仍通过同一 SubAgent 外壳执行，只是能力面为空：
 
 ```text
-Stateful Skill Flow / Reducer
-= 该 Skill 的单一确定性 SubAgent controller
+allowedHarnessToolIds = []
+runtimeBindings = []
+workspaceBound = false
 ```
 
-Flow 可以：
+当前不存在“部分 discovered Skill 由 Main Planner inline 执行、另一部分才 fork”的双重默认模型。未来若重新引入 context-only inline mode，必须先形成新的显式合同和测试，不能仅靠文档描述。
 
-- 维护 phase / round；
-- 返回 structured requirements；
-- 判断 delivery ready；
-- 暂停等待用户输入；
-- 生成冻结交付。
-
-它是可选增强层，不是所有 Skill 的入场门槛。
-
-## 6. Skill-owned SubAgent 的执行权边界
+## 5. Parent 与 Skill-owned SubAgent 的所有权
 
 Parent owns：
 
 - 用户对话；
 - global goal；
-- Skill routing；
+- primary Skill routing；
 - Policy / Approval；
 - checkpoint governance；
 - Evidence 接收；
@@ -227,88 +148,92 @@ Skill-owned SubAgent owns：
 
 ```text
 SubAgent 做一步
-  -> Main Planner 接管领域下一步
-  -> SubAgent 再做一步
+-> Main Planner 接管领域下一步
+-> SubAgent 再做一步
 ```
 
 正确边界：
 
 ```text
 Parent delegates
-  -> SubAgent owns the bounded execution
-  -> structured terminal / upthrow state
-  -> Parent governs delivery or recovery
+-> SubAgent owns bounded execution
+-> structured terminal / interruption state
+-> Parent governs delivery or recovery
 ```
 
-## 7. 返回结果合同
+## 6. 可选 Stateful Conversation Flow
 
-SubAgent 返回：
+某些业务 Skill 需要多轮结构化状态、phase、requirements、checkpoint 或确定性 reducer。当前模型是：
 
-- `completed`；
-- `insufficient_evidence`；
-- `needs_input`；
-- `failed`，并标记 recoverable 与否；
-- Evidence；
-- Artifacts；
-- Requirements；
-- bounded trace。
+```text
+Conversation Flow / Reducer
+= 该 Skill 的单一确定性 SubAgent controller
+```
 
-Parent 行为：
+它不是再叠一层自由模型，也不是所有 Skill 的入场门槛。
 
-| 结果 | Parent 行为 |
-| --- | --- |
-| completed | Evidence 提交后冻结交付，直接 Generate，不重做领域施工 |
-| needs_input | 根据 structured user_input requirement 向用户提问 |
-| insufficient_evidence | 在 active Skill 允许能力面内继续恢复或如实报告缺口 |
-| recoverable failed | 回 Parent 恢复，工具面收窄到 active Skill 声明范围 |
-| terminal failed | Main Agent failed，Generate 不运行 |
-| approval required | 保存 exact invocation 与 transcript checkpoint，等待 Parent 审批 |
+当前 `server/src/skills/flow/registry.ts` 只登记：
 
-## 8. Tool 与 Runtime 边界
+```text
+fertility-assessment
+```
 
-SubAgent 可使用两类执行能力。
+其报告阶段通过内部 directive handoff 完成，仍属于同一个公开 Skill，不注册第二个可发现 Skill。
+
+## 7. Tool 与 Runtime 边界
 
 ### Harness-facing tools
 
-例如：
-
-- `read_open`；
-- `read_extract`；
-- 其他当前已注册、已暴露且 profile 允许的具体工具。
-
-实际可见工具面是：
+真实可见能力为：
 
 ```text
 Skill declared tools
 ∩ current environment registered tools
 ∩ active exposure / binding
-∩ policy boundary
+∩ Policy / Approval
 ```
 
 ### Skill-private Runtime
 
-例如：
+私有 Runtime：
 
-- `office_document`；
-- `office_pdf`；
-- `office_presentation`；
-- `office_spreadsheet`。
-
-Private Runtime：
-
-- 不注册成 Main Planner 的全局工具；
+- 只提供给 active Skill-owned SubAgent；
+- 不暴露给 Main Planner；
 - 不出现在普通用户工具列表；
-- 通过 managed runtime adapter 执行语义 action；
-- 不能让模型决定 Python executable、PYTHONPATH、pip 或任意 launcher；
+- 通过 managed adapter 执行语义 action；
+- 不能让模型决定 Python executable、PYTHONPATH、pip、conda 或任意 launcher；
 - readiness 与 Skill match 分离；
-- pending binding 不能伪装为 ready；
-- 仍受 Parent 治理、审批、workspace 与审计边界约束。
+- pending binding 不能伪装为 ready。
 
-当前 `wenshu_xlsx_xml_runtime` 仍是 pending binding，不能描述成已完成能力。
+当前登记状态：
+
+```text
+office_document            ready
+office_pdf                 ready
+office_presentation        ready
+office_spreadsheet         ready
+wenshu_xlsx_xml_runtime    pending
+```
+
+`office_spreadsheet` 的 ready 不得被解释为 XLSX XML-first create/edit binding 已完成。
+
+## 8. Built-in、外部与用户 Skill
+
+系统/package roots 先于 user root 扫描，用户 Skill 不能通过复用 id 覆盖系统 Skill 身份。
+
+用户导入 Skill 当前会被规范化为：
+
+```text
+context = fork
+agent = subAgent
+allowedTools = []
+runtimeBindings = []
+workspaceBound = false
+```
+
+导入的 Markdown 是执行说明，不是能力授权。后续若要给用户 Skill 绑定 Tool 或 Runtime，必须走独立、受治理的显式绑定流程。
 
 ## 9. Workspace
-
-`skillRoot`、`runtimeRoot` 与 `workspaceRoot` 是三个独立边界：
 
 ```text
 skillRoot
@@ -321,52 +246,47 @@ workspaceRoot
 = 用户当前任务的真实文件世界
 ```
 
-workspace-bound Skill 没有 active workspace 时必须失败并返回结构化 Evidence，不能偷偷写到 SkillRoot 或 RuntimeRoot。
+三者不可混用。`workspaceBound=true` 的 Skill 没有有效 workspace 时必须返回结构化能力缺口，不能偷偷写入 SkillRoot 或 RuntimeRoot。
 
-Artifact 默认交给宿主 Artifact contract，不应由 Main Planner再次复制或重建。
+## 10. Result contract
 
-## 10. Approval 与 Resume
+SubAgent 统一返回：
 
-SubAgent 请求审批时必须同时返回：
+- `completed`；
+- `insufficient_evidence`；
+- `needs_input`；
+- `failed`，并标记 recoverable；
+- Evidence；
+- Artifacts；
+- Requirements；
+- missing evidence；
+- bounded trace / checkpoint。
 
-- tool id；
-- tool call id；
-- input hash；
-- input；
+Parent 行为：
+
+| 结果 | Parent 行为 |
+| --- | --- |
+| completed | Evidence 提交后冻结交付，直接 Generate，不重做领域施工 |
+| needs_input | 根据 structured requirement 组织用户追问 |
+| insufficient_evidence | 在 active Skill 能力面内恢复，或如实报告缺口 |
+| recoverable failed | 回 Parent 恢复，工具面仍受 active profile 限制 |
+| terminal failed | Main Agent failed，Generate 不运行 |
+| approval required | 保存 exact invocation 与 transcript checkpoint，等待审批 |
+
+## 11. Approval 与 Resume
+
+审批 checkpoint 必须绑定：
+
+- Skill id；
+- tool id / tool call id；
+- input hash 与 frozen input；
 - resumable transcript checkpoint。
 
-Parent 保存 frozen `pendingToolCall` 与 pending approval。
-
-恢复时：
-
-- checkpoint 必须属于同一个 Skill；
-- frozen invocation 必须与 checkpoint 一致；
-- 只回放当前 exact approval；
-- 旧 approval 不可复用；
-- 不重新从原始目标启动一遍 Child。
-
-持久化字段 `origin: skill_agent` 是历史兼容标记；产品与运行时术语统一使用 SubAgent。
-
-## 11. Generic SubAgent 不是 Skill 自动匹配
-
-Main Planner 的 `delegate_task` 会动态构造内置 `mira.generic-task` SkillContext，用于一个通用、有明确验收边界的工作包。
-
-它与领域 Skill 的区别：
-
-| Generic delegation | Skill-owned delegation |
-| --- | --- |
-| 由 Main Planner 显式选择 `delegate_task` | 由 primary Skill execution profile 触发 |
-| 使用当前 Main exposure 的受控子集 | 使用 Skill declared tools / private runtime |
-| completed 后回 Main Planner验收 | completed 后可冻结交付并直达 Generate |
-| 不拥有领域私有 Runtime | 可以绑定 managed Skill-private Runtime |
-
-两者都禁止递归委派。
+恢复时只回放当前 exact approval。旧 approval 不可复用，也不能从原始目标重新启动 Child。
 
 ## 12. Trace
 
-Skill 生效和 SubAgent 执行必须有明确 trace，不允许从回答风格猜测。
-
-当前可观察：
+Skill 生效与 SubAgent 执行必须可观察：
 
 - primary Skill id / name / version；
 - match source / reason / score；
@@ -380,26 +300,38 @@ Skill 生效和 SubAgent 执行必须有明确 trace，不允许从回答风格�
 - tool calls；
 - requirements；
 - artifacts；
-- approval boundary；
-- resume state；
+- approval / resume；
 - terminal status。
 
-Observability 失败不能变成第二控制平面。
+Observability 只能记录事实，不能成为第二控制平面。
 
-## 13. 当前 Hard Rules
+## 13. Generic delegation 与 Skill-owned execution
 
-1. Skill 本体不等于 Tool、权限或 Runtime。
-2. SkillContext、ExecutionProfile、ToolExposure、Runtime readiness 与 Approval 必须分开。
+Main Planner 的 `delegate_task` 动态构造 `mira.generic-task`，用于通用、有明确验收边界的工作包。它与 Skill-owned execution 不同：
+
+| Generic Task SubAgent | Skill-owned SubAgent |
+| --- | --- |
+| Main Planner 显式选择 `delegate_task` | primary Skill 自动触发 execution profile |
+| 使用 Main exposure 的受控子集 | 使用 Skill declared tools / private runtime |
+| completed 后回 Main Planner验收 | completed 后可冻结交付并直达 Generate |
+| 无领域私有 Runtime | 可绑定 managed private Runtime |
+
+两者都禁止递归委派。
+
+## 14. 当前 Hard Rules
+
+1. Skill 不等于 Tool、权限、Runtime Pack 或 Stateful Flow。
+2. SkillContext、ExecutionProfile、ToolExposure、Runtime readiness、Approval 必须分开。
 3. 自动激活最多一个 primary Skill。
-4. Resources 默认按需披露，不全量注入。
-5. Context-only Skill 不生成 invocation、不扩大 ToolExposure。
-6. Task Skill 可以把局部施工交给一个 forked SubAgent。
-7. Stateful Flow 是可选确定性 controller，不是所有 Skill 的默认状态机。
-8. Parent 始终保留 global goal、Policy、Approval、terminal contract 与最终交付。
-9. SubAgent 只拥有 task-local execution。
-10. Skill-private Runtime 不暴露给 Main Planner。
+4. Resources 默认按需披露。
+5. 当前每个 discovered Skill 都通过一个 forked Skill-owned SubAgent 执行。
+6. Stateful Flow 是可选确定性 controller，不是默认自由 Agent loop。
+7. Parent 保留 global goal、Policy、Approval、terminal contract 与最终交付。
+8. SubAgent 只拥有 task-local execution。
+9. Skill-private Runtime 不暴露给 Main Planner。
+10. 用户 Skill 不因 frontmatter 声明获得 Tool 或 Runtime。
 11. V1 禁止 nested SubAgent 和 recursive `delegate_task`。
 12. completed Artifact / Evidence 不得被 Main Planner 无意义重做。
-13. requirements 必须结构化上抛，不能由 Child 编造用户问题。
+13. requirements 必须结构化上抛，不能由 Child 越权决定全局对话。
 14. terminal failure 不进入 Generate。
-15. 运行时实现与本页不一致时，先记录偏差，不得用旧 V1 叙事覆盖代码。
+15. 文档与实现冲突时，以当前代码和验证证据为准，并立即修正文档。
