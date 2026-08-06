@@ -1,324 +1,341 @@
 ---
 status: current
 owner: agent-runtime / skill-runtime
-last_verified: 2026-07-30
+last_verified: 2026-08-06
 layer: raw-source
 module: Agent
 feature: SubAgentExecution
-doc_type: reference
+doc_type: current-contract
 canonical: true
 related:
   - ../AGENT_CURRENT_TRUTH.md
   - README.md
+  - skill-authoring-and-governance-contract.md
+  - skill-contract-audit-20260806.md
   - ../harness/agentgraph-harness-protocol.md
   - ../../server/src/agent/nodes/forked-skill-agent.ts
-  - ../../server/src/agent/nodes/generic-task-subagent.ts
+  - ../../server/src/skills/agent/subagent-runtime.ts
 ---
 
-# SubAgent 与 Skill 执行当前参考
+# Delegated Worker / SubAgent 当前合同
 
-> 本页记录当前已经落地的 task-local SubAgent execution。它不再是 Candidate / Pilot，也不代表 Mira 已经成为开放式多 Agent 系统。
+> 本页只定义真正需要 task-local execution ownership 的 Worker。它不再用于证明“每个 Skill 都应该 fork”。当前代码仍会把普通 matched Skill 统一送入 Worker，这是已知兼容行为和迁移缺口。
 
-## 1. 当前存在两类 SubAgent
+## 1. 两类 Worker
 
-### Generic Task SubAgent
+### Generic Task Worker
 
-由 Main Planner 选择 `delegate_task`：
-
-```text
-Main Planner
-  -> delegate_task(goal, acceptanceCriteria)
-  -> mira.generic-task SubAgent
-  -> local tool loop
-  -> structured Evidence
-  -> Main Planner acceptance
-```
-
-用于：
-
-- 一个边界明确的多步工作包；
-- 需要连续工具调用；
-- 需要执行后验证；
-- 需要局部 repair / retry；
-- 可以独立写出验收条件。
-
-不用于：
-
-- 纯回答；
-- 一个普通工具调用即可完成的动作；
-- 模糊且无法定义 acceptance criteria 的任务；
-- 再委派给另一个 SubAgent。
-
-### Skill-owned SubAgent
-
-由命中的 primary Skill execution profile 触发：
+由 Main Planner 显式选择：
 
 ```text
-SkillContext + ExecutionProfile
-  -> forked SubAgent
-  -> Skill-scoped tools / private runtime
-  -> Evidence / Artifact / Requirement
-  -> Parent delivery
+Parent
+-> delegate_task(goal, acceptanceCriteria)
+-> generic-task Worker
+-> local tool loop
+-> structured result
+-> Parent acceptance
 ```
 
-适合：
+适用于无固定 Skill、但边界明确的多步工作包。
 
-- DOCX / PDF / PPTX / XLSX 等专业文档任务；
-- 有明确领域规则与 completion contract 的任务；
-- 需要 Skill-private Runtime；
-- Main Planner 不应自己拼解释器、脚本路径和运行参数的任务。
+### Skill Delegated Worker
 
-## 2. 单层执行合同
-
-当前最多一层 Child execution：
+只适用于 `execution.mode=delegated-worker`：
 
 ```text
-Main Agent
-  -> one SubAgent
+anchored task + SkillContext + capability grant
+-> one Skill Worker
+-> governed Tool / private Runtime
+-> Evidence / Artifact / Requirement / Deliverable
+-> Parent governance
 ```
 
-Child 不获得：
+当前合理对象：
+
+```text
+docx / pdf / pptx / xlsx ready routes / github-collaboration
+```
+
+不适用：
+
+```text
+black-mirror-writer / product-critic / deep-interview
+```
+
+这些属于 Parent context-only。
+
+## 2. 单层边界
+
+```text
+Parent
+-> one Worker
+```
+
+Worker 禁止：
 
 - `delegate_task`；
-- nested SubAgent；
-- 任意全局工具；
-- 未声明的 MCP；
-- 自动权限；
-- 自由扩展用户 global goal 的权力。
+- nested Worker；
+- cross-Skill handoff；
+- 扩展 global goal；
+- 直接与用户对话；
+- 访问未授予能力；
+- 选择任意 executable / shell / provider / runtime；
+- 把观察性 Trace 当控制指令。
 
-当前不是：
+## 3. 所有权
 
-```text
-Agent A <-> Agent B <-> Agent C
-```
-
-而是：
-
-```text
-Parent governance
-  -> bounded task-local ownership
-  -> structured return
-```
-
-## 3. 执行所有权
-
-Main Agent owns：
+Parent owns：
 
 - global goal；
-- task decomposition；
-- dependency and acceptance；
-- Skill routing；
+- decomposition；
+- primary Skill routing；
+- acceptance criteria；
+- user interaction；
 - Policy / Approval；
 - terminal contract；
-- user interaction；
-- final answer and delivery。
+- final delivery。
 
-SubAgent owns：
+Worker owns：
 
 - delegated local goal；
 - local plan；
-- concrete tool loop；
-- observation；
+- concrete capability loop；
 - task-local repair；
-- evidence coverage；
-- artifact construction；
-- task-local terminal judgment。
+- Evidence coverage；
+- Artifact construction；
+- route-local completion judgment。
 
-Main Planner 不应在 Child completed 后重新施工同一工作包。
+Worker completed 后 Parent 不应重做同一 Artifact；但 Parent 仍必须验证 completion evaluator 已通过。
 
-## 4. ExecutionProfile
+## 4. 输入合同
 
-每个 discovered Skill 可以解析为一个 SubAgent execution profile：
+目标 Worker 输入：
+
+```text
+anchored global/current goal
+current subtask
+acceptance criteria
+confirmed facts
+current user delta
+SkillContext
+workspace binding
+actual child capability grant
+```
+
+当前实现主要把 `state.question || state.goal.text` 作为 goal。续轮中 `state.question` 往往只是本轮短回复，因此当前不等于完整 anchored task input。
+
+迁移要求：Worker 不得只靠本轮回复猜原任务。
+
+## 5. Capability envelope
+
+Package 声明 requirement，不授予能力。
+
+目标 Child capability：
+
+```text
+Capability Grant Registry
+∩ environment registered/healthy
+∩ route requirement
+∩ workspace
+∩ Policy / exact Approval
+```
+
+受信任 Child grant 可以独立于 Parent ToolExposure 构建，但必须：
+
+- 不修改 Parent `state.toolExposure`；
+- Trace 明确显示 grant source；
+- 绑定 Skill id/version/publisher/digest；
+- user/external deny by default；
+- private Runtime 不能只凭字符串 id 获得。
+
+当前 grant 分散在 built-in Registry、`LEGACY_OFFICE_EXECUTION`、known binding map 与 origin 特判中，尚未形成独立真相源。
+
+## 6. Route eligibility
+
+Worker 启动前必须确定 route，并检查该 route 的 required capability。
+
+禁止：
+
+```text
+Skill 声明多个能力
++ 任意一个 ready
+-> 整个 Skill 可以执行
+```
+
+XLSX 示例：
+
+```text
+inspect -> office_spreadsheet
+create/edit/fix -> wenshu_xlsx_xml_runtime
+```
+
+XML binding pending 时 create/edit/fix 必须在 Worker 启动前阻断。
+
+## 7. User requirement
+
+Worker 返回中性业务 requirement：
 
 ```ts
 {
-  skillId,
-  mode: "forked-agent",
-  engine: "pi-agent-core",
-  allowedHarnessToolIds,
-  runtimeBindings,
-  workspaceBound
+  id
+  kind
+  description
+  requiredFor
+  acceptedFormats?
+  sensitivity?
 }
 ```
 
-Profile 是 requirement envelope，不是 permission grant。
+`description` 不是用户问题。
 
-真实可用能力还取决于：
-
-- Harness registry；
-- current exposure / binding；
-- runtime adapter readiness；
-- workspace；
-- Policy；
-- approval。
-
-## 5. Child 工具面
-
-Generic Child：
+正确链：
 
 ```text
-actual Main exposed concrete tools
-- delegate_task
+Worker requirement
+-> Parent global relevance / safety judgment
+-> Parent writes question
 ```
 
-Skill-owned Child：
+当前 wrapper 会直接使用 `userPrompt || description` 生成 ask_user；这是已知越界，不能作为新实现合同。
+
+## 8. Result contract
+
+### 当前结果
+
+当前 Worker 主要返回：
 
 ```text
-Skill allowed Harness tools
-+ managed Skill-private runtime bindings
+completed
+insufficient_evidence
+needs_input
+failed
+summary
+Evidence
+Artifacts
+Requirements
+missingEvidence
+trace/checkpoint
 ```
 
-两者都不能凭 prompt 发明工具。
+### 目标补充
 
-## 6. Skill-private Runtime
-
-当前已登记的 managed bindings 包括：
-
-- `office_document`：ready；
-- `office_pdf`：ready；
-- `office_presentation`：ready；
-- `office_spreadsheet`：ready；
-- `wenshu_xlsx_xml_runtime`：pending。
-
-Private Runtime 的正确调用是：
-
-```text
-SubAgent semantic runtime action
-  -> RuntimeBinding
-  -> Mira-managed launcher / adapter
-  -> deterministic result
-```
-
-禁止由模型决定：
-
-- Python executable；
-- `python -m`；
-- `PYTHONPATH`；
-- pip / conda；
-- 任意脚本拼接；
-- 通过 `terminal_session` 伪造文枢 Runtime。
-
-## 7. Result contract
-
-Child 统一返回：
+必须增加正式 Deliverable：
 
 ```ts
-status:
-  | "completed"
-  | "insufficient_evidence"
-  | "needs_input"
-  | "failed"
-
-evidence
-artifacts
-requirements
-missingEvidence
-recoverable
-trace
-checkpoint
+deliverables: Array<
+  | { kind: "text"; content: string }
+  | { kind: "artifact"; artifactRef: string }
+  | { kind: "structured"; data: unknown }
+>
 ```
 
-### Generic Child
+`summary` 是运行摘要，不是完整文章、报告正文或用户交付物。
 
-- completed：提交 Evidence，回 Main Planner；
-- needs_input：Parent ask_user；
-- recoverable / insufficient：回 Main Planner；
-- terminal failure：Main Agent error。
+## 9. Completion evaluator
 
-### Skill-owned Child
+`completed` 只有 route evaluator 通过才可被 Parent接受。
 
-- completed：提交 Evidence，冻结 Parent finalization packet，直接 Generate；
-- needs_input：Parent 确定性交付结构化问题；
-- recoverable / insufficient：回 Parent，恢复工具面收窄到 active Skill profile；
-- terminal failure：Main Agent failed，Generate 不运行。
+最低检查：
 
-## 8. Stateful Skill Flow
+- acceptance criteria coverage；
+- required Evidence refs；
+- required Artifact type/readability；
+- side-effect readback；
+- unresolved gaps；
+- runtime terminal result。
 
-Stateful Skill 不再被描述为“Main Planner逐步推进的可选表格”。
+禁止：
 
-当前模型：
+- 任意 governed Tool call + 任意 Evidence 就覆盖 malformed envelope；
+- read/inspect 中间结果被当作 create/write 完成；
+- model summary 单独成为强 completion proof。
+
+当前 `normalizeMalformedCompletion()` 的恢复门槛偏弱，应改为 evaluator-driven。
+
+## 10. Approval checkpoint
+
+当前 exact approval checkpoint 合同保留：
+
+- Skill id/version；
+- tool id / call id；
+- frozen input / input hash；
+- transcript；
+- Evidence / Artifacts；
+- trace seq / working state。
+
+恢复规则：
+
+- 只消费当前 exact approval；
+- approval 一次一用；
+- 不从原始 goal 重跑；
+- Skill/version/call/hash 任一不一致即阻断。
+
+这是当前 Worker 最成熟的治理边界。
+
+## 11. 普通 needs_input resume
+
+当前普通 model-authored `needs_input` 没有与 approval 等价的 transcript checkpoint。下一轮通常重新创建 Worker。
+
+目标规则：
+
+- 需要恢复同一个 Worker 时返回 `checkpointRef`；
+- 不需要恢复时明确由 Parent 重新委派 anchored task；
+- 多轮业务状态不应靠自由 Worker transcript，应该使用 Stateful Flow。
+
+## 12. Workspace
+
+- `workspaceBound=true` 没有 workspace 时执行前阻断；
+- 输入、输出、staging 只能在 workspace / managed Artifact Store；
+- SkillRoot / RuntimeRoot 不得成为用户任务写入位置；
+- packaged script 不通过 Terminal 任意执行。
+
+## 13. Stateful Flow 不属于自由 Worker
+
+Stateful Flow 是 deterministic controller：
 
 ```text
-Skill Flow / Reducer
-= deterministic SubAgent controller
+Flow / Reducer
+-> projection / requirement / delivery
 ```
 
-它可以维护：
+它不再叠一个 Pi Worker loop。`fertility-assessment` 当前走 Flow；MiraDocs 建议迁移 durable Flow。
 
-- session；
-- phase；
-- round；
-- structured requirements；
-- interruption；
-- deliveryReady；
-- flowCompleted。
+## 14. Trace
 
-Flow completed 后由 Parent 冻结交付；Flow interrupted 后由 Parent 收集用户输入并继续同一会话。
+记录：
 
-不要在 Flow 上再叠第二个自由 Pi Child loop。
-
-## 9. Approval checkpoint
-
-SubAgent approval 必须有：
-
-- toolId；
-- toolCallId；
-- inputHash；
-- input；
-- serialized transcript checkpoint。
-
-Parent 恢复前验证：
-
-- checkpoint Skill id；
-- pending invocation；
-- frozen call；
-- approved invocation。
-
-任何不一致都会阻断恢复，不会从最初目标重新启动。
-
-## 10. Evidence 与 Artifact
-
-Child 的结果首先转换成 Parent observation，再由 Evidence 统一提交。
-
-Artifact record、tool calls、requirements、missing evidence 和 bounded trace 都进入结构化 observation。
-
-completed 不允许只凭自然语言 summary；必须由 Child runtime result 与 Evidence / Artifact 支持。
-
-## 11. Trace
-
-Parent execution trace 当前可以包含：
-
-- `agent-generic-task-subagent`；
-- `agent-forked-skill-agent`；
-- `subagent-trace:*`；
-- `subagent-working-state:*`；
-- Child tool events；
-- approval required；
-- resumed from approval；
-- artifacts / requirements / missing evidence；
+- Worker run id；
+- Skill identity/version/digest；
+- anchored task / route；
+- grant source；
+- requested vs actual capabilities；
+- readiness；
+- workspace；
+- Tool events；
+- Evidence / Artifact / Deliverable；
+- requirements；
+- approval / resume；
+- completion evaluator；
 - terminal status。
 
-持久化 `origin: skill_agent` 是兼容字段，不应继续作为产品术语。
+## 15. 当前代码锚点
 
-## 12. Code anchors
-
-- `server/src/agent/delegation/contract.ts`
-- `server/src/agent/nodes/generic-task-subagent.ts`
 - `server/src/agent/nodes/forked-skill-agent.ts`
-- `server/src/agent/nodes/prepare-context-with-delegation.ts`
 - `server/src/agent/nodes/prepare-context-with-forked-skill.ts`
 - `server/src/skills/agent/profiles.ts`
 - `server/src/skills/agent/subagent-runtime.ts`
-- `server/src/agent/pi-loop/index.ts`
-- `server/src/agent/graph/build-graph.ts`
+- `server/src/skills/agent/pi-core.ts`
+- `server/src/skills/agent/tool-adapters.ts`
 
-## 13. 当前边界
+## 16. 当前已知不合规
 
-- 一个 Parent run 同一层只控制一个 active Child execution；
-- V1 不允许 recursive delegation；
-- Child 不决定用户 global completion；
-- Child 不扩大工具权限；
-- Private Runtime 不暴露给 Main Planner；
-- observability 不反向控制 Child；
-- completed Skill Artifact 不由 Main Planner 重做；
-- 这套能力属于 Agent V1.5 稳定化，不是 Agent V2。
+1. 普通 Skill 一律 fork；
+2. input 未形成完整 anchored task envelope；
+3. external private Runtime grant 存在洞；
+4. flat capability 无 route eligibility；
+5. requirement 可能直接控制用户问题；
+6. completion normalization 偏弱；
+7. long text deliverable 缺正式字段；
+8. ordinary needs_input 无可靠 resume。
+
+这些问题不能通过继续强化 Prompt 解决，必须修改执行合同与 Runtime gate。
