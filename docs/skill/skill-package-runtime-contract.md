@@ -1,6 +1,6 @@
 ---
 status: current
-owner: skill-runtime / runtime-pack / desktop
+owner: skill-runtime / runtime-pack / security / desktop
 last_verified: 2026-08-06
 layer: raw-source
 module: SKILL
@@ -9,61 +9,210 @@ doc_type: current-contract
 canonical: true
 related:
   - README.md
+  - skill-authoring-and-governance-contract.md
+  - skill-contract-audit-20260806.md
   - skill-context-design.md
+  - pi-skill-agent-execution.md
   - skill-runtime-design.md
   - ../microapp/wenshu-skill-runtime.md
 ---
 
-# Skill Package、Runtime Pack 与 Private Runtime 合同
+# Skill Package、Capability Grant 与 Runtime 合同
 
-## 1. Purpose
-
-本页定义 Skill Package、Runtime Pack、Skill-private Runtime binding、Harness Tool 与 Stateful Flow 的当前边界。
-
-## 2. 五层必须分开
+## 1. 必须分开的层
 
 ```text
 Skill Package
-  Manifest / SKILL.md / Resources
+  identity / routing / instructions / resources
 
 SkillContext
-  当前任务的领域策略与完成合同
+  current task domain context
 
-ExecutionProfile
-  Skill-owned SubAgent 的最大能力需求
+Execution responsibility
+  context-only / delegated-worker / stateful-flow
 
-Execution Capability
-  Harness Tool / managed private Runtime binding
+Capability request
+  package 声明希望使用什么
 
-Optional Stateful Flow
-  phase / reducer / requirements / delivery state
+Capability grant
+  产品明确允许该 package 使用什么
+
+Environment readiness
+  Tool / adapter / Runtime Pack 当前是否健康
+
+Policy / Approval
+  exact invocation 是否允许
 ```
 
-任何一层存在都不能推导其它层已经 ready。
+任何一层存在都不能推导后一层已经成立。
 
-## 3. Skill Package
+## 2. Skill Package
 
-Skill Package 是发现、展示和分发单位，可以包含：
+Package 是发现、展示和分发单位，可以包含：
 
 - `SKILL.md`；
 - references / templates / examples；
-- scripts 或 runtime 文件；
-- version / source / license；
-- runtime dependency declaration；
-- execution metadata。
-
-Package 被发现后可以参与 Matcher，并在命中后形成 SkillContext 与 SubAgent ExecutionProfile。
+- script metadata；
+- version / publisher / source / license；
+- routing；
+- execution responsibility；
+- completion contract；
+- capability requirements；
+- optional Flow binding metadata。
 
 Package 本身：
 
 - 不授予 Tool；
 - 不授予 private Runtime；
-- 不自动执行 scripts；
+- 不执行 script；
+- 不安装依赖；
 - 不绕过 approval；
-- 不自动创建 Stateful Flow；
-- 不拥有第二 Agent Loop。
+- 不创建第二 Agent loop。
 
-## 4. Runtime Pack
+## 3. Origin 与 Trust
+
+当前 origin：
+
+```text
+built-in | user | external
+```
+
+当前不足：origin 同时被部分代码拿来做执行信任判断，但 `external` 同时可能表示产品源码内 public Skill 和真正第三方包。
+
+目标必须拆分：
+
+```text
+origin
+= built-in | bundled | user | external
+
+trustTier
+= system | signed-first-party | user-authored | untrusted-third-party
+```
+
+规则：
+
+- `source: Mira Lab` 只是文本，不能提升 trust；
+- trust 绑定 package digest/signature；
+- user/external 声明已知 Runtime id 仍不得获得 Runtime；
+- 同 id 不同 publisher/digest 不是同一个可授权 package。
+
+## 4. Capability request
+
+Package 只能声明：
+
+```text
+requestedTools
+requestedRuntimes
+route requirements
+```
+
+这些字段回答“正确执行需要什么”，不是 permission grant。
+
+无效或未知 requirement 应 fail closed，并进入 package diagnostics。
+
+## 5. Capability Grant Registry
+
+目标新增独立产品真相源：
+
+```text
+(skill id + version + publisher + package digest)
+-> granted Harness tools
+-> granted private Runtime bindings
+-> route limits
+-> workspace constraints
+```
+
+Grant Registry：
+
+- 由产品代码/签名安装流程管理；
+- 不从 Markdown 文本直接生成；
+- 不因 Runtime id 已知自动授予；
+- 可以为受信任 delegated-worker 创建 Child-local capability envelope；
+- 不修改 Parent `state.toolExposure`；
+- 必须进入 Trace。
+
+最终能力：
+
+```text
+grant
+∩ route requirement
+∩ adapter registered
+∩ environment healthy
+∩ workspace
+∩ Policy / exact Approval
+```
+
+当前 Grant 逻辑分散在：
+
+```text
+server/src/skills/registry.ts
+server/src/skills/agent/profiles.ts
+server/src/skills/agent/tool-adapters.ts
+scanner origin branches
+```
+
+`LEGACY_OFFICE_EXECUTION` 只是迁移兼容，不是长期 Grant Registry。
+
+## 6. Harness Tool
+
+Harness Tool：
+
+- 有统一 definition / implementation；
+- 经过 environment registry；
+- invocation 经过 Policy / Approval；
+- 产生 Evidence / Artifact / Trace。
+
+受信任 Skill Worker 可以通过 Grant 获得 Child-local Tool，不要求把 Tool 推入 Parent exposure；但必须明确：
+
+```text
+childCapabilityGrant != SkillContext mutation
+childCapabilityGrant != Parent ToolExposure mutation
+```
+
+user / untrusted Skill 默认没有 Child Tool grant。
+
+## 7. Private Runtime binding
+
+Private binding 是 Worker 可调用的语义适配器：
+
+```text
+semantic action
+-> binding id
+-> managed adapter / launcher
+-> deterministic result
+```
+
+它：
+
+- 只对获得 grant 的 active Worker 可见；
+- 不暴露给 Parent Planner；
+- 不作为普通用户 Tool；
+- 不允许模型决定 executable、PYTHONPATH、shell、pip、conda；
+- readiness 必须来自真实 adapter/environment probe；
+- 绑定 package identity/version/digest。
+
+当前静态登记标签：
+
+```text
+office_document            ready
+office_pdf                 ready
+office_presentation        ready
+office_spreadsheet         ready
+wenshu_xlsx_xml_runtime    pending
+```
+
+这些标签当前主要表示 profile/adapter 状态，不足以证明环境健康。目标应显示：
+
+```text
+declared
+granted
+adapter_registered
+runtime_pack_available
+health_verified
+route_eligible
+```
+
+## 8. Runtime Pack
 
 Runtime Pack 是受管本地依赖集合，例如：
 
@@ -71,9 +220,7 @@ Runtime Pack 是受管本地依赖集合，例如：
 wenshu-office@1.0.0
 ```
 
-它负责提供 Python packages、受控脚本和低成本 readiness marker。
-
-Runtime Pack 状态至少区分：
+状态：
 
 ```text
 not-required
@@ -84,217 +231,185 @@ broken
 unknown
 ```
 
-Runtime Pack `available` 只说明依赖包可用，不表示某个 Skill-private binding 已经接线完成。
+`available` 只表示依赖包存在并通过相应健康检查，不代表某个 Skill 已获 grant，也不代表某条 route ready。
 
-## 5. Skill-private Runtime binding
+安装：
 
-Private binding 是 SubAgent 可调用的语义执行适配器：
+- staging；
+- dependency/module verification；
+- manifest/digest；
+- atomic promote；
+- 失败不写 installed 真值；
+- 不污染用户全局 Python/Node 环境。
 
-```text
-SubAgent semantic action
-  -> binding id
-  -> Mira-managed adapter / launcher
-  -> deterministic result
-```
-
-它：
-
-- 只对 active Skill-owned SubAgent 可见；
-- 不暴露给 Main Planner；
-- 不作为普通用户 Tool 展示；
-- 不允许模型选择 executable、PYTHONPATH、shell 或安装命令；
-- 独立报告 `ready | pending | unavailable`。
-
-当前登记：
+## 9. WenShu 当前边界
 
 ```text
-office_document            ready
-office_pdf                 ready
-office_presentation        ready
-office_spreadsheet         ready
-wenshu_xlsx_xml_runtime    pending
+docx
+-> Node / OOXML
+-> no Python Runtime Pack
+-> office_document
+
+pdf / pptx / xlsx compatibility routes
+-> wenshu-office Runtime Pack
 ```
 
-重要区别：
-
-```text
-wenshu-office pack available
-!= wenshu_xlsx_xml_runtime ready
-```
-
-## 6. Harness-facing Tool
-
-Harness Tool 是当前环境注册并暴露给 Agent 的具体能力。Skill 可以声明 `execution.allowedTools`，但真实 Child Tool 面必须求交集：
-
-```text
-Skill declared tools
-∩ registered/exposed tools
-∩ Policy / Approval
-```
-
-Private Runtime 不应为了“让 Planner 看见”而伪装成全局 Harness Tool。
-
-## 7. 当前 Office packages
-
-```text
-docx -> bundled, no Python Runtime Pack required
-xlsx -> runtimeRequirements: wenshu-office@1.0.0
-pdf  -> runtimeRequirements: wenshu-office@1.0.0
-pptx -> runtimeRequirements: wenshu-office@1.0.0
-```
-
-### DOCX
-
-- Node / OOXML deterministic runtime；
-- private binding：`office_document`；
-- `ready`；
-- 不允许 Python 或 terminal fallback。
-
-### PDF
-
-- Python-backed WenShu runtime；
-- private binding：`office_pdf`；
-- `ready`；
-- 需要 `wenshu-office` pack。
-
-### PPTX
-
-- Python-backed PPTD checker / renderer；
-- private binding：`office_presentation`；
-- `ready`；
-- 需要 `wenshu-office` pack。
-
-### XLSX
-
-当前必须拆开描述：
+XLSX：
 
 ```text
 office_spreadsheet
-= ready inspection / recalculation / verification compatibility runtime
+-> inspect / recalc / verify compatibility
 
 wenshu_xlsx_xml_runtime
-= XML-first create / edit / fix execution bridge
-= pending
+-> create / edit / fix
+-> pending
 ```
 
-因此不得因为 `office_spreadsheet=ready` 就声称 XML-first XLSX create/edit 已完整接通。需要 XML write path 的任务应返回 capability gap，而不是静默降级到 openpyxl round-trip 或 legacy path。
+两个 binding 禁止互相替代。
 
-## 8. WenShu Python launcher
+## 10. Route-specific readiness
 
-所有 Python-backed WenShu Runtime 必须通过 backend 内部 launcher：
+禁止：
 
 ```text
-operation-level input
-  -> runtime = wenshu-office
-  -> registered script id
-  -> managed launcher
-  -> selected system development Python
-  -> managed Runtime Pack PYTHONPATH
-  -> bundled script
-  -> deterministic result
+Skill 有多个 binding
++ 任意一个 ready
+-> 整个 Skill ready
 ```
 
-模型只能提交：
+目标：
 
-- runtime id；
-- registered script / operation id；
-- structured operation arguments；
-- workspace input/output paths。
+```yaml
+routes:
+  inspect:
+    requiredAll: [office_spreadsheet]
+  create:
+    requiredAll: [wenshu_xlsx_xml_runtime]
+```
 
-模型不得提交：
+- route 选择后计算 eligibility；
+- 当前 route required capability 缺失即阻断；
+- 其它 route 缺失不应阻断；
+- readiness 和 missing capability 进入 Trace。
 
-- Python executable；
-- shell command；
-- `PYTHONPATH`；
-- `python -m`；
-- `pip install` / `conda install`；
-- 任意脚本路径拼接。
+## 11. Script Runtime
 
-`terminal_session` 不是 WenShu launcher。
+Package script 是 Resource，不是 Terminal 权限。
 
-## 9. 安装模型
-
-Skills Catalog 中可见的 Package 已经存在；“去使用”只检查其 Runtime requirement：
+目标 managed Script Runtime：
 
 ```text
-Package visible
-  -> inspect runtimeRequirements
-  -> pack available: continue
-  -> pack missing: install into staging
-  -> module probe
-  -> write manifest
-  -> atomic promote
-  -> re-evaluate binding readiness
+skill id
++ resource URI
++ package/resource digest
++ structured args
+-> managed launcher
+-> deterministic result
 ```
 
-安装失败不得写入 `available` 真值。
+禁止：
 
-即使 Pack 安装成功，仍必须重新检查具体 binding；不能把 Pack 状态直接投影成全部能力 ready。
+- materialize 后默认交给 `terminal_session`；
+- 把脚本文本拼成行内 shell；
+- 由模型选择 Python executable / environment；
+- untrusted script 自动执行。
 
-## 10. User Skill
+`wechat-article-layout` 应使用此模型，而不是通用 Terminal 充当 Python generator launcher。
 
-用户导入 Package 不得因 frontmatter 声明获得 private Runtime 或 Harness Tool：
+## 12. Package inventory
+
+Package inventory 应由 build/package boundary 自动生成：
 
 ```text
-allowedTools = []
-runtimeBindings = []
+relative path
+resource kind
+bytes
+digest
+license/provenance when applicable
 ```
 
-后续若实现用户 Skill capability binding，必须单独设计授权、来源信任、版本、审计和撤销合同。
+当前 built-in Registry 手写 `packageFiles` 与真实 references 已出现漂移。该字段在自动生成前不能作为完整安装/安全真相。
 
-## 11. Workspace
+Build acceptance：
 
-Runtime Pack 目录不是用户工作区。
+- SKILL.md 存在；
+- Manifest schema 通过；
+- declared resource URI 存在；
+- script digest 固定；
+- required license/provenance 存在；
+- bundled output 可重新 Scanner/Loader；
+- missing file 使 package blocked，不只打印 warning。
+
+## 13. User Skill
+
+当前 user package 会被清空 Tool/Runtime execution 声明。该默认安全方向保留。
+
+未来显式绑定流程必须：
+
+- 展示 requested capability；
+- 明确用户批准的是 package + version + digest；
+- 限定 Tool/Runtime/route/workspace；
+- 可撤销；
+- 进入 Trace；
+- package 更新后重新确认。
+
+在此之前：
 
 ```text
-runtimeRoot
-= dependencies and managed scripts
-
-workspaceRoot
-= task input/output files
+user package
+= context-only instructions by default
 ```
 
-Private Runtime 只能在 binding 允许的 workspace 范围内处理任务文件。
+不能因为 package 带 scripts 就自动获得 Terminal。
 
-## 12. 与 MicroAPP 的关系
-
-MicroAPP 是操作、调试、安装和验证界面，不等于 Skill 本体。
+## 14. Lifecycle
 
 ```text
-Skills page
-  -> package detail / runtime status / go use
-
-MicroAPP
-  -> runtime preparation / domain workbench / diagnostics
-
-Chat Agent
-  -> Skill-owned SubAgent / private Runtime execution
+Package exists
+!= Runtime installed
+!= Grant active
+!= Route ready
 ```
 
-三个入口可以共享同一 Runtime，但控制权与用户体验不同。
+Catalog 可以分别展示：
 
-## 13. Current anchors
+- lifecycle；
+- origin/publisher；
+- runtime dependency；
+- environment health；
+- enabled routes；
+- blocked reason。
+
+`review` / `blocked` 必须影响 Matcher 和 execution；不能只是 frontmatter 装饰。
+
+## 15. Trace
+
+至少记录：
 
 ```text
-server/src/skills/registry.ts
-server/src/skills/context/scanner.ts
-server/src/skills/agent/profiles.ts
-server/src/skills/agent/subagent-runtime.ts
-server/src/microapps/office-suite/capability-pack.ts
-server/src/microapps/office-suite/python-runtime.ts
-server/src/routes/microapps/office-suite/capability-pack.ts
-desktop/src/features/Settings/pages/Skills/
+package id/version/publisher/digest
+origin/trustTier
+requested capabilities
+grant source/granted capabilities
+adapter registration
+runtime pack status/health
+selected route/eligibility
+workspace
+approval
+result/completion evaluator
 ```
 
-## 14. Hard Rules
+## 16. Hard Rules
 
-1. Skill Package、SkillContext、ExecutionProfile、Runtime Pack、binding readiness 必须分开。
-2. Catalog 可见表示 Package 存在，不表示 Runtime ready。
-3. Runtime Pack available 不表示所有 private bindings ready。
-4. Private Runtime 只对 Skill-owned SubAgent 可见，不暴露给 Main Planner。
-5. Skill match 不注册 Tool、不扩大 exposure、不授予权限。
-6. 用户 Skill 不继承系统 Runtime 或 Tool。
-7. Python-backed Runtime 只能走 managed launcher，禁止 terminal fallback。
-8. `wenshu_xlsx_xml_runtime` 当前是 pending，不能描述成已完成。
-9. DOCX 不依赖 Python Runtime Pack。
-10. 安装失败不得留下虚假 available 状态。
+1. Package requirement 不等于 grant。
+2. Runtime id known 不等于 Skill owns Runtime。
+3. origin 与 trust 分离。
+4. Grant 绑定 id/version/publisher/digest。
+5. user/external private Runtime deny by default。
+6. Child grant 不修改 Parent ToolExposure。
+7. Runtime Pack available 不等于 route ready。
+8. route readiness 必须按 operation 计算。
+9. script resource 不等于 Terminal execution permission。
+10. package inventory/digest 必须自动验证。
+11. legacy profile union 迁移后必须删除。
+12. Capability、readiness、approval 和 completion 全部可追踪。
