@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mira-remote-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-09",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RELAY_ROOMS",
+        "class_name": "RelayRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RelayRoom"]
+    }
+  ]
+}
