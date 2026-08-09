@@ -197,6 +197,7 @@ export class RemoteAccessPairingService {
   createChallenge(input: {
     userId: number;
     hostUrl: string;
+    relay?: { endpoint: string; relayId: string } | null;
   }): CreatedPairingChallenge {
     const now = new Date();
     const code = createCode();
@@ -214,6 +215,10 @@ export class RemoteAccessPairingService {
       code,
       version: "1",
     });
+    if (input.relay) {
+      query.set("relay", input.relay.endpoint);
+      query.set("relayId", input.relay.relayId);
+    }
 
     return {
       ...toView(challenge),

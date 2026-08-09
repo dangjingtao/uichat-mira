@@ -2,10 +2,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TailscaleRemoteAccessSettings from "./index";
+import RemoteAccessSettings from "./index";
 
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn(),
+  getRelay: vi.fn(),
+  getRelayConfig: vi.fn(),
+  updateRelayConfig: vi.fn(),
   check: vi.fn(),
   update: vi.fn(),
   revoke: vi.fn(),
@@ -28,6 +31,16 @@ vi.mock("@/shared/api/generalSettings", () => ({
   checkTailscaleRemoteAccess: apiMocks.check,
   updateTailscaleRemoteAccess: apiMocks.update,
   revokeTailscaleRemoteDevice: apiMocks.revoke,
+}));
+
+vi.mock("@/shared/api/remoteAccess", () => ({
+  getRemoteRelayConfig: apiMocks.getRelayConfig,
+  updateRemoteRelayConfig: apiMocks.updateRelayConfig,
+  getRemoteRelayStatus: apiMocks.getRelay,
+  createRemotePairingChallenge: vi.fn(),
+  getRemotePairingChallenge: vi.fn(),
+  approveRemotePairingClaim: vi.fn(),
+  rejectRemotePairingClaim: vi.fn(),
 }));
 
 vi.mock("@/shared/ui/Message", () => ({
@@ -81,8 +94,31 @@ const readySnapshot = {
   },
 };
 
+const relayConfig = {
+  enabled: true,
+  endpointMode: "default" as const,
+  customUrl: "",
+  effectiveUrl: "https://mira-relay.example.workers.dev",
+  defaultAvailable: true,
+  updatedAt: "2026-08-09T10:00:00.000Z",
+};
+
+const relaySnapshot = {
+  enabled: true,
+  state: "connected" as const,
+  relayUrl: "wss://mira-relay.example.workers.dev",
+  relayId: "relay_1234567890abcdef",
+  connectedAt: "2026-08-09T10:00:00.000Z",
+  lastError: null,
+  activeRequests: 0,
+  reconnectAttempt: 0,
+};
+
 beforeEach(() => {
   apiMocks.get.mockReset();
+  apiMocks.getRelay.mockReset();
+  apiMocks.getRelayConfig.mockReset();
+  apiMocks.updateRelayConfig.mockReset();
   apiMocks.check.mockReset();
   apiMocks.update.mockReset();
   apiMocks.revoke.mockReset();
@@ -90,48 +126,100 @@ beforeEach(() => {
   messageMocks.error.mockReset();
 
   apiMocks.get.mockResolvedValue(connectedSnapshot);
+  apiMocks.getRelay.mockResolvedValue(relaySnapshot);
+  apiMocks.getRelayConfig.mockResolvedValue(relayConfig);
+  apiMocks.updateRelayConfig.mockImplementation(async (input) => ({
+    ...relayConfig,
+    ...input,
+    effectiveUrl:
+      input.endpointMode === "custom" || relayConfig.endpointMode === "custom"
+        ? input.customUrl ?? relayConfig.customUrl
+        : relayConfig.effectiveUrl,
+  }));
   apiMocks.check.mockResolvedValue(connectedSnapshot);
   apiMocks.update.mockResolvedValue(readySnapshot);
 });
 
-describe("TailscaleRemoteAccessSettings", () => {
-  it("keeps runtime-discovered device configuration inside diagnostics", async () => {
-    render(<TailscaleRemoteAccessSettings />);
+describe("RemoteAccessSettings", () => {
+  it("shows Relay and Tailscale under one remote access page", async () => {
+    render(<RemoteAccessSettings />);
 
+    expect(await screen.findByText("Mira Relay")).toBeInTheDocument();
+    expect(screen.getByText("Tailscale")).toBeInTheDocument();
+    expect(screen.getByText("远程连接")).toBeInTheDocument();
+    expect(screen.getByLabelText("默认服务")).toBeChecked();
+    expect(screen.getByLabelText("自定义地址")).not.toBeChecked();
+    expect(screen.queryByPlaceholderText("https://relay.example.com")).not.toBeInTheDocument();
     expect(await screen.findAllByText("已连接")).toHaveLength(2);
+    expect(apiMocks.getRelayConfig).toHaveBeenCalledTimes(1);
+    expect(apiMocks.getRelay).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows and persists a custom Relay address only when selected", async () => {
+    const user = userEvent.setup();
+    render(<RemoteAccessSettings />);
+    await screen.findByText("Mira Relay");
+
+    await user.click(screen.getByLabelText("自定义地址"));
+    const input = screen.getByPlaceholderText("https://relay.example.com");
+    expect(input).toBeInTheDocument();
+
+    await user.type(input, "https://relay.tomz.io");
+    await user.tab();
+
+    await waitFor(() =>
+      expect(apiMocks.updateRelayConfig).toHaveBeenCalledWith({
+        endpointMode: "custom",
+        customUrl: "https://relay.tomz.io",
+      }),
+    );
+  });
+
+  it("toggles Mira Relay without exposing relay identity fields", async () => {
+    const user = userEvent.setup();
+    render(<RemoteAccessSettings />);
+    await screen.findByText("Mira Relay");
+
+    await user.click(screen.getByRole("switch", { name: "Mira Relay" }));
+
+    await waitFor(() =>
+      expect(apiMocks.updateRelayConfig).toHaveBeenCalledWith({
+        enabled: false,
+        endpointMode: "default",
+        customUrl: "",
+      }),
+    );
+    expect(screen.queryByText("relay_1234567890abcdef")).not.toBeInTheDocument();
+  });
+
+  it("keeps runtime-discovered device configuration inside diagnostics", async () => {
+    render(<RemoteAccessSettings />);
+
+    await screen.findByText("Mira Relay");
     expect(screen.queryByDisplayValue("studio-pc")).not.toBeInTheDocument();
     expect(screen.queryByText("设备配置")).not.toBeInTheDocument();
     expect(screen.queryByText("访问边界")).not.toBeInTheDocument();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "诊断环境" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "诊断" }));
 
     expect(await screen.findByDisplayValue("studio-pc")).toBeDisabled();
     expect(screen.getByDisplayValue("real-tailnet.ts.net")).toBeDisabled();
     expect(
       screen.getByText("https://studio-pc.real-tailnet.ts.net"),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("https://mira-desktop.example.ts.net"),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText("还没有通过 mobile 配对协议登记的设备。"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("暂无已配对设备")).toBeInTheDocument();
     expect(apiMocks.get).toHaveBeenCalledTimes(1);
   });
 
-  it("checks the backend and saves an enabled Serve draft", async () => {
-    render(<TailscaleRemoteAccessSettings />);
+  it("checks the backend and saves an enabled Tailscale draft", async () => {
+    render(<RemoteAccessSettings />);
 
-    expect(await screen.findAllByText("已连接")).toHaveLength(2);
+    await screen.findByText("Mira Relay");
 
     await userEvent.click(
-      screen.getByRole("switch", { name: "启用远程连接" }),
+      screen.getByRole("switch", { name: "启用 Tailscale" }),
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: "诊断环境" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "诊断" }));
     await waitFor(() => expect(apiMocks.check).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMocks.update).toHaveBeenCalledWith(true));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -140,19 +228,17 @@ describe("TailscaleRemoteAccessSettings", () => {
     expect(screen.getByText("1.90.0")).not.toHaveClass("break-all");
 
     await waitFor(() => {
-      expect(messageMocks.success).toHaveBeenCalledWith(
-        "远程连接设置已保存",
-      );
+      expect(messageMocks.success).toHaveBeenCalledWith("Tailscale 设置已保存");
     });
-    expect(await screen.findAllByText("可访问")).toHaveLength(2);
+    expect(await screen.findByText("可访问")).toBeInTheDocument();
   });
 
-  it("opens help with the explicit private-network and authentication boundary", async () => {
-    render(<TailscaleRemoteAccessSettings />);
-    await screen.findAllByText("已连接");
+  it("keeps Tailscale help explicit", async () => {
+    render(<RemoteAccessSettings />);
+    await screen.findByText("Mira Relay");
 
     await userEvent.click(
-      screen.getByRole("button", { name: "帮助说明" }),
+      screen.getByRole("button", { name: "Tailscale 帮助" }),
     );
 
     expect(

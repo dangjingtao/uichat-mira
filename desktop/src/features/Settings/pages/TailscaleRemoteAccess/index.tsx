@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
+  Cloud,
   ExternalLink,
   HelpCircle,
   Link2,
@@ -21,6 +22,15 @@ import {
   type TailscaleRemoteAccessSnapshot,
   type TailscaleRemoteRuntimeState,
 } from "@/shared/api/generalSettings";
+import {
+  getRemoteRelayConfig,
+  getRemoteRelayStatus,
+  updateRemoteRelayConfig,
+  type RemoteRelayConnectorSnapshot,
+  type RemoteRelayConnectorState,
+  type RemoteRelayEndpointMode,
+  type RemoteRelayUserConfig,
+} from "@/shared/api/remoteAccess";
 import { ApiError } from "@/shared/lib/request";
 import { openExternalUrl } from "@/shared/platform/desktopRuntime";
 import { Badge, Button, Switch, TextInput } from "@/shared/ui";
@@ -31,10 +41,8 @@ import TailscaleRemoteAccessGuideDrawer from "./TailscaleRemoteAccessGuideDrawer
 import RemoteDevicePairingModal from "./RemoteDevicePairingModal";
 import { getTailscaleRemoteAccessCopy } from "./copy";
 
-const statusVariant = (state: TailscaleRemoteRuntimeState) => {
-  if (state === "ready") {
-    return "success" as const;
-  }
+const tailscaleStatusVariant = (state: TailscaleRemoteRuntimeState) => {
+  if (state === "ready") return "success" as const;
   if (
     state === "serve_conflict" ||
     state === "unreachable" ||
@@ -52,21 +60,43 @@ const statusVariant = (state: TailscaleRemoteRuntimeState) => {
   return "muted" as const;
 };
 
+const relayStatusVariant = (state: RemoteRelayConnectorState | null) => {
+  if (state === "connected") return "success" as const;
+  if (state === "connecting") return "warning" as const;
+  if (state === "misconfigured" || state === "disconnected") {
+    return "danger" as const;
+  }
+  return "muted" as const;
+};
+
 const readErrorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiError || error instanceof Error ? error.message : fallback;
 
-export default function TailscaleRemoteAccessSettings() {
+export default function RemoteAccessSettings() {
   const { i18n } = useTranslation();
   const copy = getTailscaleRemoteAccessCopy(i18n.resolvedLanguage);
   const isZh = i18n.resolvedLanguage?.toLowerCase().startsWith("zh") ?? true;
+
   const [snapshot, setSnapshot] =
     useState<TailscaleRemoteAccessSnapshot | null>(null);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  const [relayConfig, setRelayConfig] =
+    useState<RemoteRelayUserConfig | null>(null);
+  const [relaySnapshot, setRelaySnapshot] =
+    useState<RemoteRelayConnectorSnapshot | null>(null);
+  const [relayMode, setRelayMode] =
+    useState<RemoteRelayEndpointMode>("default");
+  const [relayCustomUrl, setRelayCustomUrl] = useState("");
+  const [relayLoading, setRelayLoading] = useState(true);
+  const [relaySaving, setRelaySaving] = useState(false);
+  const [relayError, setRelayError] = useState("");
+
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pairingOpen, setPairingOpen] = useState(false);
   const [diagnosticsSnapshot, setDiagnosticsSnapshot] =
@@ -77,9 +107,21 @@ export default function TailscaleRemoteAccessSettings() {
     setEnabled(next.config.enabled);
   };
 
+  const applyRelayConfig = (next: RemoteRelayUserConfig) => {
+    setRelayConfig(next);
+    setRelayMode(next.endpointMode);
+    setRelayCustomUrl(next.customUrl);
+  };
+
   const refreshSnapshot = async () => {
     const next = await getTailscaleRemoteAccess();
     applySnapshot(next);
+    return next;
+  };
+
+  const refreshRelayStatus = async () => {
+    const next = await getRemoteRelayStatus();
+    setRelaySnapshot(next);
     return next;
   };
 
@@ -99,9 +141,7 @@ export default function TailscaleRemoteAccessSettings() {
           setError(readErrorMessage(requestError, copy.messages.loadFailed));
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     })();
 
@@ -110,10 +150,47 @@ export default function TailscaleRemoteAccessSettings() {
     };
   }, [copy.messages.loadFailed]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        setRelayLoading(true);
+        const [config, status] = await Promise.all([
+          getRemoteRelayConfig(),
+          getRemoteRelayStatus(),
+        ]);
+        if (!cancelled) {
+          applyRelayConfig(config);
+          setRelaySnapshot(status);
+          setRelayError("");
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setRelayError(
+            readErrorMessage(requestError, copy.relay.messages.loadFailed),
+          );
+        }
+      } finally {
+        if (!cancelled) setRelayLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [copy.relay.messages.loadFailed]);
+
   const runtime = snapshot?.runtime;
   const statusCopy = runtime
     ? copy.status.states[runtime.state]
     : copy.status.states.connecting;
+  const relayState = relaySnapshot?.state ?? null;
+  const relayLabel = relayLoading
+    ? copy.actions.checking
+    : relayState
+      ? copy.relay.states[relayState]
+      : copy.relay.states.unavailable;
   const dirty = snapshot ? enabled !== snapshot.config.enabled : false;
   const canChangeRemoteAccess =
     runtime?.state === "connected" ||
@@ -121,6 +198,63 @@ export default function TailscaleRemoteAccessSettings() {
     runtime?.state === "unreachable" ||
     runtime?.state === "serve_not_configured";
   const canPairDevice = runtime?.state === "ready" && !loading && !checking && !saving;
+
+  const saveRelay = async (input: {
+    enabled?: boolean;
+    endpointMode?: RemoteRelayEndpointMode;
+    customUrl?: string;
+  }) => {
+    setRelaySaving(true);
+    setRelayError("");
+    try {
+      const next = await updateRemoteRelayConfig(input);
+      applyRelayConfig(next);
+      await refreshRelayStatus();
+      return next;
+    } catch (requestError) {
+      setRelayError(
+        readErrorMessage(requestError, copy.relay.messages.saveFailed),
+      );
+      return null;
+    } finally {
+      setRelaySaving(false);
+    }
+  };
+
+  const handleRelayEnabledChange = () => {
+    if (!relayConfig) return;
+    void saveRelay({
+      enabled: !relayConfig.enabled,
+      endpointMode: relayMode,
+      customUrl: relayCustomUrl,
+    });
+  };
+
+  const handleRelayModeChange = (mode: RemoteRelayEndpointMode) => {
+    setRelayMode(mode);
+    if (!relayConfig) return;
+
+    if (mode === "default") {
+      void saveRelay({ endpointMode: mode });
+      return;
+    }
+
+    if (!relayConfig.enabled || relayCustomUrl.trim()) {
+      void saveRelay({ endpointMode: mode, customUrl: relayCustomUrl });
+    }
+  };
+
+  const commitRelayCustomUrl = () => {
+    if (!relayConfig || relayMode !== "custom") return;
+    const normalized = relayCustomUrl.trim();
+    if (
+      relayConfig.endpointMode === "custom" &&
+      relayConfig.customUrl === normalized
+    ) {
+      return;
+    }
+    void saveRelay({ endpointMode: "custom", customUrl: normalized });
+  };
 
   const renderDiagnostics = (nextSnapshot: TailscaleRemoteAccessSnapshot) => {
     const nextRuntime = nextSnapshot.runtime;
@@ -196,29 +330,29 @@ export default function TailscaleRemoteAccessSettings() {
 
         <section>
           <div className="-mx-4 divide-y divide-border border-y border-border">
-          {[
-            [copy.diagnostics.version, nextRuntime.version || "-"],
-            [copy.diagnostics.backend, nextRuntime.backendState || "-"],
-            [
-              copy.diagnostics.ips,
-              nextRuntime.tailscaleIps.length
-                ? nextRuntime.tailscaleIps.join(", ")
-                : "-",
-            ],
-            [copy.diagnostics.serve, nextServeValue],
-            [copy.diagnostics.health, nextHealthValue],
-            [copy.diagnostics.checkedAt, nextCheckedAt],
-          ].map(([label, value]) => (
-            <SectionCardRow
-              key={label}
-              className="grid-cols-[minmax(140px,1fr)_minmax(0,2fr)]"
-            >
-              <span className="text-sm text-text-secondary">{label}</span>
-              <span className="min-w-0 w-full break-words text-right font-mono text-xs text-text-primary">
-                {value}
-              </span>
-            </SectionCardRow>
-          ))}
+            {[
+              [copy.diagnostics.version, nextRuntime.version || "-"],
+              [copy.diagnostics.backend, nextRuntime.backendState || "-"],
+              [
+                copy.diagnostics.ips,
+                nextRuntime.tailscaleIps.length
+                  ? nextRuntime.tailscaleIps.join(", ")
+                  : "-",
+              ],
+              [copy.diagnostics.serve, nextServeValue],
+              [copy.diagnostics.health, nextHealthValue],
+              [copy.diagnostics.checkedAt, nextCheckedAt],
+            ].map(([label, value]) => (
+              <SectionCardRow
+                key={label}
+                className="grid-cols-[minmax(140px,1fr)_minmax(0,2fr)]"
+              >
+                <span className="text-sm text-text-secondary">{label}</span>
+                <span className="min-w-0 w-full break-words text-right font-mono text-xs text-text-primary">
+                  {value}
+                </span>
+              </SectionCardRow>
+            ))}
           </div>
         </section>
       </div>
@@ -292,7 +426,6 @@ export default function TailscaleRemoteAccessSettings() {
       <SettingsPageLayout
         miniTitle={copy.page.miniTitle}
         title={copy.page.title}
-        description={copy.page.description}
         slot={
           <Button
             size="xs"
@@ -309,7 +442,83 @@ export default function TailscaleRemoteAccessSettings() {
         {error ? <SettingsNotice tone="danger">{error}</SettingsNotice> : null}
 
         <SectionCard
-          title={copy.status.title}
+          title={copy.relay.title}
+          icon={<Cloud className="h-4 w-4" />}
+          meta={
+            <Badge variant={relayStatusVariant(relayState)} outline>
+              {relayLabel}
+            </Badge>
+          }
+          action={
+            <Switch
+              checked={relayConfig?.enabled ?? false}
+              onChange={handleRelayEnabledChange}
+              ariaLabel={copy.relay.title}
+              disabled={relayLoading || relaySaving || !relayConfig}
+            />
+          }
+          divided
+        >
+          <SectionCardRow>
+            <div
+              className="flex flex-wrap items-center gap-x-6 gap-y-2"
+              role="radiogroup"
+              aria-label={copy.relay.title}
+            >
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="radio"
+                  name="remote-relay-endpoint"
+                  value="default"
+                  checked={relayMode === "default"}
+                  onChange={() => handleRelayModeChange("default")}
+                  disabled={relayLoading || relaySaving}
+                  className="h-4 w-4 accent-primary"
+                />
+                {copy.relay.default}
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="radio"
+                  name="remote-relay-endpoint"
+                  value="custom"
+                  checked={relayMode === "custom"}
+                  onChange={() => handleRelayModeChange("custom")}
+                  disabled={relayLoading || relaySaving}
+                  className="h-4 w-4 accent-primary"
+                />
+                {copy.relay.custom}
+              </label>
+            </div>
+          </SectionCardRow>
+
+          {relayMode === "custom" ? (
+            <div className="px-4 py-3">
+              <label className="block text-xs font-medium text-text-secondary">
+                {copy.relay.customAddress}
+              </label>
+              <input
+                type="url"
+                value={relayCustomUrl}
+                placeholder={copy.relay.customPlaceholder}
+                disabled={relayLoading || relaySaving}
+                onChange={(event) => setRelayCustomUrl(event.target.value)}
+                onBlur={commitRelayCustomUrl}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                className="mt-2 h-9 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary"
+              />
+            </div>
+          ) : null}
+
+          {relayError ? (
+            <div className="px-4 py-3 text-xs text-danger-text">{relayError}</div>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard
+          title="Tailscale"
           icon={<Network className="h-4 w-4" />}
           action={
             <Button
@@ -330,20 +539,12 @@ export default function TailscaleRemoteAccessSettings() {
                 : copy.actions.diagnose}
             </Button>
           }
-          meta={
-            <Badge variant={runtime ? statusVariant(runtime.state) : "muted"}>
-              {loading ? copy.actions.checking : statusCopy[0]}
-            </Badge>
-          }
           divided
         >
           <SectionCardRow>
             <div className="min-w-0">
               <div className="text-sm font-medium text-text-primary">
                 {copy.status.connection}
-              </div>
-              <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                {statusCopy[1]}
               </div>
               {runtime?.error ? (
                 <div className="mt-1 text-xs leading-5 text-danger-text">
@@ -352,21 +553,16 @@ export default function TailscaleRemoteAccessSettings() {
               ) : null}
             </div>
             <Badge
-              variant={runtime ? statusVariant(runtime.state) : "muted"}
+              variant={runtime ? tailscaleStatusVariant(runtime.state) : "muted"}
               outline
             >
-              {statusCopy[0]}
+              {loading ? copy.actions.checking : statusCopy[0]}
             </Badge>
           </SectionCardRow>
 
           <SectionCardRow>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">
-                {copy.status.enable}
-              </div>
-              <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                {copy.status.enableDescription}
-              </div>
+            <div className="text-sm font-medium text-text-primary">
+              {copy.status.enable}
             </div>
             <Switch
               checked={enabled}
@@ -401,9 +597,7 @@ export default function TailscaleRemoteAccessSettings() {
             </Button>
           }
           divided={Boolean(snapshot?.pairedDevices.length)}
-          contentClassName={
-            snapshot?.pairedDevices.length ? undefined : "p-4"
-          }
+          contentClassName={snapshot?.pairedDevices.length ? undefined : "p-4"}
         >
           {snapshot?.pairedDevices.length ? (
             snapshot.pairedDevices.map((device) => (
@@ -440,17 +634,11 @@ export default function TailscaleRemoteAccessSettings() {
               </SectionCardRow>
             ))
           ) : (
-            <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary px-4 py-5 text-center">
-              <div className="text-sm font-medium text-text-primary">
-                {copy.devices.empty}
-              </div>
-              <div className="mt-1 text-xs leading-5 text-text-secondary">
-                {copy.devices.emptyHint}
-              </div>
+            <div className="px-1 py-2 text-sm text-text-secondary">
+              {copy.devices.empty}
             </div>
           )}
         </SectionCard>
-
       </SettingsPageLayout>
 
       <TailscaleRemoteAccessGuideDrawer

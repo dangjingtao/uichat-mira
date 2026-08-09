@@ -1,8 +1,19 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import {
   PairingServiceError,
   remoteAccessPairingService,
 } from "@/services/remote-access-pairing.service.js";
+import {
+  RemoteRelayConnectorService,
+  type RelaySocketFactory,
+} from "@/services/remote-relay-connector.service.js";
+import {
+  RemoteRelayConfigError,
+  getRemoteRelayPairingMetadata,
+  getRemoteRelayUserConfig,
+  resolvePersistedRemoteRelayConnectorConfig,
+  updateRemoteRelayUserConfig,
+} from "@/services/remote-relay-config.service.js";
 import { tailscaleRemoteAccessService } from "@/services/tailscale-remote-access.service.js";
 import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
@@ -29,7 +40,135 @@ const mapPairingError = (error: unknown): never => {
   throw error;
 };
 
+const mapRelayConfigError = (error: unknown): never => {
+  if (error instanceof RemoteRelayConfigError) {
+    throw badRequest(error.message, { cause: error });
+  }
+  throw error;
+};
+
+const createRelaySocketFactory = (app: FastifyInstance): RelaySocketFactory => {
+  const websocketServer = (
+    app as unknown as {
+      websocketServer?: {
+        options?: {
+          WebSocket?: new (url: string) => ReturnType<RelaySocketFactory>;
+        };
+      };
+    }
+  ).websocketServer;
+  const WebSocketCtor = websocketServer?.options?.WebSocket;
+  if (!WebSocketCtor) {
+    throw new Error(
+      "@fastify/websocket did not expose the ws WebSocket runtime required by Mira Relay",
+    );
+  }
+
+  return (url) => new WebSocketCtor(url);
+};
+
 const remoteAccessRoute: FastifyPluginAsync = async (app) => {
+  const remoteRelayConnectorService = new RemoteRelayConnectorService(
+    resolvePersistedRemoteRelayConnectorConfig,
+    createRelaySocketFactory(app),
+  );
+
+  app.addHook("onListen", async () => {
+    remoteRelayConnectorService.start();
+  });
+
+  app.addHook("onClose", async () => {
+    remoteRelayConnectorService.stop();
+  });
+
+  app.get(
+    "/remote/admin/relay/config",
+    {
+      schema: {
+        tags: ["Remote Access"],
+        summary: "Get Mira Relay configuration",
+        operationId: "getRemoteRelayConfig",
+        response: {
+          200: successEnvelope(looseObjectSchema),
+          401: errorEnvelope,
+          500: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to get Mira Relay configuration", async (request) => {
+      if (!request.authUser) {
+        throw forbidden("Desktop authentication is required");
+      }
+      return success(getRemoteRelayUserConfig());
+    }),
+  );
+
+  app.put<{
+    Body: {
+      enabled?: boolean;
+      endpointMode?: "default" | "custom";
+      customUrl?: string;
+    };
+  }>(
+    "/remote/admin/relay/config",
+    {
+      schema: {
+        tags: ["Remote Access"],
+        summary: "Update Mira Relay configuration",
+        operationId: "updateRemoteRelayConfig",
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            enabled: { type: "boolean" },
+            endpointMode: { type: "string", enum: ["default", "custom"] },
+            customUrl: { type: "string", maxLength: 2048 },
+          },
+        },
+        response: {
+          200: successEnvelope(looseObjectSchema),
+          400: errorEnvelope,
+          401: errorEnvelope,
+          500: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to update Mira Relay configuration", async (request) => {
+      if (!request.authUser) {
+        throw forbidden("Desktop authentication is required");
+      }
+      try {
+        const config = updateRemoteRelayUserConfig(request.body);
+        remoteRelayConnectorService.restart();
+        return success(config, "Mira Relay configuration updated");
+      } catch (error) {
+        return mapRelayConfigError(error);
+      }
+    }),
+  );
+
+  app.get(
+    "/remote/admin/relay/status",
+    {
+      schema: {
+        tags: ["Remote Access"],
+        summary: "Get Mira Relay connector status",
+        operationId: "getRemoteRelayConnectorStatus",
+        response: {
+          200: successEnvelope(looseObjectSchema),
+          401: errorEnvelope,
+          500: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to get Mira Relay connector status", async (request) => {
+      if (!request.authUser) {
+        throw forbidden("Desktop authentication is required");
+      }
+      return success(remoteRelayConnectorService.getSnapshot());
+    }),
+  );
+
   app.post(
     "/remote/admin/pairing/challenges",
     {
@@ -64,6 +203,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
         remoteAccessPairingService.createChallenge({
           userId: user.id,
           hostUrl: snapshot.runtime.accessUrl,
+          relay: getRemoteRelayPairingMetadata(),
         }),
         "Pairing challenge created",
       );

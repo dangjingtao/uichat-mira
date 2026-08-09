@@ -11,6 +11,8 @@ import chatPendingZh from "@/features/chat/i18n/zh-CN";
 import chatPendingEn from "@/features/chat/i18n/en-US";
 import settingsPendingZh from "@/features/Settings/i18n/zh-CN";
 import settingsPendingEn from "@/features/Settings/i18n/en-US";
+import remoteAccessZh from "@/features/Settings/pages/TailscaleRemoteAccess/i18n/zh-CN";
+import remoteAccessEn from "@/features/Settings/pages/TailscaleRemoteAccess/i18n/en-US";
 import skillsZh from "@/features/Settings/pages/Skills/i18n/zh-CN";
 import skillsEn from "@/features/Settings/pages/Skills/i18n/en-US";
 import codeGraphZh from "@/features/Settings/pages/MicroApps/CodeGraph/i18n/zh-CN";
@@ -66,6 +68,7 @@ const shards = {
     dashboardZh,
     chatPendingZh,
     settingsPendingZh,
+    remoteAccessZh,
     skillsZh,
     codeGraphZh,
     jianXingZh,
@@ -77,6 +80,7 @@ const shards = {
     dashboardEn,
     chatPendingEn,
     settingsPendingEn,
+    remoteAccessEn,
     skillsEn,
     codeGraphEn,
     jianXingEn,

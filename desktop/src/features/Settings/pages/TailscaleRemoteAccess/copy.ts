@@ -3,13 +3,33 @@ import type { TailscaleRemoteRuntimeState } from "@/shared/api/generalSettings";
 const zh = {
   page: {
     miniTitle: "REMOTE ACCESS",
-    title: "Tailscale 远程连接",
-    description: "通过 Tailnet 安全访问运行在这台电脑上的 Mira Host。",
+    title: "远程连接",
+    description: "",
+  },
+  relay: {
+    title: "Mira Relay",
+    default: "默认服务",
+    custom: "自定义地址",
+    customAddress: "Relay 地址",
+    customPlaceholder: "https://relay.example.com",
+    states: {
+      disabled: "未启用",
+      misconfigured: "配置异常",
+      connecting: "连接中",
+      connected: "已连接",
+      disconnected: "已断开",
+      stopped: "已停止",
+      unavailable: "不可用",
+    },
+    messages: {
+      loadFailed: "加载 Mira Relay 状态失败",
+      saveFailed: "保存 Mira Relay 设置失败",
+    },
   },
   status: {
     title: "连接状态",
     connection: "Tailscale 连接",
-    enable: "启用远程连接",
+    enable: "启用 Tailscale",
     enableDescription: "保存后由 Mira 安全配置 Tailscale Serve，不开放公网端口。",
     states: {
       not_installed: ["未安装", "没有找到 Tailscale CLI。"],
@@ -33,8 +53,8 @@ const zh = {
   },
   devices: {
     title: "已配对设备",
-    empty: "还没有通过 mobile 配对协议登记的设备。",
-    emptyHint: "这里不会生成示例设备；配对完成后才会出现真实记录。",
+    empty: "暂无已配对设备",
+    emptyHint: "",
     lastSeen: "最近连接",
     neverSeen: "尚未连接",
     revoke: "撤销",
@@ -57,16 +77,16 @@ const zh = {
     checkedAt: "检查时间",
   },
   actions: {
-    help: "帮助说明",
-    diagnose: "诊断环境",
+    help: "Tailscale 帮助",
+    diagnose: "诊断",
     checking: "检查中...",
     saving: "保存中...",
   },
   messages: {
-    loadFailed: "加载 Tailscale 远程连接状态失败",
+    loadFailed: "加载 Tailscale 状态失败",
     checkFailed: "检查 Tailscale 连接失败",
-    saved: "远程连接设置已保存",
-    saveFailed: "保存远程连接设置失败",
+    saved: "Tailscale 设置已保存",
+    saveFailed: "保存 Tailscale 设置失败",
   },
   guide: {
     title: "Tailscale 远程连接",
@@ -84,13 +104,33 @@ const zh = {
 const en = {
   page: {
     miniTitle: "REMOTE ACCESS",
-    title: "Tailscale Remote Access",
-    description: "Reach the Mira Host on this computer securely through your Tailnet.",
+    title: "Remote Access",
+    description: "",
+  },
+  relay: {
+    title: "Mira Relay",
+    default: "Default service",
+    custom: "Custom address",
+    customAddress: "Relay address",
+    customPlaceholder: "https://relay.example.com",
+    states: {
+      disabled: "Off",
+      misconfigured: "Invalid",
+      connecting: "Connecting",
+      connected: "Connected",
+      disconnected: "Disconnected",
+      stopped: "Stopped",
+      unavailable: "Unavailable",
+    },
+    messages: {
+      loadFailed: "Failed to load Mira Relay status",
+      saveFailed: "Failed to save Mira Relay settings",
+    },
   },
   status: {
     title: "Connection status",
     connection: "Tailscale connection",
-    enable: "Enable remote access",
+    enable: "Enable Tailscale",
     enableDescription: "After saving, Mira configures Tailscale Serve without opening a public port.",
     states: {
       not_installed: ["Not installed", "The Tailscale CLI was not found."],
@@ -114,8 +154,8 @@ const en = {
   },
   devices: {
     title: "Paired devices",
-    empty: "No device has been registered through the mobile pairing protocol yet.",
-    emptyHint: "Mira does not create sample devices; real records appear after pairing.",
+    empty: "No paired devices",
+    emptyHint: "",
     lastSeen: "Last seen",
     neverSeen: "Never connected",
     revoke: "Revoke",
@@ -138,16 +178,16 @@ const en = {
     checkedAt: "Checked at",
   },
   actions: {
-    help: "Help",
-    diagnose: "Diagnose environment",
+    help: "Tailscale Help",
+    diagnose: "Diagnose",
     checking: "Checking...",
     saving: "Saving...",
   },
   messages: {
-    loadFailed: "Failed to load Tailscale remote access",
-    checkFailed: "Failed to check Tailscale remote access",
-    saved: "Remote access settings saved",
-    saveFailed: "Failed to save remote access settings",
+    loadFailed: "Failed to load Tailscale status",
+    checkFailed: "Failed to check Tailscale",
+    saved: "Tailscale settings saved",
+    saveFailed: "Failed to save Tailscale settings",
   },
   guide: {
     title: "Tailscale remote access",
