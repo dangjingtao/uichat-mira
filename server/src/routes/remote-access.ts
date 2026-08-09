@@ -3,6 +3,7 @@ import {
   PairingServiceError,
   remoteAccessPairingService,
 } from "@/services/remote-access-pairing.service.js";
+import { remoteRelayConnectorService } from "@/services/remote-relay-connector.service.js";
 import { tailscaleRemoteAccessService } from "@/services/tailscale-remote-access.service.js";
 import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
@@ -30,6 +31,36 @@ const mapPairingError = (error: unknown): never => {
 };
 
 const remoteAccessRoute: FastifyPluginAsync = async (app) => {
+  app.addHook("onListen", async () => {
+    remoteRelayConnectorService.start();
+  });
+
+  app.addHook("onClose", async () => {
+    remoteRelayConnectorService.stop();
+  });
+
+  app.get(
+    "/remote/admin/relay/status",
+    {
+      schema: {
+        tags: ["Remote Access"],
+        summary: "Get Mira Relay connector status",
+        operationId: "getRemoteRelayConnectorStatus",
+        response: {
+          200: successEnvelope(looseObjectSchema),
+          401: errorEnvelope,
+          500: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to get Mira Relay connector status", async (request) => {
+      if (!request.authUser) {
+        throw forbidden("Desktop authentication is required");
+      }
+      return success(remoteRelayConnectorService.getSnapshot());
+    }),
+  );
+
   app.post(
     "/remote/admin/pairing/challenges",
     {
