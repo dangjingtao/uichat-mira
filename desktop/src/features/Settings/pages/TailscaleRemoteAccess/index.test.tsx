@@ -7,6 +7,8 @@ import RemoteAccessSettings from "./index";
 const apiMocks = vi.hoisted(() => ({
   get: vi.fn(),
   getRelay: vi.fn(),
+  getRelayConfig: vi.fn(),
+  updateRelayConfig: vi.fn(),
   check: vi.fn(),
   update: vi.fn(),
   revoke: vi.fn(),
@@ -32,6 +34,8 @@ vi.mock("@/shared/api/generalSettings", () => ({
 }));
 
 vi.mock("@/shared/api/remoteAccess", () => ({
+  getRemoteRelayConfig: apiMocks.getRelayConfig,
+  updateRemoteRelayConfig: apiMocks.updateRelayConfig,
   getRemoteRelayStatus: apiMocks.getRelay,
   createRemotePairingChallenge: vi.fn(),
   getRemotePairingChallenge: vi.fn(),
@@ -90,10 +94,19 @@ const readySnapshot = {
   },
 };
 
+const relayConfig = {
+  enabled: true,
+  endpointMode: "default" as const,
+  customUrl: "",
+  effectiveUrl: "https://mira-relay.example.workers.dev",
+  defaultAvailable: true,
+  updatedAt: "2026-08-09T10:00:00.000Z",
+};
+
 const relaySnapshot = {
   enabled: true,
   state: "connected" as const,
-  relayUrl: "wss://relay.example.com",
+  relayUrl: "wss://mira-relay.example.workers.dev",
   relayId: "relay_1234567890abcdef",
   connectedAt: "2026-08-09T10:00:00.000Z",
   lastError: null,
@@ -104,6 +117,8 @@ const relaySnapshot = {
 beforeEach(() => {
   apiMocks.get.mockReset();
   apiMocks.getRelay.mockReset();
+  apiMocks.getRelayConfig.mockReset();
+  apiMocks.updateRelayConfig.mockReset();
   apiMocks.check.mockReset();
   apiMocks.update.mockReset();
   apiMocks.revoke.mockReset();
@@ -112,6 +127,15 @@ beforeEach(() => {
 
   apiMocks.get.mockResolvedValue(connectedSnapshot);
   apiMocks.getRelay.mockResolvedValue(relaySnapshot);
+  apiMocks.getRelayConfig.mockResolvedValue(relayConfig);
+  apiMocks.updateRelayConfig.mockImplementation(async (input) => ({
+    ...relayConfig,
+    ...input,
+    effectiveUrl:
+      input.endpointMode === "custom" || relayConfig.endpointMode === "custom"
+        ? input.customUrl ?? relayConfig.customUrl
+        : relayConfig.effectiveUrl,
+  }));
   apiMocks.check.mockResolvedValue(connectedSnapshot);
   apiMocks.update.mockResolvedValue(readySnapshot);
 });
@@ -123,9 +147,49 @@ describe("RemoteAccessSettings", () => {
     expect(await screen.findByText("Mira Relay")).toBeInTheDocument();
     expect(screen.getByText("Tailscale")).toBeInTheDocument();
     expect(screen.getByText("远程连接")).toBeInTheDocument();
-    expect(screen.getByText("公网连接")).toBeInTheDocument();
+    expect(screen.getByLabelText("默认服务")).toBeChecked();
+    expect(screen.getByLabelText("自定义地址")).not.toBeChecked();
+    expect(screen.queryByPlaceholderText("https://relay.example.com")).not.toBeInTheDocument();
     expect(await screen.findAllByText("已连接")).toHaveLength(2);
+    expect(apiMocks.getRelayConfig).toHaveBeenCalledTimes(1);
     expect(apiMocks.getRelay).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows and persists a custom Relay address only when selected", async () => {
+    const user = userEvent.setup();
+    render(<RemoteAccessSettings />);
+    await screen.findByText("Mira Relay");
+
+    await user.click(screen.getByLabelText("自定义地址"));
+    const input = screen.getByPlaceholderText("https://relay.example.com");
+    expect(input).toBeInTheDocument();
+
+    await user.type(input, "https://relay.tomz.io");
+    await user.tab();
+
+    await waitFor(() =>
+      expect(apiMocks.updateRelayConfig).toHaveBeenCalledWith({
+        endpointMode: "custom",
+        customUrl: "https://relay.tomz.io",
+      }),
+    );
+  });
+
+  it("toggles Mira Relay without exposing relay identity fields", async () => {
+    const user = userEvent.setup();
+    render(<RemoteAccessSettings />);
+    await screen.findByText("Mira Relay");
+
+    await user.click(screen.getByRole("switch", { name: "Mira Relay" }));
+
+    await waitFor(() =>
+      expect(apiMocks.updateRelayConfig).toHaveBeenCalledWith({
+        enabled: false,
+        endpointMode: "default",
+        customUrl: "",
+      }),
+    );
+    expect(screen.queryByText("relay_1234567890abcdef")).not.toBeInTheDocument();
   });
 
   it("keeps runtime-discovered device configuration inside diagnostics", async () => {
