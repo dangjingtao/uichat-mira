@@ -83,23 +83,25 @@ type RelaySocket = {
     type: "message",
     listener: (event: RelaySocketMessageEvent) => void,
   ): void;
-  addEventListener(
-    type: "error",
-    listener: () => void,
-  ): void;
+  addEventListener(type: "error", listener: () => void): void;
   addEventListener(
     type: "close",
     listener: (event: RelaySocketCloseEvent) => void,
   ): void;
 };
 
-type RelaySocketConstructor = new (url: string) => RelaySocket;
 export type RelaySocketFactory = (url: string) => RelaySocket;
 export type RelayLocalFetch = typeof fetch;
 
 type ActiveLocalRequest = {
   controller: AbortController;
   cancelled: boolean;
+};
+
+const missingSocketFactory: RelaySocketFactory = () => {
+  throw new Error(
+    "Mira Relay requires an explicit WebSocket client runtime from the host application",
+  );
 };
 
 const normalizeToken = (value: string | undefined) => {
@@ -119,18 +121,12 @@ const normalizeRelayUrl = (
   value: string | undefined,
   nodeEnv = process.env.NODE_ENV,
 ) => {
-  if (!value?.trim()) {
-    return null;
-  }
+  if (!value?.trim()) return null;
 
   try {
     const url = new URL(value.trim());
-    if (url.username || url.password || url.search || url.hash) {
-      return null;
-    }
-    if (url.pathname !== "/" && url.pathname !== "") {
-      return null;
-    }
+    if (url.username || url.password || url.search || url.hash) return null;
+    if (url.pathname !== "/" && url.pathname !== "") return null;
 
     if (url.protocol === "https:") {
       url.protocol = "wss:";
@@ -181,18 +177,6 @@ const buildSocketUrl = (relayUrl: string, relayId: string) => {
   return url.toString();
 };
 
-const defaultSocketFactory: RelaySocketFactory = (url) => {
-  const WebSocketCtor = (globalThis as unknown as {
-    WebSocket?: RelaySocketConstructor;
-  }).WebSocket;
-  if (!WebSocketCtor) {
-    throw new Error(
-      "This Node runtime does not expose the WebSocket API required by Mira Relay",
-    );
-  }
-  return new WebSocketCtor(url);
-};
-
 const toTextMessage = (value: unknown) =>
   typeof value === "string" ? value : null;
 
@@ -226,9 +210,7 @@ const responseHeaders = (headers: Headers) => {
 };
 
 const decodeRequestBody = (bodyBase64: string | undefined) => {
-  if (!bodyBase64) {
-    return undefined;
-  }
+  if (!bodyBase64) return undefined;
   const body = Buffer.from(bodyBase64, "base64");
   if (body.byteLength > RELAY_MAX_REQUEST_BODY_BYTES) {
     throw new Error("Relay request body exceeds the V1 size limit");
@@ -238,7 +220,11 @@ const decodeRequestBody = (bodyBase64: string | undefined) => {
 
 const splitChunk = (value: Uint8Array) => {
   const chunks: Uint8Array[] = [];
-  for (let offset = 0; offset < value.byteLength; offset += RELAY_STREAM_CHUNK_BYTES) {
+  for (
+    let offset = 0;
+    offset < value.byteLength;
+    offset += RELAY_STREAM_CHUNK_BYTES
+  ) {
     chunks.push(value.subarray(offset, offset + RELAY_STREAM_CHUNK_BYTES));
   }
   return chunks;
@@ -262,7 +248,7 @@ export class RemoteRelayConnectorService {
 
   constructor(
     private readonly configProvider = resolveRemoteRelayConnectorConfig,
-    private readonly socketFactory: RelaySocketFactory = defaultSocketFactory,
+    private readonly socketFactory: RelaySocketFactory = missingSocketFactory,
     private readonly localFetch: RelayLocalFetch = fetch,
     private readonly localBaseUrl = `http://127.0.0.1:${CONFIG.PORT}`,
     private readonly random = Math.random,
@@ -303,7 +289,7 @@ export class RemoteRelayConnectorService {
       try {
         socket.close(1000, "Mira Relay connector stopped");
       } catch {
-        // The socket may already be closed.
+        // Socket may already be closed.
       }
     }
 
@@ -429,7 +415,8 @@ export class RemoteRelayConnectorService {
         !config?.relayId ||
         frame.relayId !== config.relayId
       ) {
-        this.lastError = "Mira Relay hello acknowledgement does not match this host";
+        this.lastError =
+          "Mira Relay hello acknowledgement does not match this host";
         socket.close(1008, "Relay identity mismatch");
         return;
       }
@@ -556,9 +543,8 @@ export class RemoteRelayConnectorService {
       try {
         while (true) {
           const next = await reader.read();
-          if (next.done || active.cancelled) {
-            break;
-          }
+          if (next.done || active.cancelled) break;
+
           totalBytes += next.value.byteLength;
           if (totalBytes > RELAY_MAX_RESPONSE_BYTES) {
             active.controller.abort();
@@ -590,9 +576,7 @@ export class RemoteRelayConnectorService {
         reader.releaseLock();
       }
 
-      if (!active.cancelled) {
-        this.sendComplete(frame.requestId);
-      }
+      if (!active.cancelled) this.sendComplete(frame.requestId);
     } catch (error) {
       if (active.cancelled || (active.controller.signal.aborted && abortError(error))) {
         return;
@@ -635,9 +619,8 @@ export class RemoteRelayConnectorService {
 
   private send(frame: RelayOutboundHostFrame) {
     const socket = this.socket;
-    if (!socket || socket.readyState !== 1) {
-      return false;
-    }
+    if (!socket || socket.readyState !== 1) return false;
+
     try {
       socket.send(serializeRelayFrame(frame));
       return true;
@@ -655,6 +638,7 @@ export class RemoteRelayConnectorService {
     if (this.stopped || !this.currentConfig?.enabled || this.reconnectTimer) {
       return;
     }
+
     const exponential = Math.min(
       RECONNECT_MAX_MS,
       RECONNECT_BASE_MS * 2 ** Math.min(this.reconnectAttempt, 5),
@@ -678,19 +662,15 @@ export class RemoteRelayConnectorService {
   }
 
   private stopHandshakeTimer() {
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer);
-      this.handshakeTimer = null;
-    }
+    if (!this.handshakeTimer) return;
+    clearTimeout(this.handshakeTimer);
+    this.handshakeTimer = null;
   }
 
   private stopTimers() {
     this.stopHandshakeTimer();
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    if (!this.reconnectTimer) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
   }
 }
-
-export const remoteRelayConnectorService = new RemoteRelayConnectorService();
