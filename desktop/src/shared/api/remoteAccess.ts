@@ -17,6 +17,25 @@ export type PairingChallengeStatus =
   | "delivered"
   | "expired";
 
+export type RemoteRelayConnectorState =
+  | "disabled"
+  | "misconfigured"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "stopped";
+
+export interface RemoteRelayConnectorSnapshot {
+  enabled: boolean;
+  state: RemoteRelayConnectorState;
+  relayUrl: string | null;
+  relayId: string | null;
+  connectedAt: string | null;
+  lastError: string | null;
+  activeRequests: number;
+  reconnectAttempt: number;
+}
+
 export interface PairingClaimSummary {
   claimId: string;
   deviceName: string;
@@ -40,6 +59,10 @@ export interface PairingChallengeView {
 export interface CreatedPairingChallenge extends PairingChallengeView {
   code: string;
   pairingUri: string;
+}
+
+export function getRemoteRelayStatus() {
+  return get<RemoteRelayConnectorSnapshot>("/remote/admin/relay/status");
 }
 
 export function createRemotePairingChallenge() {
