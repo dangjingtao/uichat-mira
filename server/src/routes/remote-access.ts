@@ -1,9 +1,13 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import {
   PairingServiceError,
   remoteAccessPairingService,
 } from "@/services/remote-access-pairing.service.js";
-import { remoteRelayConnectorService } from "@/services/remote-relay-connector.service.js";
+import {
+  RemoteRelayConnectorService,
+  resolveRemoteRelayConnectorConfig,
+  type RelaySocketFactory,
+} from "@/services/remote-relay-connector.service.js";
 import { tailscaleRemoteAccessService } from "@/services/tailscale-remote-access.service.js";
 import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
@@ -30,7 +34,32 @@ const mapPairingError = (error: unknown): never => {
   throw error;
 };
 
+const createRelaySocketFactory = (app: FastifyInstance): RelaySocketFactory => {
+  const websocketServer = (
+    app as unknown as {
+      websocketServer?: {
+        options?: {
+          WebSocket?: new (url: string) => ReturnType<RelaySocketFactory>;
+        };
+      };
+    }
+  ).websocketServer;
+  const WebSocketCtor = websocketServer?.options?.WebSocket;
+  if (!WebSocketCtor) {
+    throw new Error(
+      "@fastify/websocket did not expose the ws WebSocket runtime required by Mira Relay",
+    );
+  }
+
+  return (url) => new WebSocketCtor(url);
+};
+
 const remoteAccessRoute: FastifyPluginAsync = async (app) => {
+  const remoteRelayConnectorService = new RemoteRelayConnectorService(
+    resolveRemoteRelayConnectorConfig,
+    createRelaySocketFactory(app),
+  );
+
   app.addHook("onListen", async () => {
     remoteRelayConnectorService.start();
   });
