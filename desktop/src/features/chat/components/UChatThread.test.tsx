@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, test, vi, beforeEach } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, test, vi } from "vitest";
 import "@/shared/i18n";
 import i18n from "@/shared/i18n";
 import UChatThread from "./UChatThread";
@@ -163,6 +163,14 @@ vi.mock("@/shared/ui/SearchSelectModal", () => ({
 }));
 
 describe("UChatThread", () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage("en-US");
+  });
+
+  afterAll(async () => {
+    await i18n.changeLanguage("zh-CN");
+  });
+
   beforeEach(() => {
     sendMock.mockReset();
     updateThreadRuntimeMock.mockReset();

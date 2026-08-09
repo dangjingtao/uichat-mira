@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import SearchSelectModal from "../SearchSelectModal";
@@ -17,7 +17,10 @@ const items = [
 
 describe("SearchSelectModal", () => {
   it("renders loading state", async () => {
-    vi.mocked(get).mockResolvedValueOnce({ data: [] });
+    let resolveRequest!: (value: { data: typeof items }) => void;
+    vi.mocked(get).mockReturnValueOnce(new Promise((resolve) => {
+      resolveRequest = resolve;
+    }));
     render(
       <SearchSelectModal
         open
@@ -29,6 +32,8 @@ describe("SearchSelectModal", () => {
       />,
     );
     expect(screen.getByText("Loading...")).toBeInTheDocument();
+    await act(async () => resolveRequest({ data: [] }));
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
   });
 
   it("renders items after loading", async () => {

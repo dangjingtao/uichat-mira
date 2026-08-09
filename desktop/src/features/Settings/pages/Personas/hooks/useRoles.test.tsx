@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, test, vi } from "vitest";
+import i18n from "@/shared/i18n";
 import "../i18n";
 import { useRoles } from "./useRoles";
 
@@ -53,6 +54,14 @@ const baseRole = {
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
 };
+
+beforeAll(async () => {
+  await i18n.changeLanguage("en-US");
+});
+
+afterAll(async () => {
+  await i18n.changeLanguage("zh-CN");
+});
 
 beforeEach(() => {
   listRolesMock.mockReset();

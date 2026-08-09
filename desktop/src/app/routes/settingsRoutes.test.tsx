@@ -47,11 +47,11 @@ vi.mock("@/features/Settings/pages/KnowledgeBase/pages/Detail", () => ({
 vi.mock("@/features/Settings/pages/ModelSetting", () => ({
   default: () => null,
 }));
-vi.mock("@/features/Settings/pages/Evaluation/pages/New", () => ({
-  default: () => null,
+vi.mock("@/features/Settings/pages/Evaluation/New", () => ({
+  default: () => <div data-testid="evaluation-new-page">evaluation-new-page</div>,
 }));
-vi.mock("@/features/Settings/pages/Evaluation/pages/Center", () => ({
-  default: () => null,
+vi.mock("@/features/Settings/pages/Evaluation/Center", () => ({
+  default: () => <div data-testid="evaluation-center-page">evaluation-center-page</div>,
 }));
 vi.mock("@/features/Settings/pages/Development/index", () => ({
   default: () => <Outlet />,
@@ -251,7 +251,7 @@ describe("settings routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("includes the image generation studio route under the micro apps path", () => {
+  it("includes the news hub route under the micro apps path", () => {
     const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
       microAppsRoute?.children?.some(
@@ -276,6 +276,25 @@ describe("settings routes", () => {
     render(<RouterProvider router={router} />);
 
     expect(screen.getByTestId("news-hub-page")).toBeInTheDocument();
+  });
+
+  it("mounts the current evaluation center and workbench entry points", () => {
+    const centerRouter = createMemoryRouter(
+      [{ path: "/settings", children: settingsRoutes }],
+      { initialEntries: ["/settings/evaluation/center"] },
+    );
+    const center = render(<RouterProvider router={centerRouter} />);
+
+    expect(screen.getByTestId("evaluation-center-page")).toBeInTheDocument();
+    center.unmount();
+
+    const workbenchRouter = createMemoryRouter(
+      [{ path: "/settings", children: settingsRoutes }],
+      { initialEntries: ["/settings/evaluation/center/new"] },
+    );
+    render(<RouterProvider router={workbenchRouter} />);
+
+    expect(screen.getByTestId("evaluation-new-page")).toBeInTheDocument();
   });
 
   it("redirects the former development base information page to About", async () => {

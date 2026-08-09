@@ -36,6 +36,16 @@
       "branch": "dev",
       "versions": [
         {
+          "version": "0.99.7",
+          "commit": {
+            "hash": "1a047bf750ed42cc513531e1728f80b83099e7ab",
+            "shortHash": "1a047bf",
+            "message": "chore(release): bump version to 0.99.7",
+            "author": "Tomz",
+            "date": "2026-08-03T06:49:19+08:00"
+          }
+        },
+        {
           "version": "0.99.6",
           "commit": {
             "hash": "ba2c36634f7cd502e000ebec813207c13e92bb78",

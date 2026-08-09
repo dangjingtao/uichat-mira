@@ -1,9 +1,17 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { test } from "vitest";
-import "@/shared/i18n";
+import { afterAll, beforeAll, test } from "vitest";
+import i18n from "@/shared/i18n";
 import { UChatToolTrace } from "./UChatToolTrace";
+
+beforeAll(async () => {
+  await i18n.changeLanguage("en-US");
+});
+
+afterAll(async () => {
+  await i18n.changeLanguage("zh-CN");
+});
 
 test("UChatToolTrace renders a collapsed summary and expandable details", () => {
   render(

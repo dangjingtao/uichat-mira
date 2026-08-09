@@ -33,6 +33,7 @@ vi.mock("@/shared/ui/MarkdownText", () => ({
 }));
 
 vi.mock("@/shared/ui/StreamingTextRenderer", () => ({
+  getStreamingTextVisibleRevision: () => 0,
   default: (props: {
     text: string;
     isStreaming?: boolean;

@@ -2,12 +2,20 @@
 import assert from "node:assert/strict";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { test, vi } from "vitest";
+import { afterAll, beforeAll, test, vi } from "vitest";
 import "@/shared/i18n";
 import i18n from "@/shared/i18n";
 import { UChatThreadView } from "./UChatThreadView";
 import type { ChatMessage } from "../core";
 import type { UChatMessageExtensionProps } from "./UChatThreadSlots";
+
+beforeAll(async () => {
+  await i18n.changeLanguage("en-US");
+});
+
+afterAll(async () => {
+  await i18n.changeLanguage("zh-CN");
+});
 
 vi.mock("@/app/providers/ThemeProvider", () => ({
   useThemePreferences: () => ({
