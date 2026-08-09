@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
+  Cloud,
   ExternalLink,
   HelpCircle,
   Link2,
@@ -21,6 +22,11 @@ import {
   type TailscaleRemoteAccessSnapshot,
   type TailscaleRemoteRuntimeState,
 } from "@/shared/api/generalSettings";
+import {
+  getRemoteRelayStatus,
+  type RemoteRelayConnectorSnapshot,
+  type RemoteRelayConnectorState,
+} from "@/shared/api/remoteAccess";
 import { ApiError } from "@/shared/lib/request";
 import { openExternalUrl } from "@/shared/platform/desktopRuntime";
 import { Badge, Button, Switch, TextInput } from "@/shared/ui";
@@ -31,7 +37,7 @@ import TailscaleRemoteAccessGuideDrawer from "./TailscaleRemoteAccessGuideDrawer
 import RemoteDevicePairingModal from "./RemoteDevicePairingModal";
 import { getTailscaleRemoteAccessCopy } from "./copy";
 
-const statusVariant = (state: TailscaleRemoteRuntimeState) => {
+const tailscaleStatusVariant = (state: TailscaleRemoteRuntimeState) => {
   if (state === "ready") {
     return "success" as const;
   }
@@ -52,15 +58,44 @@ const statusVariant = (state: TailscaleRemoteRuntimeState) => {
   return "muted" as const;
 };
 
+const relayStatusVariant = (state: RemoteRelayConnectorState | null) => {
+  if (state === "connected") return "success" as const;
+  if (state === "connecting") return "warning" as const;
+  if (state === "misconfigured" || state === "disconnected") {
+    return "danger" as const;
+  }
+  return "muted" as const;
+};
+
+const relayStatusLabel = (
+  state: RemoteRelayConnectorState | null,
+  isZh: boolean,
+) => {
+  const labels: Record<RemoteRelayConnectorState, readonly [string, string]> = {
+    disabled: ["未启用", "Off"],
+    misconfigured: ["配置异常", "Invalid"],
+    connecting: ["连接中", "Connecting"],
+    connected: ["已连接", "Connected"],
+    disconnected: ["已断开", "Disconnected"],
+    stopped: ["已停止", "Stopped"],
+  };
+  if (!state) return isZh ? "不可用" : "Unavailable";
+  return labels[state][isZh ? 0 : 1];
+};
+
 const readErrorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiError || error instanceof Error ? error.message : fallback;
 
-export default function TailscaleRemoteAccessSettings() {
+export default function RemoteAccessSettings() {
   const { i18n } = useTranslation();
   const copy = getTailscaleRemoteAccessCopy(i18n.resolvedLanguage);
   const isZh = i18n.resolvedLanguage?.toLowerCase().startsWith("zh") ?? true;
   const [snapshot, setSnapshot] =
     useState<TailscaleRemoteAccessSnapshot | null>(null);
+  const [relaySnapshot, setRelaySnapshot] =
+    useState<RemoteRelayConnectorSnapshot | null>(null);
+  const [relayLoading, setRelayLoading] = useState(true);
+  const [relayUnavailable, setRelayUnavailable] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -110,10 +145,44 @@ export default function TailscaleRemoteAccessSettings() {
     };
   }, [copy.messages.loadFailed]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        setRelayLoading(true);
+        const next = await getRemoteRelayStatus();
+        if (!cancelled) {
+          setRelaySnapshot(next);
+          setRelayUnavailable(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setRelaySnapshot(null);
+          setRelayUnavailable(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setRelayLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const runtime = snapshot?.runtime;
   const statusCopy = runtime
     ? copy.status.states[runtime.state]
     : copy.status.states.connecting;
+  const relayState = relayUnavailable ? null : relaySnapshot?.state ?? null;
+  const relayLabel = relayLoading
+    ? isZh
+      ? "检查中"
+      : "Checking"
+    : relayStatusLabel(relayState, isZh);
   const dirty = snapshot ? enabled !== snapshot.config.enabled : false;
   const canChangeRemoteAccess =
     runtime?.state === "connected" ||
@@ -196,29 +265,29 @@ export default function TailscaleRemoteAccessSettings() {
 
         <section>
           <div className="-mx-4 divide-y divide-border border-y border-border">
-          {[
-            [copy.diagnostics.version, nextRuntime.version || "-"],
-            [copy.diagnostics.backend, nextRuntime.backendState || "-"],
-            [
-              copy.diagnostics.ips,
-              nextRuntime.tailscaleIps.length
-                ? nextRuntime.tailscaleIps.join(", ")
-                : "-",
-            ],
-            [copy.diagnostics.serve, nextServeValue],
-            [copy.diagnostics.health, nextHealthValue],
-            [copy.diagnostics.checkedAt, nextCheckedAt],
-          ].map(([label, value]) => (
-            <SectionCardRow
-              key={label}
-              className="grid-cols-[minmax(140px,1fr)_minmax(0,2fr)]"
-            >
-              <span className="text-sm text-text-secondary">{label}</span>
-              <span className="min-w-0 w-full break-words text-right font-mono text-xs text-text-primary">
-                {value}
-              </span>
-            </SectionCardRow>
-          ))}
+            {[
+              [copy.diagnostics.version, nextRuntime.version || "-"],
+              [copy.diagnostics.backend, nextRuntime.backendState || "-"],
+              [
+                copy.diagnostics.ips,
+                nextRuntime.tailscaleIps.length
+                  ? nextRuntime.tailscaleIps.join(", ")
+                  : "-",
+              ],
+              [copy.diagnostics.serve, nextServeValue],
+              [copy.diagnostics.health, nextHealthValue],
+              [copy.diagnostics.checkedAt, nextCheckedAt],
+            ].map(([label, value]) => (
+              <SectionCardRow
+                key={label}
+                className="grid-cols-[minmax(140px,1fr)_minmax(0,2fr)]"
+              >
+                <span className="text-sm text-text-secondary">{label}</span>
+                <span className="min-w-0 w-full break-words text-right font-mono text-xs text-text-primary">
+                  {value}
+                </span>
+              </SectionCardRow>
+            ))}
           </div>
         </section>
       </div>
@@ -292,7 +361,6 @@ export default function TailscaleRemoteAccessSettings() {
       <SettingsPageLayout
         miniTitle={copy.page.miniTitle}
         title={copy.page.title}
-        description={copy.page.description}
         slot={
           <Button
             size="xs"
@@ -309,7 +377,22 @@ export default function TailscaleRemoteAccessSettings() {
         {error ? <SettingsNotice tone="danger">{error}</SettingsNotice> : null}
 
         <SectionCard
-          title={copy.status.title}
+          title="Mira Relay"
+          icon={<Cloud className="h-4 w-4" />}
+          divided
+        >
+          <SectionCardRow>
+            <span className="text-sm font-medium text-text-primary">
+              {isZh ? "公网连接" : "Public relay"}
+            </span>
+            <Badge variant={relayStatusVariant(relayState)} outline>
+              {relayLabel}
+            </Badge>
+          </SectionCardRow>
+        </SectionCard>
+
+        <SectionCard
+          title="Tailscale"
           icon={<Network className="h-4 w-4" />}
           action={
             <Button
@@ -330,20 +413,12 @@ export default function TailscaleRemoteAccessSettings() {
                 : copy.actions.diagnose}
             </Button>
           }
-          meta={
-            <Badge variant={runtime ? statusVariant(runtime.state) : "muted"}>
-              {loading ? copy.actions.checking : statusCopy[0]}
-            </Badge>
-          }
           divided
         >
           <SectionCardRow>
             <div className="min-w-0">
               <div className="text-sm font-medium text-text-primary">
                 {copy.status.connection}
-              </div>
-              <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                {statusCopy[1]}
               </div>
               {runtime?.error ? (
                 <div className="mt-1 text-xs leading-5 text-danger-text">
@@ -352,21 +427,16 @@ export default function TailscaleRemoteAccessSettings() {
               ) : null}
             </div>
             <Badge
-              variant={runtime ? statusVariant(runtime.state) : "muted"}
+              variant={runtime ? tailscaleStatusVariant(runtime.state) : "muted"}
               outline
             >
-              {statusCopy[0]}
+              {loading ? copy.actions.checking : statusCopy[0]}
             </Badge>
           </SectionCardRow>
 
           <SectionCardRow>
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-text-primary">
-                {copy.status.enable}
-              </div>
-              <div className="mt-0.5 text-xs leading-5 text-text-secondary">
-                {copy.status.enableDescription}
-              </div>
+            <div className="text-sm font-medium text-text-primary">
+              {copy.status.enable}
             </div>
             <Switch
               checked={enabled}
@@ -401,9 +471,7 @@ export default function TailscaleRemoteAccessSettings() {
             </Button>
           }
           divided={Boolean(snapshot?.pairedDevices.length)}
-          contentClassName={
-            snapshot?.pairedDevices.length ? undefined : "p-4"
-          }
+          contentClassName={snapshot?.pairedDevices.length ? undefined : "p-4"}
         >
           {snapshot?.pairedDevices.length ? (
             snapshot.pairedDevices.map((device) => (
@@ -440,17 +508,11 @@ export default function TailscaleRemoteAccessSettings() {
               </SectionCardRow>
             ))
           ) : (
-            <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary px-4 py-5 text-center">
-              <div className="text-sm font-medium text-text-primary">
-                {copy.devices.empty}
-              </div>
-              <div className="mt-1 text-xs leading-5 text-text-secondary">
-                {copy.devices.emptyHint}
-              </div>
+            <div className="px-1 py-2 text-sm text-text-secondary">
+              {copy.devices.empty}
             </div>
           )}
         </SectionCard>
-
       </SettingsPageLayout>
 
       <TailscaleRemoteAccessGuideDrawer
