@@ -7,7 +7,7 @@ Base: `docs/remote-relay-transport-v1`
 
 ## 目标
 
-在不改变现有 Tailscale Remote Host V1 业务合同的前提下，完成 Mira Relay 的后端 POC：
+在不改变现有 Tailscale Remote Host V1 业务合同的前提下，完成 Mira Relay 的后端 POC，并在现有 Desktop 远程连接页做最小产品化呈现：
 
 ```text
 Mobile / test client
@@ -16,7 +16,11 @@ Mobile / test client
   -> localhost Mira Fastify backend
 ```
 
-本任务只建立 Transport 后端，不实现 Mobile UI、自动选路或新 pairing URI。
+Desktop 页面只呈现 Relay 与 Tailscale 两种通道及其真实状态，不暴露 Cloudflare、relay token 等实现配置。本任务不实现 Mobile UI、自动选路或新 pairing URI。
+
+## 2026-08-09 范围扩展
+
+项目 Owner 明确要求把原“Tailscale 远程连接”更名为“远程连接”，并将本次 Relay 技术方案顺势排布在同一页面；界面保持极简，不增加说明墙或技术配置表单。
 
 ## 允许修改
 
@@ -25,6 +29,9 @@ Mobile / test client
 - `server/src/services/remote-relay-connector.service.ts`
 - `server/src/services/remote-relay-connector.service.test.ts`
 - `server/src/routes/remote-access.ts`
+- `desktop/src/shared/api/remoteAccess.ts`
+- `desktop/src/features/Settings/pages/TailscaleRemoteAccess/**`
+- `desktop/src/shared/i18n/index.ts`：仅允许注册 Remote Access feature i18n shard
 - `docs/remote-access/**`
 - 本任务卡
 - `package.json`：仅允许增加 Relay 验证脚本
@@ -33,7 +40,7 @@ Mobile / test client
 ## 禁止修改
 
 - Mira Mobile 仓库与 Mobile UI
-- Desktop 设置页 / UI
+- 其他 Desktop 设置页 / UI
 - `server/src/services/tailscale-remote-access.service.ts`
 - Tailscale repository 与现有 Serve 行为
 - `mira_device_*` credential 格式
@@ -73,6 +80,24 @@ Relay 不负责：
 - Relay cancel 必须映射到本地 `AbortController`。
 - WebSocket Client runtime 由已经注册的 `@fastify/websocket` / `ws` runtime 显式注入，不依赖 Node 20 实验性的 global WebSocket。
 
+## Desktop UI 合同
+
+远程连接页保持三块：
+
+```text
+Mira Relay
+Tailscale
+已配对设备
+```
+
+约束：
+
+- 页面与侧边导航统一显示“远程连接 / Remote Access”。
+- Relay 只显示公网连接状态，不显示 Relay URL、Relay ID、Host Token、Client Token 或 Cloudflare 实现名。
+- Tailscale 原有启用、诊断、配对与设备撤销能力继续保留。
+- Tailscale 开关必须明确写作“启用 Tailscale”，避免与整个远程能力混淆。
+- 不增加额外营销文案、技术原理说明或大块空状态说明。
+
 ## POC 配置
 
 POC 使用环境变量，默认关闭：
@@ -101,8 +126,12 @@ Relay connection token 与 `mira_device_*` credential 必须保持概念和用�
 - [x] Relay Connector 有针对 hello、请求转发、header 清洗、stream、cancel、配置错误的单测。
 - [x] Cloudflare Worker / Durable Object 源码独立 TypeScript 检查通过。
 - [x] Relay protocol + Desktop Connector 源码独立 TypeScript 检查通过。
+- [x] Desktop 页面标题与导航名改为“远程连接 / Remote Access”。
+- [x] Desktop 页面按 Mira Relay / Tailscale / 已配对设备排布。
+- [x] Relay 页面不暴露内部 Relay 配置与 Cloudflare 实现细节。
 - [ ] `pnpm check` 通过。
 - [ ] Relay Connector Vitest 实际执行通过。
+- [ ] Remote Access Desktop Vitest 实际执行通过。
 - [ ] Cloudflare 实网 smoke：Host online -> request -> localhost `/health` -> response。
 
 ## 验证记录
@@ -122,7 +151,7 @@ Relay connection token 与 `mira_device_*` credential 必须保持概念和用�
 - Direct -> Relay 自动 fallback
 - 同一设备保存多个 endpoint
 - pairing 去 Tailscale ready 硬编码
-- Desktop “远程连接”产品 UI
+- Relay 用户级零配置凭证签发 / 持久化
 - 大文件专用传输
 - Relay 多 Host 调度
 
