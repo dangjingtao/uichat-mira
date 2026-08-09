@@ -21,10 +21,7 @@ export class RemoteRelayConfigError extends Error {
   }
 }
 
-const normalizeBaseUrl = (
-  value: string | null | undefined,
-  nodeEnv = process.env.NODE_ENV,
-) => {
+const normalizeBaseUrl = (value: string | null | undefined) => {
   const normalized = value?.trim() ?? "";
   if (!normalized) return null;
 
@@ -32,11 +29,7 @@ const normalizeBaseUrl = (
     const url = new URL(normalized);
     if (url.username || url.password || url.search || url.hash) return null;
     if (url.pathname !== "/" && url.pathname !== "") return null;
-
-    const allowHttp = nodeEnv !== "production";
-    if (url.protocol !== "https:" && !(allowHttp && url.protocol === "http:")) {
-      return null;
-    }
+    if (url.protocol !== "https:") return null;
 
     url.pathname = "/";
     return url.toString().replace(/\/$/u, "");
@@ -48,7 +41,7 @@ const normalizeBaseUrl = (
 const toWebSocketUrl = (value: string | null) => {
   if (!value) return null;
   const url = new URL(value);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = "wss:";
   return url.toString().replace(/\/$/u, "");
 };
 
