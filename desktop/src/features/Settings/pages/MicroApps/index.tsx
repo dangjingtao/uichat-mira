@@ -207,30 +207,24 @@ export default function MicroAppsSettings() {
         contentClassName="space-y-6 pt-6"
       >
         <div data-testid="micro-apps-loading-skeleton" className="space-y-6">
-          <Card className="p-4">
-            <div className="space-y-3">
-              <Skeleton height={18} width="28%" />
-              <Skeleton.Text lines={2} lastLineWidth="72%" />
-            </div>
-          </Card>
+          <div className="space-y-3">
+            <Skeleton height={18} width="28%" />
+            <Skeleton.Text lines={2} lastLineWidth="72%" />
+          </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-            <Card className="border-border bg-primary/5 p-5">
-              <div className="space-y-4">
-                <Skeleton height={20} width="34%" />
-                <Skeleton.Text lines={4} lastLineWidth="58%" />
-                <Skeleton height={40} width={160} />
-              </div>
-            </Card>
+            <div className="space-y-4">
+              <Skeleton height={20} width="34%" />
+              <Skeleton.Text lines={4} lastLineWidth="58%" />
+              <Skeleton height={40} width={160} />
+            </div>
 
-            <Card className="p-5">
-              <div className="space-y-4">
-                <Skeleton height={18} width="42%" />
-                <Skeleton.Text lines={3} lastLineWidth="66%" />
-                <Skeleton height={18} width="30%" />
-                <Skeleton.Text lines={3} lastLineWidth="54%" />
-              </div>
-            </Card>
+            <div className="space-y-4">
+              <Skeleton height={18} width="42%" />
+              <Skeleton.Text lines={3} lastLineWidth="66%" />
+              <Skeleton height={18} width="30%" />
+              <Skeleton.Text lines={3} lastLineWidth="54%" />
+            </div>
           </div>
 
           <div
@@ -238,7 +232,7 @@ export default function MicroAppsSettings() {
             className="grid grid-cols-2 gap-4 pb-6 xl:grid-cols-3"
           >
             {Array.from({ length: 4 }).map((_, index) => (
-              <Card key={index} padding="none" className="min-h-[132px] overflow-hidden">
+              <div key={index} className="min-h-[132px]">
                 <div className="p-4">
                   <div className="flex items-start gap-3">
                     <Skeleton.Circle size={44} className="shrink-0" />
@@ -248,7 +242,7 @@ export default function MicroAppsSettings() {
                   </div>
                   <div className="mt-4"><Skeleton.Text lines={2} lastLineWidth="62%" /></div>
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
         </div>

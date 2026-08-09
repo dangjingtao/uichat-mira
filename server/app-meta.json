@@ -38,11 +38,11 @@
         {
           "version": "0.99.7",
           "commit": {
-            "hash": "1a047bf750ed42cc513531e1728f80b83099e7ab",
-            "shortHash": "1a047bf",
-            "message": "chore(release): bump version to 0.99.7",
-            "author": "Tomz",
-            "date": "2026-08-03T06:49:19+08:00"
+            "hash": "e2b36ed3f049efd152b86fd8c3bd6a3a7642af5b",
+            "shortHash": "e2b36ed",
+            "message": "Merge Mira Relay remote transport into dev",
+            "author": "DangJingtao",
+            "date": "2026-08-09T21:58:38+08:00"
           }
         },
         {
