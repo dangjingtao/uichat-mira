@@ -28,13 +28,12 @@ type Env = {
   RELAY_ROOMS: DurableObjectNamespace;
 };
 
-const json = (value: unknown, init: ResponseInit = {}) =>
+const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
-    ...init,
+    status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      ...(init.headers ?? {}),
     },
   });
 
@@ -52,9 +51,7 @@ const isWebSocketUpgrade = (request: Request) =>
   request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 
 const parseFrame = (message: string): RelayFrame | null => {
-  if (message.length > MAX_FRAME_CHARS) {
-    return null;
-  }
+  if (message.length > MAX_FRAME_CHARS) return null;
 
   try {
     const parsed = JSON.parse(message) as unknown;
@@ -72,9 +69,7 @@ const parseFrame = (message: string): RelayFrame | null => {
 };
 
 const normalizeToken = (value: unknown) => {
-  if (typeof value !== "string") {
-    return null;
-  }
+  if (typeof value !== "string") return null;
   const normalized = value.trim();
   if (
     normalized.length < TOKEN_MIN_LENGTH ||
@@ -97,9 +92,7 @@ const sha256Hex = async (value: string) => {
 
 const readAttachment = (socket: WebSocket): RelayAttachment | null => {
   const value = socket.deserializeAttachment();
-  if (!isRecord(value)) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
   if (
     typeof value.authenticated !== "boolean" ||
     typeof value.connectionId !== "string" ||
@@ -148,18 +141,13 @@ const internalRequestId = (connectionId: string, requestId: string) =>
   `${connectionId}~${requestId}`;
 
 const parseInternalRequestId = (value: unknown) => {
-  if (typeof value !== "string") {
-    return null;
-  }
+  if (typeof value !== "string") return null;
   const separator = value.indexOf("~");
-  if (separator <= 0 || separator === value.length - 1) {
-    return null;
-  }
+  if (separator <= 0 || separator === value.length - 1) return null;
+
   const connectionId = value.slice(0, separator);
   const requestId = value.slice(separator + 1);
-  if (!REQUEST_ID_PATTERN.test(requestId)) {
-    return null;
-  }
+  if (!REQUEST_ID_PATTERN.test(requestId)) return null;
   return { connectionId, requestId };
 };
 
@@ -178,10 +166,10 @@ export class RelayRoom extends DurableObject<Env> {
     const url = new URL(request.url);
     const relayId = parseRelayId(url.pathname);
     if (!relayId || !RELAY_ID_PATTERN.test(relayId)) {
-      return json({ error: "invalid_relay_id" }, { status: 404 });
+      return json({ error: "invalid_relay_id" }, 404);
     }
     if (!isWebSocketUpgrade(request)) {
-      return json({ error: "websocket_required" }, { status: 426 });
+      return json({ error: "websocket_required" }, 426);
     }
 
     const pair = new WebSocketPair();
@@ -203,19 +191,31 @@ export class RelayRoom extends DurableObject<Env> {
     message: string | ArrayBuffer,
   ): Promise<void> {
     if (typeof message !== "string") {
-      this.failSocket(socket, "BINARY_FRAME_UNSUPPORTED", "Binary relay frames are not supported");
+      this.failSocket(
+        socket,
+        "BINARY_FRAME_UNSUPPORTED",
+        "Binary relay frames are not supported",
+      );
       return;
     }
 
     const frame = parseFrame(message);
     if (!frame) {
-      this.failSocket(socket, "INVALID_FRAME", "Relay frame is invalid or too large");
+      this.failSocket(
+        socket,
+        "INVALID_FRAME",
+        "Relay frame is invalid or too large",
+      );
       return;
     }
 
     const attachment = readAttachment(socket);
     if (!attachment) {
-      this.failSocket(socket, "INVALID_CONNECTION_STATE", "Relay connection state is invalid");
+      this.failSocket(
+        socket,
+        "INVALID_CONNECTION_STATE",
+        "Relay connection state is invalid",
+      );
       return;
     }
 
@@ -225,7 +225,11 @@ export class RelayRoom extends DurableObject<Env> {
     }
 
     if (frame.type === "hello") {
-      this.failSocket(socket, "HELLO_ALREADY_COMPLETED", "Relay hello has already completed");
+      this.failSocket(
+        socket,
+        "HELLO_ALREADY_COMPLETED",
+        "Relay hello has already completed",
+      );
       return;
     }
 
@@ -284,17 +288,19 @@ export class RelayRoom extends DurableObject<Env> {
       return;
     }
 
-    const role = frame.role;
-    const relayId = frame.relayId;
     if (
-      (role !== "host" && role !== "client") ||
-      relayId !== attachment.relayId
+      (frame.role !== "host" && frame.role !== "client") ||
+      frame.relayId !== attachment.relayId
     ) {
-      this.failSocket(socket, "INVALID_HELLO", "Relay hello role or relay id is invalid");
+      this.failSocket(
+        socket,
+        "INVALID_HELLO",
+        "Relay hello role or relay id is invalid",
+      );
       return;
     }
 
-    if (role === "host") {
+    if (frame.role === "host") {
       await this.authenticateHost(socket, attachment, frame);
       return;
     }
@@ -309,7 +315,11 @@ export class RelayRoom extends DurableObject<Env> {
   ) {
     const token = normalizeToken(frame.token);
     if (!token) {
-      this.failSocket(socket, "HOST_AUTH_REQUIRED", "A valid host relay token is required");
+      this.failSocket(
+        socket,
+        "HOST_AUTH_REQUIRED",
+        "A valid host relay token is required",
+      );
       return;
     }
 
@@ -348,13 +358,19 @@ export class RelayRoom extends DurableObject<Env> {
       }
     }
 
-    for (const existing of this.hostSockets()) {
-      if (existing === socket) continue;
-      const existingAttachment = readAttachment(existing);
-      if (existingAttachment) {
-        writeAttachment(existing, { ...existingAttachment, replaced: true });
+    const existingHosts = this.hostSockets().filter((existing) => existing !== socket);
+    if (existingHosts.length) {
+      this.failAllClientRequests(
+        "HOST_REPLACED",
+        "Mira Desktop Relay host connection was replaced",
+      );
+      for (const existing of existingHosts) {
+        const existingAttachment = readAttachment(existing);
+        if (existingAttachment) {
+          writeAttachment(existing, { ...existingAttachment, replaced: true });
+        }
+        existing.close(1012, "Mira Relay host replaced");
       }
-      existing.close(1012, "Mira Relay host replaced");
     }
 
     writeAttachment(socket, {
@@ -383,7 +399,11 @@ export class RelayRoom extends DurableObject<Env> {
       !configuredClientHash ||
       configuredClientHash !== (await sha256Hex(token))
     ) {
-      this.failSocket(socket, "CLIENT_AUTH_FAILED", "Client relay token is invalid");
+      this.failSocket(
+        socket,
+        "CLIENT_AUTH_FAILED",
+        "Client relay token is invalid",
+      );
       return;
     }
 
@@ -440,6 +460,7 @@ export class RelayRoom extends DurableObject<Env> {
     }
 
     if (frame.type === "cancel") {
+      if (!attachment.activeRequestIds.includes(requestId)) return;
       this.removeActiveRequest(socket, attachment, requestId);
       safeSend(host, {
         ...frame,
@@ -496,9 +517,7 @@ export class RelayRoom extends DurableObject<Env> {
     }
 
     if (frame.type === "error" && frame.requestId === undefined) {
-      for (const client of this.clientSockets()) {
-        safeSend(client, frame);
-      }
+      for (const client of this.clientSockets()) safeSend(client, frame);
       return;
     }
 
@@ -519,16 +538,19 @@ export class RelayRoom extends DurableObject<Env> {
     });
     if (!client) {
       if (frame.type !== "complete" && frame.type !== "error") {
-        safeSend(socket, {
-          type: "cancel",
-          requestId: String(frame.requestId),
-        });
+        safeSend(socket, { type: "cancel", requestId: String(frame.requestId) });
       }
       return;
     }
 
     const clientAttachment = readAttachment(client);
-    if (!clientAttachment) {
+    if (
+      !clientAttachment ||
+      !clientAttachment.activeRequestIds.includes(routed.requestId)
+    ) {
+      if (frame.type !== "complete" && frame.type !== "error") {
+        safeSend(socket, { type: "cancel", requestId: String(frame.requestId) });
+      }
       return;
     }
 
@@ -538,14 +560,30 @@ export class RelayRoom extends DurableObject<Env> {
     }
   }
 
+  private failAllClientRequests(code: string, message: string) {
+    for (const client of this.clientSockets()) {
+      const attachment = readAttachment(client);
+      if (!attachment) continue;
+
+      for (const requestId of attachment.activeRequestIds) {
+        safeSend(client, {
+          type: "error",
+          requestId,
+          code,
+          message,
+          retryable: true,
+        });
+      }
+      writeAttachment(client, { ...attachment, activeRequestIds: [] });
+    }
+  }
+
   private removeActiveRequest(
     socket: WebSocket,
     attachment: RelayAttachment,
     requestId: string,
   ) {
-    if (!attachment.activeRequestIds.includes(requestId)) {
-      return;
-    }
+    if (!attachment.activeRequestIds.includes(requestId)) return;
     writeAttachment(socket, {
       ...attachment,
       activeRequestIds: attachment.activeRequestIds.filter(
@@ -574,9 +612,7 @@ export class RelayRoom extends DurableObject<Env> {
 
   private cleanupSocket(socket: WebSocket) {
     const attachment = readAttachment(socket);
-    if (!attachment?.authenticated) {
-      return;
-    }
+    if (!attachment?.authenticated) return;
 
     if (attachment.role === "client") {
       const host = this.hostSockets()[0];
@@ -592,14 +628,11 @@ export class RelayRoom extends DurableObject<Env> {
     }
 
     if (attachment.role === "host" && attachment.replaced !== true) {
+      this.failAllClientRequests(
+        "HOST_DISCONNECTED",
+        "Mira Desktop Relay host disconnected",
+      );
       for (const client of this.clientSockets()) {
-        const clientAttachment = readAttachment(client);
-        if (clientAttachment) {
-          writeAttachment(client, {
-            ...clientAttachment,
-            activeRequestIds: [],
-          });
-        }
         safeSend(client, {
           type: "error",
           code: "HOST_DISCONNECTED",
@@ -610,11 +643,7 @@ export class RelayRoom extends DurableObject<Env> {
     }
   }
 
-  private failSocket(
-    socket: WebSocket,
-    code: string,
-    message: string,
-  ) {
+  private failSocket(socket: WebSocket, code: string, message: string) {
     safeSend(socket, {
       type: "error",
       code,
@@ -624,7 +653,7 @@ export class RelayRoom extends DurableObject<Env> {
     try {
       socket.close(1008, message.slice(0, 100));
     } catch {
-      // The socket may already be closed; nothing else is required.
+      // Socket may already be closed.
     }
   }
 }
@@ -642,10 +671,10 @@ export default {
 
     const relayId = parseRelayId(url.pathname);
     if (!relayId || !RELAY_ID_PATTERN.test(relayId)) {
-      return json({ error: "not_found" }, { status: 404 });
+      return json({ error: "not_found" }, 404);
     }
     if (!isWebSocketUpgrade(request)) {
-      return json({ error: "websocket_required" }, { status: 426 });
+      return json({ error: "websocket_required" }, 426);
     }
 
     const id = env.RELAY_ROOMS.idFromName(relayId);
