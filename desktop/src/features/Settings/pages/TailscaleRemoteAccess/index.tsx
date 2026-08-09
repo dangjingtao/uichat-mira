@@ -23,9 +23,13 @@ import {
   type TailscaleRemoteRuntimeState,
 } from "@/shared/api/generalSettings";
 import {
+  getRemoteRelayConfig,
   getRemoteRelayStatus,
+  updateRemoteRelayConfig,
   type RemoteRelayConnectorSnapshot,
   type RemoteRelayConnectorState,
+  type RemoteRelayEndpointMode,
+  type RemoteRelayUserConfig,
 } from "@/shared/api/remoteAccess";
 import { ApiError } from "@/shared/lib/request";
 import { openExternalUrl } from "@/shared/platform/desktopRuntime";
@@ -38,9 +42,7 @@ import RemoteDevicePairingModal from "./RemoteDevicePairingModal";
 import { getTailscaleRemoteAccessCopy } from "./copy";
 
 const tailscaleStatusVariant = (state: TailscaleRemoteRuntimeState) => {
-  if (state === "ready") {
-    return "success" as const;
-  }
+  if (state === "ready") return "success" as const;
   if (
     state === "serve_conflict" ||
     state === "unreachable" ||
@@ -67,22 +69,6 @@ const relayStatusVariant = (state: RemoteRelayConnectorState | null) => {
   return "muted" as const;
 };
 
-const relayStatusLabel = (
-  state: RemoteRelayConnectorState | null,
-  isZh: boolean,
-) => {
-  const labels: Record<RemoteRelayConnectorState, readonly [string, string]> = {
-    disabled: ["未启用", "Off"],
-    misconfigured: ["配置异常", "Invalid"],
-    connecting: ["连接中", "Connecting"],
-    connected: ["已连接", "Connected"],
-    disconnected: ["已断开", "Disconnected"],
-    stopped: ["已停止", "Stopped"],
-  };
-  if (!state) return isZh ? "不可用" : "Unavailable";
-  return labels[state][isZh ? 0 : 1];
-};
-
 const readErrorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiError || error instanceof Error ? error.message : fallback;
 
@@ -90,18 +76,27 @@ export default function RemoteAccessSettings() {
   const { i18n } = useTranslation();
   const copy = getTailscaleRemoteAccessCopy(i18n.resolvedLanguage);
   const isZh = i18n.resolvedLanguage?.toLowerCase().startsWith("zh") ?? true;
+
   const [snapshot, setSnapshot] =
     useState<TailscaleRemoteAccessSnapshot | null>(null);
-  const [relaySnapshot, setRelaySnapshot] =
-    useState<RemoteRelayConnectorSnapshot | null>(null);
-  const [relayLoading, setRelayLoading] = useState(true);
-  const [relayUnavailable, setRelayUnavailable] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  const [relayConfig, setRelayConfig] =
+    useState<RemoteRelayUserConfig | null>(null);
+  const [relaySnapshot, setRelaySnapshot] =
+    useState<RemoteRelayConnectorSnapshot | null>(null);
+  const [relayMode, setRelayMode] =
+    useState<RemoteRelayEndpointMode>("default");
+  const [relayCustomUrl, setRelayCustomUrl] = useState("");
+  const [relayLoading, setRelayLoading] = useState(true);
+  const [relaySaving, setRelaySaving] = useState(false);
+  const [relayError, setRelayError] = useState("");
+
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pairingOpen, setPairingOpen] = useState(false);
   const [diagnosticsSnapshot, setDiagnosticsSnapshot] =
@@ -112,9 +107,21 @@ export default function RemoteAccessSettings() {
     setEnabled(next.config.enabled);
   };
 
+  const applyRelayConfig = (next: RemoteRelayUserConfig) => {
+    setRelayConfig(next);
+    setRelayMode(next.endpointMode);
+    setRelayCustomUrl(next.customUrl);
+  };
+
   const refreshSnapshot = async () => {
     const next = await getTailscaleRemoteAccess();
     applySnapshot(next);
+    return next;
+  };
+
+  const refreshRelayStatus = async () => {
+    const next = await getRemoteRelayStatus();
+    setRelaySnapshot(next);
     return next;
   };
 
@@ -134,9 +141,7 @@ export default function RemoteAccessSettings() {
           setError(readErrorMessage(requestError, copy.messages.loadFailed));
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     })();
 
@@ -151,38 +156,41 @@ export default function RemoteAccessSettings() {
     void (async () => {
       try {
         setRelayLoading(true);
-        const next = await getRemoteRelayStatus();
+        const [config, status] = await Promise.all([
+          getRemoteRelayConfig(),
+          getRemoteRelayStatus(),
+        ]);
         if (!cancelled) {
-          setRelaySnapshot(next);
-          setRelayUnavailable(false);
+          applyRelayConfig(config);
+          setRelaySnapshot(status);
+          setRelayError("");
         }
-      } catch {
+      } catch (requestError) {
         if (!cancelled) {
-          setRelaySnapshot(null);
-          setRelayUnavailable(true);
+          setRelayError(
+            readErrorMessage(requestError, copy.relay.messages.loadFailed),
+          );
         }
       } finally {
-        if (!cancelled) {
-          setRelayLoading(false);
-        }
+        if (!cancelled) setRelayLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [copy.relay.messages.loadFailed]);
 
   const runtime = snapshot?.runtime;
   const statusCopy = runtime
     ? copy.status.states[runtime.state]
     : copy.status.states.connecting;
-  const relayState = relayUnavailable ? null : relaySnapshot?.state ?? null;
+  const relayState = relaySnapshot?.state ?? null;
   const relayLabel = relayLoading
-    ? isZh
-      ? "检查中"
-      : "Checking"
-    : relayStatusLabel(relayState, isZh);
+    ? copy.actions.checking
+    : relayState
+      ? copy.relay.states[relayState]
+      : copy.relay.states.unavailable;
   const dirty = snapshot ? enabled !== snapshot.config.enabled : false;
   const canChangeRemoteAccess =
     runtime?.state === "connected" ||
@@ -190,6 +198,63 @@ export default function RemoteAccessSettings() {
     runtime?.state === "unreachable" ||
     runtime?.state === "serve_not_configured";
   const canPairDevice = runtime?.state === "ready" && !loading && !checking && !saving;
+
+  const saveRelay = async (input: {
+    enabled?: boolean;
+    endpointMode?: RemoteRelayEndpointMode;
+    customUrl?: string;
+  }) => {
+    setRelaySaving(true);
+    setRelayError("");
+    try {
+      const next = await updateRemoteRelayConfig(input);
+      applyRelayConfig(next);
+      await refreshRelayStatus();
+      return next;
+    } catch (requestError) {
+      setRelayError(
+        readErrorMessage(requestError, copy.relay.messages.saveFailed),
+      );
+      return null;
+    } finally {
+      setRelaySaving(false);
+    }
+  };
+
+  const handleRelayEnabledChange = () => {
+    if (!relayConfig) return;
+    void saveRelay({
+      enabled: !relayConfig.enabled,
+      endpointMode: relayMode,
+      customUrl: relayCustomUrl,
+    });
+  };
+
+  const handleRelayModeChange = (mode: RemoteRelayEndpointMode) => {
+    setRelayMode(mode);
+    if (!relayConfig) return;
+
+    if (mode === "default") {
+      void saveRelay({ endpointMode: mode });
+      return;
+    }
+
+    if (!relayConfig.enabled || relayCustomUrl.trim()) {
+      void saveRelay({ endpointMode: mode, customUrl: relayCustomUrl });
+    }
+  };
+
+  const commitRelayCustomUrl = () => {
+    if (!relayConfig || relayMode !== "custom") return;
+    const normalized = relayCustomUrl.trim();
+    if (
+      relayConfig.endpointMode === "custom" &&
+      relayConfig.customUrl === normalized
+    ) {
+      return;
+    }
+    void saveRelay({ endpointMode: "custom", customUrl: normalized });
+  };
 
   const renderDiagnostics = (nextSnapshot: TailscaleRemoteAccessSnapshot) => {
     const nextRuntime = nextSnapshot.runtime;
@@ -377,18 +442,79 @@ export default function RemoteAccessSettings() {
         {error ? <SettingsNotice tone="danger">{error}</SettingsNotice> : null}
 
         <SectionCard
-          title="Mira Relay"
+          title={copy.relay.title}
           icon={<Cloud className="h-4 w-4" />}
-          divided
-        >
-          <SectionCardRow>
-            <span className="text-sm font-medium text-text-primary">
-              {isZh ? "公网连接" : "Public relay"}
-            </span>
+          meta={
             <Badge variant={relayStatusVariant(relayState)} outline>
               {relayLabel}
             </Badge>
+          }
+          action={
+            <Switch
+              checked={relayConfig?.enabled ?? false}
+              onChange={handleRelayEnabledChange}
+              ariaLabel={copy.relay.title}
+              disabled={relayLoading || relaySaving || !relayConfig}
+            />
+          }
+          divided
+        >
+          <SectionCardRow>
+            <div
+              className="flex flex-wrap items-center gap-x-6 gap-y-2"
+              role="radiogroup"
+              aria-label={copy.relay.title}
+            >
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="radio"
+                  name="remote-relay-endpoint"
+                  value="default"
+                  checked={relayMode === "default"}
+                  onChange={() => handleRelayModeChange("default")}
+                  disabled={relayLoading || relaySaving}
+                  className="h-4 w-4 accent-primary"
+                />
+                {copy.relay.default}
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
+                <input
+                  type="radio"
+                  name="remote-relay-endpoint"
+                  value="custom"
+                  checked={relayMode === "custom"}
+                  onChange={() => handleRelayModeChange("custom")}
+                  disabled={relayLoading || relaySaving}
+                  className="h-4 w-4 accent-primary"
+                />
+                {copy.relay.custom}
+              </label>
+            </div>
           </SectionCardRow>
+
+          {relayMode === "custom" ? (
+            <div className="px-4 py-3">
+              <label className="block text-xs font-medium text-text-secondary">
+                {copy.relay.customAddress}
+              </label>
+              <input
+                type="url"
+                value={relayCustomUrl}
+                placeholder={copy.relay.customPlaceholder}
+                disabled={relayLoading || relaySaving}
+                onChange={(event) => setRelayCustomUrl(event.target.value)}
+                onBlur={commitRelayCustomUrl}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                className="mt-2 h-9 w-full rounded-ui-control border border-border bg-surface-primary px-3 text-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus:border-primary"
+              />
+            </div>
+          ) : null}
+
+          {relayError ? (
+            <div className="px-4 py-3 text-xs text-danger-text">{relayError}</div>
+          ) : null}
         </SectionCard>
 
         <SectionCard
