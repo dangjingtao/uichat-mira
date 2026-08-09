@@ -86,7 +86,7 @@ const createMockSession = (input?: {
 
 const extractMarker = () => {
   const writtenCommand = String(terminalMocks.writeTerminalSessionMock.mock.calls.at(-1)?.[1] ?? "");
-  const markerMatch = writtenCommand.match(/(__CODEX_DONE__:[^":\s]+:[^":\s]+):/);
+  const markerMatch = writtenCommand.match(/(__MIRA_TERMINAL_DONE__:[^":\s]+:[^":\s]+):/);
   if (!markerMatch) {
     throw new Error(`Failed to extract completion marker from command: ${writtenCommand}`);
   }
