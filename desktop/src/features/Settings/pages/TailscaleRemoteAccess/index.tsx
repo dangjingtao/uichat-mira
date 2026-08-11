@@ -197,7 +197,13 @@ export default function RemoteAccessSettings() {
     runtime?.state === "ready" ||
     runtime?.state === "unreachable" ||
     runtime?.state === "serve_not_configured";
-  const canPairDevice = runtime?.state === "ready" && !loading && !checking && !saving;
+  const canPairDevice =
+    (runtime?.state === "ready" || relayState === "connected") &&
+    !loading &&
+    !checking &&
+    !saving &&
+    !relayLoading &&
+    !relaySaving;
 
   const saveRelay = async (input: {
     enabled?: boolean;
@@ -587,8 +593,8 @@ export default function RemoteAccessSettings() {
                 canPairDevice
                   ? undefined
                   : isZh
-                    ? "Tailscale 远程入口可访问后才能配对"
-                    : "Remote access must be ready before pairing"
+                    ? "请先连接 Tailscale 或 Mira Relay"
+                    : "Connect Tailscale or Mira Relay before pairing"
               }
               onClick={() => setPairingOpen(true)}
             >

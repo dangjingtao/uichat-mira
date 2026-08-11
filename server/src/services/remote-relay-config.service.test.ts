@@ -108,6 +108,7 @@ describe("Mira Relay product configuration", () => {
     expect(getRemoteRelayPairingMetadata()).toEqual({
       endpoint: "https://mira-relay.example.workers.dev",
       relayId: "relay_1234567890abcdef",
+      clientToken: "c".repeat(48),
     });
 
     repositoryMock.get.mockReturnValue({ ...baseSettings, enabled: false });

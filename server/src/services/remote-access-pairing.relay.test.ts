@@ -32,8 +32,10 @@ vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
 
 import { RemoteAccessPairingService } from "./remote-access-pairing.service.js";
 
+const clientToken = "c".repeat(43);
+
 describe("Remote pairing Relay metadata", () => {
-  it("adds Relay metadata without changing the V1 pairing fields", () => {
+  it("adds Relay metadata without changing the V1 Direct pairing fields", () => {
     const service = new RemoteAccessPairingService();
     const created = service.createChallenge({
       userId: 7,
@@ -41,6 +43,7 @@ describe("Remote pairing Relay metadata", () => {
       relay: {
         endpoint: "https://relay.tomz.io",
         relayId: "relay_1234567890abcdef",
+        clientToken,
       },
     });
 
@@ -55,5 +58,25 @@ describe("Remote pairing Relay metadata", () => {
     expect(uri.searchParams.get("code")).toBe(created.code);
     expect(uri.searchParams.get("relay")).toBe("https://relay.tomz.io");
     expect(uri.searchParams.get("relayId")).toBe("relay_1234567890abcdef");
+    expect(uri.searchParams.get("relayToken")).toBe(clientToken);
+  });
+
+  it("allows a Relay-only pairing URI without inventing a Direct host", () => {
+    const service = new RemoteAccessPairingService();
+    const created = service.createChallenge({
+      userId: 7,
+      hostUrl: null,
+      relay: {
+        endpoint: "https://relay.tomz.io",
+        relayId: "relay_1234567890abcdef",
+        clientToken,
+      },
+    });
+
+    const uri = new URL(created.pairingUri);
+    expect(created.hostUrl).toBe("");
+    expect(uri.searchParams.has("host")).toBe(false);
+    expect(uri.searchParams.get("relay")).toBe("https://relay.tomz.io");
+    expect(uri.searchParams.get("relayToken")).toBe(clientToken);
   });
 });

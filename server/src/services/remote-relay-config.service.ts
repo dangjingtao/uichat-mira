@@ -116,6 +116,7 @@ export const getRemoteRelayPairingMetadata = () => {
     ? {
         endpoint,
         relayId: settings.relayId,
+        clientToken: settings.clientToken,
       }
     : null;
 };
