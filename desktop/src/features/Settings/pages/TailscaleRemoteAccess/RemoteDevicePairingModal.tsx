@@ -64,8 +64,7 @@ export default function RemoteDevicePairingModal({
       zh
         ? {
             title: "配对手机设备",
-            intro:
-              "手机必须已经加入同一 Tailnet。配对挑战五分钟后失效。",
+            intro: "配对挑战五分钟后失效。",
             loading: "正在创建一次性配对挑战...",
             failed: "创建配对挑战失败",
             uri: "配对链接",
@@ -93,8 +92,7 @@ export default function RemoteDevicePairingModal({
           }
         : {
             title: "Pair a mobile device",
-            intro:
-              "The phone must already be on the same Tailnet. This pairing challenge expires in five minutes.",
+            intro: "This pairing challenge expires in five minutes.",
             loading: "Creating a one-time pairing challenge...",
             failed: "Failed to create pairing challenge",
             uri: "Pairing URI",
