@@ -24,8 +24,20 @@ const archivePath = path.join(runtimeCacheRoot, "piper_windows_amd64.zip");
 const extractedRoot = path.join(runtimeCacheRoot, "extracted");
 const metadataPath = path.join(runtimeCacheRoot, "manifest.json");
 
+const isWindowsHost = process.platform === "win32";
+const allowCrossBuild = ["1", "true"].includes(
+  process.env.UIC_TTS_PIPER_ALLOW_CROSS_BUILD?.trim().toLowerCase() ?? "",
+);
+
 function assertWindowsHost() {
-  if (process.platform !== "win32") {
+  if (!isWindowsHost) {
+    if (allowCrossBuild) {
+      // 交叉构建：直接取用 piper_windows_amd64.zip 官方压缩包，宿主不参与编译。
+      console.warn(
+        `Cross-build enabled: staging Windows Piper runtime on ${process.platform}/${process.arch}.`,
+      );
+      return;
+    }
     throw new Error("Bundled Piper runtime preparation currently supports Windows only.");
   }
 }
@@ -83,35 +95,49 @@ function copyLocalArchive() {
 function downloadArchive() {
   console.log(`Downloading bundled Piper runtime: ${runtimeUrl}`);
   ensureDir(runtimeCacheRoot);
+  if (isWindowsHost) {
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        `$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri ${toPsLiteral(runtimeUrl)} -OutFile ${toPsLiteral(archivePath)} -MaximumRedirection 5 -TimeoutSec 180`,
+      ],
+      {
+        windowsHide: true,
+        stdio: "inherit",
+      },
+    );
+    return;
+  }
   execFileSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-Command",
-      `$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri ${toPsLiteral(runtimeUrl)} -OutFile ${toPsLiteral(archivePath)} -MaximumRedirection 5 -TimeoutSec 180`,
-    ],
-    {
-      windowsHide: true,
-      stdio: "inherit",
-    },
+    "curl",
+    ["-fsSL", "--retry", "2", "--max-time", "300", "-o", archivePath, runtimeUrl],
+    { stdio: "inherit" },
   );
 }
 
 function extractArchive() {
   removeDir(extractedRoot);
   ensureDir(extractedRoot);
-  execFileSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-Command",
-      `Expand-Archive -LiteralPath ${toPsLiteral(archivePath)} -DestinationPath ${toPsLiteral(extractedRoot)} -Force`,
-    ],
-    {
-      windowsHide: true,
+  if (isWindowsHost) {
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        `Expand-Archive -LiteralPath ${toPsLiteral(archivePath)} -DestinationPath ${toPsLiteral(extractedRoot)} -Force`,
+      ],
+      {
+        windowsHide: true,
+        stdio: "inherit",
+      },
+    );
+  } else {
+    execFileSync("unzip", ["-q", "-o", archivePath, "-d", extractedRoot], {
       stdio: "inherit",
-    },
-  );
+    });
+  }
 }
 
 function writeMetadata(runtimeRoot) {

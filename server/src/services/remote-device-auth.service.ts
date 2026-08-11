@@ -112,6 +112,24 @@ export const getRequiredRemoteScope = (
     return "threads:read";
   }
 
+  // Remote devices may create sessions (POST /threads), rename them
+  // (PATCH /threads/:id) and delete them (DELETE /threads/:id).
+  if (
+    normalizedMethod === "POST" &&
+    parts.length === 1 &&
+    parts[0] === "threads"
+  ) {
+    return "threads:write";
+  }
+
+  if (
+    (normalizedMethod === "PATCH" || normalizedMethod === "DELETE") &&
+    parts.length === 2 &&
+    parts[0] === "threads"
+  ) {
+    return "threads:write";
+  }
+
   if (
     normalizedMethod === "GET" &&
     parts.length === 3 &&

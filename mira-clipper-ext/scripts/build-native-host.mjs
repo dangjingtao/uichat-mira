@@ -33,8 +33,12 @@ try {
   // Windows path. Compile both source and output in an ASCII-friendly system
   // temp directory, then let Node copy the finished binary back to the
   // requested project path.
+  // 交叉构建（Linux -> Windows）：宿主的 gcc 产出 ELF，必须改用 mingw-w64 交叉编译器。
+  const compiler =
+    process.env.MIRA_NATIVE_HOST_CC?.trim() ||
+    (process.platform === "win32" ? "gcc" : "x86_64-w64-mingw32-gcc");
   execFileSync(
-    "gcc",
+    compiler,
     [
       "-O2",
       "-s",

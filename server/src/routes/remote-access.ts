@@ -190,20 +190,30 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
         throw forbidden("Desktop authentication is required");
       }
 
-      const snapshot = await tailscaleRemoteAccessService.getSnapshot({
+      const tailscale = await tailscaleRemoteAccessService.getSnapshot({
         verifyHealth: true,
       });
-      if (snapshot.runtime.state !== "ready" || !snapshot.runtime.accessUrl) {
+      const directHostUrl =
+        tailscale.runtime.state === "ready" && tailscale.runtime.accessUrl
+          ? tailscale.runtime.accessUrl
+          : null;
+      const relaySnapshot = remoteRelayConnectorService.getSnapshot();
+      const relay =
+        relaySnapshot.state === "connected"
+          ? getRemoteRelayPairingMetadata()
+          : null;
+
+      if (!directHostUrl && !relay) {
         throw badRequest(
-          "Tailscale remote access must be ready before pairing a mobile device",
+          "A reachable Tailscale or Mira Relay connection is required before pairing a mobile device",
         );
       }
 
       return success(
         remoteAccessPairingService.createChallenge({
           userId: user.id,
-          hostUrl: snapshot.runtime.accessUrl,
-          relay: getRemoteRelayPairingMetadata(),
+          hostUrl: directHostUrl,
+          relay,
         }),
         "Pairing challenge created",
       );

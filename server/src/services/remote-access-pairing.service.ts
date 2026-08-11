@@ -196,28 +196,32 @@ const requireClaim = (claimId: string) => {
 export class RemoteAccessPairingService {
   createChallenge(input: {
     userId: number;
-    hostUrl: string;
-    relay?: { endpoint: string; relayId: string } | null;
+    hostUrl?: string | null;
+    relay?: { endpoint: string; relayId: string; clientToken: string } | null;
   }): CreatedPairingChallenge {
     const now = new Date();
     const code = createCode();
+    const hostUrl = input.hostUrl?.trim().replace(/\/+$/, "") ?? "";
     const challenge = tailscaleRemoteAccessRepository.createPairingChallenge({
       id: randomUUID(),
       userId: input.userId,
       codeHash: hashOpaque(code),
-      hostUrl: input.hostUrl.replace(/\/+$/, ""),
+      hostUrl,
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + PAIRING_TTL_MS).toISOString(),
     });
     const query = new URLSearchParams({
-      host: challenge.hostUrl,
       challenge: challenge.id,
       code,
       version: "1",
     });
+    if (challenge.hostUrl) {
+      query.set("host", challenge.hostUrl);
+    }
     if (input.relay) {
       query.set("relay", input.relay.endpoint);
       query.set("relayId", input.relay.relayId);
+      query.set("relayToken", input.relay.clientToken);
     }
 
     return {

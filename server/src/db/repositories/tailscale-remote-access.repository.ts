@@ -3,6 +3,7 @@ import { hasSqliteColumn } from "../sqlite-utils.js";
 
 export const REMOTE_DEVICE_SCOPES = [
   "threads:read",
+  "threads:write",
   "messages:read",
   "messages:write",
   "agent:read",

@@ -28,6 +28,7 @@ const readError = (error: unknown, fallback: string) =>
 
 const scopeLabels: Record<RemoteDeviceScope, { zh: string; en: string }> = {
   "threads:read": { zh: "读取会话", en: "Read threads" },
+  "threads:write": { zh: "管理会话", en: "Manage threads" },
   "messages:read": { zh: "读取消息", en: "Read messages" },
   "messages:write": { zh: "发送消息", en: "Send messages" },
   "agent:read": { zh: "读取 Agent 状态", en: "Read agent state" },
@@ -35,6 +36,9 @@ const scopeLabels: Record<RemoteDeviceScope, { zh: string; en: string }> = {
   "agent:control": { zh: "停止 Agent", en: "Control agent runs" },
   "artifacts:read": { zh: "读取产物", en: "Read artifacts" },
 };
+
+const scopeLabel = (scope: RemoteDeviceScope, zh: boolean) =>
+  scopeLabels[scope]?.[zh ? "zh" : "en"] ?? scope;
 
 export default function RemoteDevicePairingModal({
   open,
@@ -64,8 +68,7 @@ export default function RemoteDevicePairingModal({
       zh
         ? {
             title: "配对手机设备",
-            intro:
-              "手机必须已经加入同一 Tailnet。配对挑战五分钟后失效。",
+            intro: "配对挑战五分钟后失效。",
             loading: "正在创建一次性配对挑战...",
             failed: "创建配对挑战失败",
             uri: "配对链接",
@@ -93,8 +96,7 @@ export default function RemoteDevicePairingModal({
           }
         : {
             title: "Pair a mobile device",
-            intro:
-              "The phone must already be on the same Tailnet. This pairing challenge expires in five minutes.",
+            intro: "This pairing challenge expires in five minutes.",
             loading: "Creating a one-time pairing challenge...",
             failed: "Failed to create pairing challenge",
             uri: "Pairing URI",
@@ -367,13 +369,13 @@ export default function RemoteDevicePairingModal({
                           <input
                             type="checkbox"
                             checked={selectedScopes.includes(scope)}
-                            aria-label={scopeLabels[scope][zh ? "zh" : "en"]}
+                            aria-label={scopeLabel(scope, zh)}
                             className="h-4 w-4 rounded border-border accent-primary focus:ring-primary/20"
                             onChange={(event) =>
                               toggleScope(scope, event.target.checked)
                             }
                           />
-                          {scopeLabels[scope][zh ? "zh" : "en"]}
+                          {scopeLabel(scope, zh)}
                         </label>
                       ))}
                     </div>

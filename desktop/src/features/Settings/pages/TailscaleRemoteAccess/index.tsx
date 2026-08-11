@@ -176,8 +176,23 @@ export default function RemoteAccessSettings() {
       }
     })();
 
+    // Poll relay status every 5s so the badge reflects the live connector
+    // state (previously it froze on the value captured at mount time).
+    const poll = window.setInterval(() => {
+      if (cancelled) return;
+      void (async () => {
+        try {
+          const status = await getRemoteRelayStatus();
+          if (!cancelled) setRelaySnapshot(status);
+        } catch {
+          // Keep the last known snapshot on transient polling failures.
+        }
+      })();
+    }, 5_000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
     };
   }, [copy.relay.messages.loadFailed]);
 
@@ -197,7 +212,13 @@ export default function RemoteAccessSettings() {
     runtime?.state === "ready" ||
     runtime?.state === "unreachable" ||
     runtime?.state === "serve_not_configured";
-  const canPairDevice = runtime?.state === "ready" && !loading && !checking && !saving;
+  const canPairDevice =
+    (runtime?.state === "ready" || relayState === "connected") &&
+    !loading &&
+    !checking &&
+    !saving &&
+    !relayLoading &&
+    !relaySaving;
 
   const saveRelay = async (input: {
     enabled?: boolean;
@@ -459,6 +480,11 @@ export default function RemoteAccessSettings() {
           }
           divided
         >
+          {relaySnapshot?.lastError ? (
+            <div className="mb-3 rounded-ui-control border border-border bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-status-danger">
+              {relaySnapshot.lastError}
+            </div>
+          ) : null}
           <SectionCardRow>
             <div
               className="flex flex-wrap items-center gap-x-6 gap-y-2"
@@ -587,8 +613,8 @@ export default function RemoteAccessSettings() {
                 canPairDevice
                   ? undefined
                   : isZh
-                    ? "Tailscale 远程入口可访问后才能配对"
-                    : "Remote access must be ready before pairing"
+                    ? "请先连接 Tailscale 或 Mira Relay"
+                    : "Connect Tailscale or Mira Relay before pairing"
               }
               onClick={() => setPairingOpen(true)}
             >

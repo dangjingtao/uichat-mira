@@ -26,8 +26,21 @@ const removeDir = (targetPath) =>
   fs.rmSync(targetPath, { recursive: true, force: true });
 const normalizePath = (value) => value.replaceAll("\\", "/");
 
+const allowCrossBuild = ["1", "true"].includes(
+  process.env.MIRA_TERMINAL_RUNTIME_ALLOW_CROSS_BUILD?.trim().toLowerCase() ?? "",
+);
+const isWindowsHost = process.platform === "win32";
+
 function assertSupportedHost() {
   if (process.platform !== lock.platform || process.arch !== lock.architecture) {
+    if (allowCrossBuild) {
+      // 交叉构建：所有产物均取自 lock 中带 sha256 校验的 Windows 官方压缩包，
+      // 宿主不参与编译，因此在 Linux 上暂存 Windows 运行时是安全的。
+      console.warn(
+        `Cross-build enabled: staging ${lock.platform}/${lock.architecture} runtime on ${process.platform}/${process.arch}.`,
+      );
+      return;
+    }
     throw new Error(
       `Terminal Dev Runtime preparation requires ${lock.platform}/${lock.architecture}; current host is ${process.platform}/${process.arch}.`,
     );
@@ -51,16 +64,25 @@ function downloadFile(url, destinationPath) {
   let lastError;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      execFileSync(
-        "powershell.exe",
-        [
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          `$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri ${toPowerShellLiteral(url)} -OutFile ${toPowerShellLiteral(partialPath)} -MaximumRedirection 5 -TimeoutSec 600`,
-        ],
-        { stdio: "inherit", windowsHide: true },
-      );
+      if (isWindowsHost) {
+        execFileSync(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri ${toPowerShellLiteral(url)} -OutFile ${toPowerShellLiteral(partialPath)} -MaximumRedirection 5 -TimeoutSec 600`,
+          ],
+          { stdio: "inherit", windowsHide: true },
+        );
+      } else {
+        // 交叉构建宿主无 PowerShell，改用 curl；下载完成后仍按 lock 的 sha256 校验。
+        execFileSync(
+          "curl",
+          ["-fsSL", "--retry", "2", "--max-time", "600", "-o", partialPath, url],
+          { stdio: "inherit" },
+        );
+      }
       fs.renameSync(partialPath, destinationPath);
       return;
     } catch (error) {
@@ -120,16 +142,23 @@ function extractArchive(componentName, component, archivePath, componentCacheRoo
 
   removeDir(extractedRoot);
   ensureDir(extractedRoot);
-  execFileSync(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `Expand-Archive -LiteralPath ${toPowerShellLiteral(archivePath)} -DestinationPath ${toPowerShellLiteral(extractedRoot)} -Force`,
-    ],
-    { stdio: "inherit", windowsHide: true },
-  );
+  if (isWindowsHost) {
+    execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Expand-Archive -LiteralPath ${toPowerShellLiteral(archivePath)} -DestinationPath ${toPowerShellLiteral(extractedRoot)} -Force`,
+      ],
+      { stdio: "inherit", windowsHide: true },
+    );
+  } else {
+    // 交叉构建宿主用 unzip 解压同一个已校验的 zip 包。
+    execFileSync("unzip", ["-q", "-o", archivePath, "-d", extractedRoot], {
+      stdio: "inherit",
+    });
+  }
   fs.writeFileSync(markerPath, `${component.sha256}\n`);
   return extractedRoot;
 }
@@ -274,21 +303,42 @@ async function main() {
   stageStandaloneExecutable(prepared.uv.extractedRoot, "uv.exe");
   stageStandaloneExecutable(prepared.ripgrep.extractedRoot, "rg.exe");
 
-  const nodeVersion = commandVersion(path.join(nodeStageRoot, "node.exe"), ["--version"])
-    .replace(/^v/, "");
-  const npmVersion = commandVersion(path.join(nodeStageRoot, "node.exe"), [
-    path.join(nodeStageRoot, "node_modules", "npm", "bin", "npm-cli.js"),
-    "--version",
-  ]);
-  const gitVersion = commandVersion(path.join(terminalStageRoot, "git", "cmd", "git.exe"), [
-    "--version",
-  ]).replace(/^git version\s+/, "");
-  const uvVersion = commandVersion(path.join(terminalStageRoot, "bin", "uv.exe"), [
-    "--version",
-  ]).replace(/^uv\s+/, "").split(/\s+/)[0];
-  const ripgrepVersion = commandVersion(path.join(terminalStageRoot, "bin", "rg.exe"), [
-    "--version",
-  ]).split(/\s+/)[1];
+  // 交叉构建宿主无法执行 Windows exe 来探测版本；改用 lock 中固定的版本，
+  // npm 版本从解压出的 npm/package.json 读取。二进制本身已通过 sha256 校验。
+  const readStagedNpmVersion = () => {
+    const npmPackageJson = path.join(
+      nodeStageRoot,
+      "node_modules",
+      "npm",
+      "package.json",
+    );
+    return JSON.parse(fs.readFileSync(npmPackageJson, "utf8")).version;
+  };
+
+  const nodeVersion = isWindowsHost
+    ? commandVersion(path.join(nodeStageRoot, "node.exe"), ["--version"]).replace(/^v/, "")
+    : lock.components.node.version;
+  const npmVersion = isWindowsHost
+    ? commandVersion(path.join(nodeStageRoot, "node.exe"), [
+        path.join(nodeStageRoot, "node_modules", "npm", "bin", "npm-cli.js"),
+        "--version",
+      ])
+    : readStagedNpmVersion();
+  const gitVersion = isWindowsHost
+    ? commandVersion(path.join(terminalStageRoot, "git", "cmd", "git.exe"), [
+        "--version",
+      ]).replace(/^git version\s+/, "")
+    : lock.components.git.version;
+  const uvVersion = isWindowsHost
+    ? commandVersion(path.join(terminalStageRoot, "bin", "uv.exe"), ["--version"])
+        .replace(/^uv\s+/, "")
+        .split(/\s+/)[0]
+    : lock.components.uv.version;
+  const ripgrepVersion = isWindowsHost
+    ? commandVersion(path.join(terminalStageRoot, "bin", "rg.exe"), ["--version"]).split(
+        /\s+/,
+      )[1]
+    : lock.components.ripgrep.version;
   writeNotices(npmVersion);
 
   const archiveSize = (name) => fs.statSync(prepared[name].archivePath).size;

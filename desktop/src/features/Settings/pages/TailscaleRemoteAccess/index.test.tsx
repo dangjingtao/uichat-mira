@@ -155,6 +155,16 @@ describe("RemoteAccessSettings", () => {
     expect(apiMocks.getRelay).toHaveBeenCalledTimes(1);
   });
 
+  it("allows pairing when Relay is connected even if Tailscale Serve is not ready", async () => {
+    render(<RemoteAccessSettings />);
+
+    await screen.findByText("Mira Relay");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "配对新设备" })).toBeEnabled(),
+    );
+    expect(screen.queryByText("Tailscale 远程入口可访问后才能配对")).not.toBeInTheDocument();
+  });
+
   it("shows and persists a custom Relay address only when selected", async () => {
     const user = userEvent.setup();
     render(<RemoteAccessSettings />);

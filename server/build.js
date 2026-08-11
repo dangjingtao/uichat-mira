@@ -134,6 +134,49 @@ function copyPackage(packageName) {
   console.log(`Copied native package ${packageName}`);
 }
 
+// 交叉构建（Linux -> Windows）时，pnpm store 里的 better-sqlite3 是 Linux ELF，
+// 直接打包会导致 Windows 后端启动崩溃（ERR_DLOPEN_FAILED / not a valid Win32 application）。
+// 这里用仓库内固化的 Windows PE 副本强制覆盖，并校验文件头，避免误用 Linux 二进制。
+function injectWin32BetterSqlite3() {
+  if (process.platform === "win32") {
+    return;
+  }
+
+  const prebuiltPath = path.join(
+    projectRoot,
+    ".artifacts",
+    "win32-prebuilt",
+    "better_sqlite3.win32-x64.node",
+  );
+  const targetPath = path.join(
+    outputNodeModules,
+    "better-sqlite3",
+    "build",
+    "Release",
+    "better_sqlite3.node",
+  );
+
+  if (!fs.existsSync(prebuiltPath)) {
+    throw new Error(
+      `Missing Windows better-sqlite3 prebuilt binary: ${prebuiltPath}. ` +
+        "Run scripts/capture-win32-better-sqlite3.mjs first or restore the artifact.",
+    );
+  }
+
+  fs.copyFileSync(prebuiltPath, targetPath);
+
+  const header = fs.readFileSync(targetPath).subarray(0, 2).toString("latin1");
+  if (header !== "MZ") {
+    throw new Error(
+      `Injected better-sqlite3 is not a Windows PE binary (got ${JSON.stringify(header)}): ${targetPath}`,
+    );
+  }
+
+  console.log(
+    "Cross-build: injected Windows better-sqlite3 PE binary into server bundle",
+  );
+}
+
 function copyPackageTree(packageName, copied = new Set()) {
   if (copied.has(packageName)) {
     return;
@@ -163,6 +206,13 @@ function pruneNodePtyRuntime() {
 
   for (const directory of ["deps", "scripts", "src", "third_party", "typings"]) {
     fs.rmSync(path.join(packageRoot, directory), { recursive: true, force: true });
+  }
+
+  // 交叉构建时 build/Release/pty.node 是宿主(Linux)产物，必须剔除，
+  // 否则会随包进入 Windows 安装包并在加载时崩溃。
+  if (process.platform !== "win32") {
+    fs.rmSync(path.join(packageRoot, "build"), { recursive: true, force: true });
+    console.log("Cross-build: removed host-built node-pty build/ directory");
   }
 
   for (const entry of fs.readdirSync(path.join(prebuildsRoot, "win32-x64"))) {
@@ -235,6 +285,7 @@ build({
   .then(() => {
     console.log("Server bundle completed, copying native modules...");
     copyPackage("better-sqlite3");
+    injectWin32BetterSqlite3();
     copyPackageTree("jsdom");
     copyPackage("playwright-core");
     copyPackage("sharp");
@@ -248,11 +299,33 @@ build({
     pruneNodePtyRuntime();
     copyPackage("bindings");
     copyPackage("file-uri-to-path");
-    execFileSync(process.execPath, ["-e", "require('node-pty')"], {
-      cwd: outputDir,
-      stdio: "inherit",
-    });
-    console.log("Verified staged node-pty can load with the build Node runtime");
+    if (process.platform === "win32") {
+      execFileSync(process.execPath, ["-e", "require('node-pty')"], {
+        cwd: outputDir,
+        stdio: "inherit",
+      });
+      console.log("Verified staged node-pty can load with the build Node runtime");
+    } else {
+      // 交叉构建（Linux -> Windows）：宿主无法 require Windows 版 pty.node。
+      // 改为静态校验 win32-x64 预编译产物是否为 PE32+ 二进制。
+      const winPty = path.join(
+        outputNodeModules,
+        "node-pty",
+        "prebuilds",
+        "win32-x64",
+        "pty.node",
+      );
+      if (!fs.existsSync(winPty)) {
+        throw new Error(`Missing Windows node-pty prebuild: ${winPty}`);
+      }
+      const header = fs.readFileSync(winPty).subarray(0, 2).toString("latin1");
+      if (header !== "MZ") {
+        throw new Error(`Staged node-pty is not a Windows PE binary: ${winPty}`);
+      }
+      console.log(
+        "Cross-build: verified staged node-pty win32-x64 prebuild is a PE binary",
+      );
+    }
     console.log("Server build completed successfully");
   })
   .catch((err) => {
