@@ -5,11 +5,9 @@ export default function DevelopmentPageSkeleton() {
     <div
       aria-busy="true"
       data-testid="development-page-skeleton"
-      className="flex h-full min-h-0 flex-col gap-4"
+      className="flex h-full min-h-0 flex-col"
     >
-      <Skeleton height={20} width="28%" />
-      <Skeleton.Text lines={4} lastLineWidth="72%" />
-      <Skeleton height={40} width={160} />
+      <Skeleton.Card className="min-h-[220px] flex-1" lines={4} />
     </div>
   );
 }

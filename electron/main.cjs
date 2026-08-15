@@ -400,6 +400,7 @@ async function startBackend() {
       JWT_SECRET: jwtSecret,
       SETTINGS_SECRET: settingsSecret,
       UI_CHAT_ALLOW_DEFAULT_BOOTSTRAP: "1",
+      UI_CHAT_ALLOW_BACKEND_REUSE: "1",
       UI_CHAT_BACKEND_URL: getBackendUrl(),
       UI_CHAT_DESKTOP_RESOURCES_ROOT: process.resourcesPath,
       UI_CHAT_DATABASE_DIR: dataDir,

@@ -2,6 +2,7 @@ import { get, post, put } from "@/shared/lib/request";
 
 export type RemoteDeviceScope =
   | "threads:read"
+  | "threads:write"
   | "messages:read"
   | "messages:write"
   | "agent:read"

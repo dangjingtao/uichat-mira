@@ -42,8 +42,17 @@ describe("remote device route gateway", () => {
     ).toBe("artifacts:read");
   });
 
+  it("maps session mutation routes to threads:write", () => {
+    expect(getRequiredRemoteScope("POST", "/threads")).toBe("threads:write");
+    expect(getRequiredRemoteScope("PATCH", "/threads/thread-1")).toBe(
+      "threads:write",
+    );
+    expect(getRequiredRemoteScope("DELETE", "/threads/thread-1")).toBe(
+      "threads:write",
+    );
+  });
+
   it("rejects nearby but non-canonical routes", () => {
-    expect(getRequiredRemoteScope("POST", "/threads")).toBeNull();
     expect(getRequiredRemoteScope("POST", "/threads/thread-1/messages")).toBeNull();
     expect(getRequiredRemoteScope("POST", "/proxy/chat/volcengine")).toBeNull();
     expect(getRequiredRemoteScope("GET", "/general-settings")).toBeNull();

@@ -70,6 +70,10 @@ function assertRuntime(root) {
 function installRuntime() {
   removeDir(runtimeCacheRoot);
   ensureDir(runtimeCacheRoot);
+  // 交叉构建（Linux -> Windows）：npm 默认按宿主平台挑选 optionalDependencies，
+  // 会装进 *-linux-x64-gnu 的原生 .node。用 --os/--cpu 强制解析 Windows 变体。
+  const crossTargetOs = process.env.MIRA_VIVLIOSTYLE_TARGET_OS?.trim();
+  const crossTargetCpu = process.env.MIRA_VIVLIOSTYLE_TARGET_CPU?.trim() || "x64";
   const npmArgs = [
     "install",
     "--prefix",
@@ -78,6 +82,7 @@ function installRuntime() {
     "--no-audit",
     "--no-fund",
     "--no-package-lock",
+    ...(crossTargetOs ? [`--os=${crossTargetOs}`, `--cpu=${crossTargetCpu}`] : []),
     `@vivliostyle/cli@${pinnedVersion}`,
   ];
   const childEnv = {
