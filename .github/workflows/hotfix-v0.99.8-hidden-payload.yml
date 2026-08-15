@@ -1,0 +1,55 @@
+name: Hotfix v0.99.8 Hidden Payload Files
+
+on:
+  push:
+    branches:
+      - release/v0.99.8
+    paths:
+      - '.github/workflows/hotfix-v0.99.8-hidden-payload.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-hidden-payload:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/v0.99.8
+          fetch-depth: 0
+
+      - name: Patch frozen payload upload
+        shell: pwsh
+        run: |
+          $path = '.github/workflows/release-factory-v2.yml'
+          $text = [System.IO.File]::ReadAllText($path)
+          $needle = @'
+      - name: Upload frozen shared payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-payload-windows-x64-${{ github.sha }}
+          path: 'D:\\mira-release\\workspace\\.artifacts\\release-payload\\windows-x64'
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+'@
+          $replacement = $needle + "          include-hidden-files: true`n"
+          if (-not $text.Contains($needle)) {
+            throw 'Frozen payload upload block did not match expected release factory content.'
+          }
+          $text = $text.Replace($needle, $replacement)
+          [System.IO.File]::WriteAllText($path, $text, [System.Text.UTF8Encoding]::new($false))
+          git diff -- $path
+
+      - name: Commit validated CI fix
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath '.github/workflows/hotfix-v0.99.8-hidden-payload.yml' -Force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(release): include hidden files in frozen payload"
+          git push origin HEAD:release/v0.99.8
