@@ -515,7 +515,7 @@ export class RemoteRelayConnectorService {
       const response = await this.localFetch(target, {
         method: frame.method,
         headers: sanitizeRequestHeaders(frame.headers),
-        ...(body?.byteLength ? { body } : {}),
+        ...(body?.byteLength ? { body: new Uint8Array(body) } : {}),
         signal: active.controller.signal,
       });
 
