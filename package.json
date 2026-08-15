@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.99.7",
+  "version": "0.99.8",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.12.0",
