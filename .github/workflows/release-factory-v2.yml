@@ -520,6 +520,7 @@ jobs:
           if-no-files-found: error
           retention-days: 2
           compression-level: 0
+          include-hidden-files: true
 
   package-electron-from-payload:
     name: Package Electron
