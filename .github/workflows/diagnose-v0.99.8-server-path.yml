@@ -1,0 +1,75 @@
+name: Diagnose v0.99.8 Server Build Path
+
+on:
+  push:
+    branches:
+      - release/v0.99.8
+    paths:
+      - '.github/workflows/diagnose-v0.99.8-server-path.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  server-build-path:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [normal, hostile]
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release/v0.99.8
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Stage source
+        shell: pwsh
+        run: |
+          if ('${{ matrix.mode }}' -eq 'normal') {
+            "MIRA_TEST_ROOT=$env:GITHUB_WORKSPACE" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            exit 0
+          }
+          $target = 'D:\Mira 构建验证\含 空格 & 符号\workspace'
+          $parent = Split-Path -Parent $target
+          if (Test-Path -LiteralPath $parent) {
+            Remove-Item -LiteralPath $parent -Recurse -Force
+          }
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $archive = Join-Path $env:RUNNER_TEMP 'mira-v0.99.8-path-diagnostic.zip'
+          git archive --format=zip --output=$archive HEAD
+          Expand-Archive -LiteralPath $archive -DestinationPath $target -Force
+          "MIRA_TEST_ROOT=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pnpm --dir "$env:MIRA_TEST_ROOT" install --frozen-lockfile --prefer-offline
+
+      - name: Probe Node and esbuild
+        shell: pwsh
+        run: |
+          Push-Location (Join-Path $env:MIRA_TEST_ROOT 'server')
+          try {
+            node -e "console.log('node', process.version, 'cwd', process.cwd())"
+            node -e "import('esbuild').then(m => console.log('esbuild', m.version))"
+            node -e "import('esbuild').then(async ({build}) => { await build({stdin:{contents:'console.log(1)', resolveDir:process.cwd()}, bundle:true, platform:'node', write:false}); console.log('minimal-build-ok') })"
+          } finally {
+            Pop-Location
+          }
+
+      - name: Build server
+        shell: pwsh
+        run: pnpm --dir "$env:MIRA_TEST_ROOT" --filter @ui-chat-mira/server build
