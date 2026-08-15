@@ -425,8 +425,8 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 65
     env:
-      MIRA_VALIDATION_ROOT: 'D:\Mira 构建验证\含 空格 & 符号\workspace'
-      LOCAL_MODEL_RAW_ROOT: 'D:\Mira 构建验证\binary-cache\local-models'
+      MIRA_VALIDATION_ROOT: 'D:\mira-release\workspace'
+      LOCAL_MODEL_RAW_ROOT: 'D:\mira-release\binary-cache\local-models'
       LOCAL_MODEL_ALLOW_NETWORK: '1'
       CI: 'true'
     steps:
@@ -458,25 +458,25 @@ jobs:
       - name: Cache Terminal Runtime
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\terminal-dev'
+          path: 'D:\mira-release\workspace\.local-runtimes\terminal-dev'
           key: windows-release-factory-terminal-${{ hashFiles('scripts/terminal-runtime.lock.json') }}
 
       - name: Cache Piper Runtime
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\piper'
+          path: 'D:\mira-release\workspace\.local-runtimes\piper'
           key: windows-release-factory-piper-${{ hashFiles('scripts/prepare-piper-runtime.mjs') }}
 
       - name: Cache Vivliostyle Runtime
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.local-runtimes\vivliostyle'
+          path: 'D:\mira-release\workspace\.local-runtimes\vivliostyle'
           key: windows-release-factory-vivliostyle-${{ hashFiles('scripts/prepare-vivliostyle-runtime.mjs') }}
 
       - name: Cache local model sources
         uses: actions/cache@v4
         with:
-          path: 'D:\Mira 构建验证\binary-cache\local-models'
+          path: 'D:\mira-release\binary-cache\local-models'
           key: windows-release-factory-models-${{ hashFiles('scripts/prepare-local-model-packs.mjs') }}
           restore-keys: |
             windows-release-factory-models-
@@ -491,7 +491,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-validation-windows-x64-${{ github.sha }}
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-validation\windows-x64'
+          path: 'D:\mira-release\workspace\.artifacts\release-validation\windows-x64'
 
       - name: Configure clipper signing key
         shell: pwsh
@@ -516,7 +516,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-payload-windows-x64-${{ github.sha }}
-          path: 'D:\Mira 构建验证\含 空格 & 符号\workspace\.artifacts\release-payload\windows-x64'
+          path: 'D:\mira-release\workspace\.artifacts\release-payload\windows-x64'
           if-no-files-found: error
           retention-days: 2
           compression-level: 0
