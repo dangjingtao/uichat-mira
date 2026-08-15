@@ -25,9 +25,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "80d4794da07417064cccd7d5c068dc31f79cf0c7"
+          test "$(git rev-parse HEAD)" = "6f3c1cd414e06a898819148a8b524fe92f94f1ab"
           test "$(node -p "require('./package.json').version")" = "0.99.8"
           grep -Fq "D:\\mira-release\\workspace" .github/workflows/release-factory-v2.yml
+          grep -Fq "include-hidden-files: true" .github/workflows/release-factory-v2.yml
 
       - name: Move unpublished tag to repaired commit
         shell: bash
