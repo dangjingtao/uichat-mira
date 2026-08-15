@@ -39,16 +39,16 @@ jobs:
           $path = '.github/workflows/release-factory-v2.yml'
           $text = [System.IO.File]::ReadAllText($path)
 
-          $oldRoot = 'D:\\Mira 构建验证\\含 空格 & 符号\\workspace'
-          $newRoot = 'D:\\mira-release\\workspace'
+          $oldRoot = 'D:\Mira 构建验证\含 空格 & 符号\workspace'
+          $newRoot = 'D:\mira-release\workspace'
           $rootCount = ([regex]::Matches($text, [regex]::Escape($oldRoot))).Count
           if ($rootCount -lt 2) {
             throw "Expected at least 2 hostile workspace references, found $rootCount"
           }
           $text = $text.Replace($oldRoot, $newRoot)
 
-          $oldModels = 'D:\\Mira 构建验证\\binary-cache\\local-models'
-          $newModels = 'D:\\mira-release\\binary-cache\\local-models'
+          $oldModels = 'D:\Mira 构建验证\binary-cache\local-models'
+          $newModels = 'D:\mira-release\binary-cache\local-models'
           $modelCount = ([regex]::Matches($text, [regex]::Escape($oldModels))).Count
           if ($modelCount -lt 1) {
             throw "Expected at least 1 hostile model-cache reference, found $modelCount"
