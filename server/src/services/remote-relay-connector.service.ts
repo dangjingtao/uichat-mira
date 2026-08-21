@@ -17,6 +17,14 @@ const TOKEN_MAX_LENGTH = 512;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
+// The relay edge never sends application-level keepalives to hibernated
+// Durable Object sockets, so the host must prove liveness itself. A protocol
+// ping every 20s also keeps NAT / Cloudflare idle timeouts from silently
+// killing the TCP connection while the machine is quiet.
+const HEARTBEAT_INTERVAL_MS = 20_000;
+// If no pong or inbound frame arrives within this window the connection is
+// considered half-dead and is closed so the backoff reconnect path runs.
+const HEARTBEAT_TIMEOUT_MS = 45_000;
 
 const BLOCKED_REQUEST_HEADERS = new Set([
   "connection",
@@ -74,6 +82,7 @@ type RelaySocket = {
   readonly readyState: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
+  ping?(data?: Uint8Array): void;
   addEventListener(
     type: "open",
     listener: () => void,
@@ -84,6 +93,7 @@ type RelaySocket = {
     listener: (event: RelaySocketMessageEvent) => void,
   ): void;
   addEventListener(type: "error", listener: () => void): void;
+  addEventListener(type: "pong", listener: () => void): void;
   addEventListener(
     type: "close",
     listener: (event: RelaySocketCloseEvent) => void,
@@ -239,6 +249,8 @@ export class RemoteRelayConnectorService {
   private currentConfig: RemoteRelayConnectorConfig | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private lastLivenessAt = 0;
   private reconnectAttempt = 0;
   private connectedAt: string | null = null;
   private lastError: string | null = null;
@@ -256,6 +268,7 @@ export class RemoteRelayConnectorService {
 
   start() {
     this.stopTimers();
+    this.stopHeartbeat();
     this.stopped = false;
     this.currentConfig = this.configProvider();
     this.connectedAt = null;
@@ -281,6 +294,7 @@ export class RemoteRelayConnectorService {
     this.stopped = true;
     this.generation += 1;
     this.stopTimers();
+    this.stopHeartbeat();
     this.abortAllRequests();
 
     const socket = this.socket;
@@ -370,6 +384,7 @@ export class RemoteRelayConnectorService {
 
     socket.addEventListener("message", (event) => {
       if (!this.isCurrent(socket, generation)) return;
+      this.markLiveness();
       const text = toTextMessage(event.data);
       if (!text) {
         this.lastError = "Mira Relay sent a non-text frame";
@@ -377,6 +392,11 @@ export class RemoteRelayConnectorService {
         return;
       }
       this.handleMessage(socket, generation, text);
+    });
+
+    socket.addEventListener("pong", () => {
+      if (!this.isCurrent(socket, generation)) return;
+      this.markLiveness();
     });
 
     socket.addEventListener("error", () => {
@@ -387,6 +407,7 @@ export class RemoteRelayConnectorService {
     socket.addEventListener("close", (event) => {
       if (!this.isCurrent(socket, generation)) return;
       this.stopHandshakeTimer();
+      this.stopHeartbeat();
       this.socket = null;
       this.connectedAt = null;
       this.abortAllRequests();
@@ -425,6 +446,7 @@ export class RemoteRelayConnectorService {
       this.connectedAt = new Date().toISOString();
       this.lastError = null;
       this.reconnectAttempt = 0;
+      this.startHeartbeat(socket, generation);
       return;
     }
 
@@ -672,5 +694,47 @@ export class RemoteRelayConnectorService {
     if (!this.reconnectTimer) return;
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+  }
+
+  private markLiveness() {
+    this.lastLivenessAt = Date.now();
+  }
+
+  private startHeartbeat(socket: RelaySocket, generation: number) {
+    this.stopHeartbeat();
+    this.lastLivenessAt = Date.now();
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.isCurrent(socket, generation) || this.state !== "connected") {
+        this.stopHeartbeat();
+        return;
+      }
+
+      const idleFor = Date.now() - this.lastLivenessAt;
+      if (idleFor >= HEARTBEAT_TIMEOUT_MS) {
+        // No pong or inbound frame arrived inside the liveness window: the
+        // TCP path is half-dead (sleep, NAT expiry, edge reset) even though
+        // no close event fired. Force the close/reconnect path.
+        this.lastError = "Mira Relay heartbeat timed out";
+        try {
+          socket.close(4000, "Relay heartbeat timeout");
+        } catch {
+          // The close listener below drives the reconnect state machine.
+        }
+        return;
+      }
+
+      try {
+        socket.ping?.();
+      } catch {
+        // A failed ping surfaces through the close/error listeners.
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref?.();
+  }
+
+  private stopHeartbeat() {
+    if (!this.heartbeatTimer) return;
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
   }
 }

@@ -15,22 +15,35 @@ type ListenerMap = {
   open: Array<() => void>;
   message: Array<(event: { data: unknown }) => void>;
   error: Array<() => void>;
+  pong: Array<() => void>;
   close: Array<(event: { code?: number; reason?: string }) => void>;
 };
 
 class FakeRelaySocket {
   readyState = 0;
   sent: string[] = [];
+  pingCalls = 0;
+  onPing: (() => void) | null = null;
   closeCalls: Array<{ code?: number; reason?: string }> = [];
   private listeners: ListenerMap = {
     open: [],
     message: [],
     error: [],
+    pong: [],
     close: [],
   };
 
   send(data: string) {
     this.sent.push(data);
+  }
+
+  ping() {
+    this.pingCalls += 1;
+    this.onPing?.();
+  }
+
+  pong() {
+    for (const listener of this.listeners.pong) listener();
   }
 
   close(code?: number, reason?: string) {
@@ -293,6 +306,87 @@ describe("RemoteRelayConnectorService", () => {
     await vi.waitFor(() => expect(service.getSnapshot().activeRequests).toBe(0));
     expect(parsedSent(socket).some((frame) => frame.type === "error")).toBe(false);
     service.stop();
+  });
+
+  it("sends protocol pings while connected and stays connected when pongs arrive", () => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+    });
+    try {
+      const socket = new FakeRelaySocket();
+      socket.onPing = () => socket.pong();
+      const service = new RemoteRelayConnectorService(
+        validConfig,
+        (() => socket) as RelaySocketFactory,
+        fetch,
+        "http://127.0.0.1:8787",
+        () => 0,
+      );
+      connectHost(service, socket);
+
+      vi.advanceTimersByTime(20_000);
+      expect(socket.pingCalls).toBeGreaterThanOrEqual(1);
+      expect(service.getSnapshot().state).toBe("connected");
+
+      vi.advanceTimersByTime(40_000);
+      expect(socket.pingCalls).toBeGreaterThanOrEqual(3);
+      expect(service.getSnapshot().state).toBe("connected");
+      expect(socket.closeCalls).toHaveLength(0);
+      service.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("closes a half-dead connection when no pong arrives and reconnects", () => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+    });
+    try {
+      const sockets = [new FakeRelaySocket(), new FakeRelaySocket()];
+      let factoryCalls = 0;
+      const socketFactory: RelaySocketFactory = () => {
+        const socket = sockets[factoryCalls] ?? new FakeRelaySocket();
+        factoryCalls += 1;
+        return socket;
+      };
+      const service = new RemoteRelayConnectorService(
+        validConfig,
+        socketFactory,
+        fetch,
+        "http://127.0.0.1:8787",
+        () => 0,
+      );
+
+      service.start();
+      sockets[0]!.open();
+      sockets[0]!.message({
+        version: 1,
+        type: "hello_ack",
+        role: "host",
+        relayId: validConfig().relayId,
+        protocolVersion: 1,
+      });
+      expect(service.getSnapshot().state).toBe("connected");
+
+      // No pong ever arrives: after the liveness window the connector must
+      // force-close and schedule a reconnect instead of staying "connected".
+      vi.advanceTimersByTime(60_000);
+      expect(sockets[0]!.closeCalls).toEqual([
+        { code: 4000, reason: "Relay heartbeat timeout" },
+      ]);
+      expect(service.getSnapshot().state).toBe("disconnected");
+      expect(service.getSnapshot().lastError).toBe(
+        "Mira Relay disconnected: Relay heartbeat timeout",
+      );
+
+      // Backoff reconnect (base 1s, jitter 0) opens a fresh socket.
+      vi.advanceTimersByTime(2_000);
+      expect(factoryCalls).toBe(2);
+      service.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not start when required Relay credentials are missing", () => {

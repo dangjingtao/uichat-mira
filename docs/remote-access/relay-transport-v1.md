@@ -194,6 +194,26 @@ Relay 采用事件驱动：
 
 Cloudflare POC 优先验证 Durable Objects WebSocket Hibernation，以避免空闲连接持续运行应用逻辑。
 
+### 5.4 Host 活性心跳
+
+Relay 服务端（Durable Object Hibernation）不会向 host 主动发送应用层保活帧，
+也不会替 host 探测 TCP 是否仍然存活。因此**活性检测责任在 Desktop Connector**：
+
+- Desktop 连接建立（`hello_ack`）后，每 20s 发送一次 WebSocket 协议层 ping。
+  - 协议层 ping 不经过 Relay 应用帧白名单，Cloudflare 边缘会自动回 pong。
+  - 定期 ping 同时防止 NAT / 边缘空闲超时静默断开 TCP。
+- 收到 pong 或任意入站帧即刷新活性时间戳。
+- 若 45s 内没有任何活性信号，判定连接半死（机器休眠、NAT 过期、边缘重置），
+  主动 close 并走既有退避重连，而不是停留在 `connected` 状态。
+
+该机制修复的典型缺陷：桌面端 UI 显示“已连接”，但 Relay 房间内 host socket
+已被清理，Mobile 侧所有请求收到 `HOST_OFFLINE`。Connector 的 `connected`
+状态必须代表 Relay 房间内真实存在 host socket，心跳超时即降级为
+`disconnected` 并重连。
+
+注意：应用层不允许新增 `ping` frame 类型——Relay 对 host 只接受
+`response/chunk/complete/error`，其他 frame 会被判为 `HOST_FRAME_NOT_ALLOWED`。
+
 ## 6. Transport 抽象
 
 Mobile 当前 `RemoteMiraHostClient` 已允许注入 JSON 与 SSE Transport，这是新增 Relay 的主要切入点。
