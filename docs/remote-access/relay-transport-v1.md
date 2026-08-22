@@ -375,7 +375,21 @@ Desktop Connector 只需要把本地 HTTP/SSE 响应转换为通用 Relay `chunk
 远程连接模式：自动
 ```
 
-V1 自动策略建议：
+配对阶段与日常业务请求采用不同的选择约束。配对阶段优先 Relay：
+
+```text
+已有 Relay endpoint
+  -> Relay /health preflight
+  -> ready: 只通过 Relay 提交 claim
+  -> Relay transport failure: 在 claim 前尝试 Direct
+
+无 Relay endpoint
+  -> Direct
+```
+
+`claim` 是一次性副作用。Transport 回退只允许发生在 claim 发送前；claim 已发出但响应不确定时，不得跨 Transport 自动重发。
+
+配对完成后的日常业务请求仍采用：
 
 ```text
 已有 Tailscale endpoint

@@ -77,6 +77,10 @@ export default function RemoteDevicePairingModal({
               "在 Mira Mobile 中扫描二维码，或粘贴完整配对链接。手机提交后，这里会出现确认信息。",
             requestTitle: "设备请求",
             fingerprint: "公钥指纹",
+            transport: "申请通道",
+            transportRelay: "Mira Relay",
+            transportDirect: "Tailscale Direct",
+            transportUnknown: "未知",
             scopes: "申请权限",
             scopeHint: "批准前可以缩减权限，不能增加手机未申请的权限。",
             scopeRequired: "至少保留一项权限才能批准设备。",
@@ -105,6 +109,10 @@ export default function RemoteDevicePairingModal({
               "Scan the QR code in Mira Mobile, or paste the complete pairing URI. The device request will appear here for confirmation.",
             requestTitle: "Device request",
             fingerprint: "Public-key fingerprint",
+            transport: "Request channel",
+            transportRelay: "Mira Relay",
+            transportDirect: "Tailscale Direct",
+            transportUnknown: "Unknown",
             scopes: "Requested access",
             scopeHint:
               "You may reduce access before approval, but cannot add permissions the phone did not request.",
@@ -342,6 +350,13 @@ export default function RemoteDevicePairingModal({
                     <div className="text-sm font-semibold text-text-primary">{copy.requestTitle}</div>
                     <div className="mt-1 text-sm text-text-primary">
                       {current.claim.deviceName} · {current.claim.platform}
+                    </div>
+                    <div className="mt-1 text-xs text-text-secondary">
+                      {copy.transport}: {current.claim.transport === "relay"
+                        ? copy.transportRelay
+                        : current.claim.transport === "direct"
+                          ? copy.transportDirect
+                          : copy.transportUnknown}
                     </div>
                     {current.claim.publicKeyFingerprint ? (
                       <div className="mt-1 font-mono text-xs text-text-secondary">

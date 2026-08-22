@@ -10,6 +10,7 @@ import {
   tailscaleRemoteAccessRepository,
   type PairingChallengeRecord,
   type PairingChallengeStatus,
+  type RemotePairingTransport,
   type RemoteDeviceScope,
 } from "@/db/repositories/tailscale-remote-access.repository.js";
 import { decryptSecret, encryptSecret } from "@/utils/crypto.js";
@@ -29,6 +30,7 @@ export type PairingClaimSummary = {
   claimId: string;
   deviceName: string;
   platform: string;
+  transport: RemotePairingTransport | null;
   publicKeyFingerprint: string | null;
   requestedScopes: RemoteDeviceScope[];
   claimedAt: string;
@@ -161,6 +163,7 @@ const toView = (record: PairingChallengeRecord): PairingChallengeView => ({
           claimId: record.claimId,
           deviceName: record.deviceName,
           platform: record.platform,
+          transport: record.claimTransport,
           publicKeyFingerprint: fingerprintPublicKey(record.publicKey),
           requestedScopes: record.requestedScopes,
           claimedAt: record.claimedAt,
@@ -254,6 +257,7 @@ export class RemoteAccessPairingService {
     code: string;
     deviceName?: string;
     platform?: string;
+    transport?: RemotePairingTransport;
     publicKey?: string;
     requestedScopes?: string[];
   }): MobilePairingClaim {
@@ -295,6 +299,7 @@ export class RemoteAccessPairingService {
         MAX_PLATFORM_LENGTH,
         "unknown",
       ),
+      transport: input.transport ?? null,
       publicKey: normalizePublicKey(input.publicKey),
       requestedScopes,
       claimedAt: new Date().toISOString(),

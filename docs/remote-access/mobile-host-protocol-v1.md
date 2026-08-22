@@ -53,7 +53,7 @@ POST /remote/admin/pairing/challenges
 Authorization: Bearer <desktop user jwt>
 ```
 
-Host 仅在 Tailscale Remote Access 状态为 `ready` 时创建挑战。响应包含：
+Host 在 Tailscale Direct 为 `ready` 或 Mira Relay 为 `connected` 时创建挑战；两者都可用时，二维码同时携带两个 endpoint。响应包含：
 
 - `challengeId`
 - 8 位一次性配对码
@@ -73,12 +73,15 @@ Content-Type: application/json
   "code": "ABCDEFGH",
   "deviceName": "K70",
   "platform": "android",
+  "transport": "relay",
   "publicKey": "optional-device-public-key",
   "requestedScopes": ["threads:read", "messages:read", "messages:write"]
 }
 ```
 
 响应返回 `claimId` 与一次性 `pollToken`。Host 只保存 poll token 的哈希。
+
+`transport` 可选值为 `relay` 或 `direct`，只记录 Mobile 实际选择的申请通道，供 Desktop 配对确认界面展示。它不参与认证、scope、审批或 endpoint 判定；旧 Mobile 不发送该字段时按“未知”展示。
 
 ### 3.3 Desktop 确认
 
