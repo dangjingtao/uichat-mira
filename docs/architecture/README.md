@@ -96,9 +96,13 @@ Electron 和 Tauri 还共享同一批 `node-runtime/` 与 `terminal-runtime/` st
 - 模型调用前的上下文预算与审计应由 backend runtime 统一处理
 - Main Agent、forked Skill Agent、private Runtime、审批恢复和 Parent recovery 的当前合同见 `multi-agent-execution-truth.md`
 
-当前桌面产品只支持 Windows。Electron 与 Tauri 对 renderer 统一暴露
-`platform: "win32"`；工作空间根目录只接受 Windows 盘符绝对路径或 UNC
-路径，不接受 Unix 路径。
+当前正式打包仍以 Windows 为基线。Electron 开发态对 renderer 暴露宿主
+`process.platform`，已验证 `win32` 与 `darwin`；Tauri 当前仍只按
+Windows 合同提供 `win32`，macOS 平台值对齐尚未进入实现。
+
+工作空间根目录由 backend 按宿主平台校验：Windows 接受盘符绝对路径或
+UNC 路径，POSIX 宿主接受以 `/` 开头的绝对路径。renderer 使用同一
+`desktopRuntime.platform` 合同做提交前校验，backend 保留最终校验责任。
 
 ## 适合什么时候读
 

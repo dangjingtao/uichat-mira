@@ -17,6 +17,14 @@ import { threadService } from "./thread.service.js";
 import { createTimestampedTestArtifactPath } from "@/test-support/artifacts.js";
 
 const testDbPath = createTimestampedTestArtifactPath("db", "rag-demo-thread-service", ".sqlite");
+const hostWorkspaceRoot = (name: string) =>
+  process.platform === "win32"
+    ? `D:\\workspace\\${name}`
+    : `/workspace/${name}`;
+const otherPlatformWorkspaceRoot =
+  process.platform === "win32"
+    ? "/workspace/other-platform"
+    : "D:\\workspace\\other-platform";
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
 
@@ -80,7 +88,7 @@ test("createChatWorkspace validates workspace root paths", () => {
     role: "user",
     isActive: true,
   });
-  const validRootPath = "D:\\workspace\\project-alpha";
+  const validRootPath = hostWorkspaceRoot("project-alpha");
 
   assert.throws(
     () =>
@@ -107,7 +115,7 @@ test("createChatWorkspace validates workspace root paths", () => {
       threadService.createChatWorkspace({
         userId: user.id,
         name: "Workspace",
-        rootPath: "/workspace/project-alpha",
+        rootPath: otherPlatformWorkspaceRoot,
       }),
     /Workspace root path is invalid/,
   );
@@ -118,6 +126,20 @@ test("createChatWorkspace validates workspace root paths", () => {
     rootPath: validRootPath,
   });
   assert.equal(created.rootPath, validRootPath);
+
+  const updatedRootPath = hostWorkspaceRoot("project-beta");
+  const updated = threadService.updateChatWorkspace(created.id, user.id, {
+    rootPath: updatedRootPath,
+  });
+  assert.equal(updated?.rootPath, updatedRootPath);
+
+  assert.throws(
+    () =>
+      threadService.updateChatWorkspace(created.id, user.id, {
+        rootPath: otherPlatformWorkspaceRoot,
+      }),
+    /Workspace root path is invalid/,
+  );
 });
 
 test("createThread and updateThread persist roleId and allow clearing it", () => {
@@ -246,7 +268,7 @@ test("deleteChatWorkspace removes threads bound to that workspace", () => {
   const workspace = threadService.createChatWorkspace({
     userId: user.id,
     name: "Workspace",
-    rootPath: "D:\\workspace\\project-delete",
+    rootPath: hostWorkspaceRoot("project-delete"),
   });
 
   const boundThread = threadService.createThread({
@@ -272,7 +294,7 @@ test("getThreadWorkspaceRoot resolves a bound thread workspace path", () => {
     role: "user",
     isActive: true,
   });
-  const workspaceRoot = "D:\\testData";
+  const workspaceRoot = hostWorkspaceRoot("testData");
   const workspace = threadService.createChatWorkspace({
     userId: user.id,
     name: "PW Test",

@@ -280,8 +280,24 @@ resources/node-runtime/node.exe resources/server/server.cjs
 
 ```bash
 pnpm --dir mira-clipper-ext dev
+pnpm --dir mira-clipper-ext dev:extension
 pnpm --dir mira-clipper-ext prod
 ```
+
+`dev` 保持 Windows 开发流程：先构建 `MiraWebBridgeHost.exe`，再打包开发版扩展。`dev:extension` 只打包开发版 CRX，不构建 Native Host；它仍要求有效的开发签名密钥。macOS Electron Core 开发命令不自动执行扩展打包，Native Messaging 在对应平台实现完成前保持明确不可用。
+
+`pnpm dev:electron:mac` 会在启动前执行 `scripts/prepare-electron-macos-dev.mjs`。该脚本只在 Darwin 上为 npm 下载的 `Electron.app` 补本机 ad-hoc 开发签名，用于通过本地 Gatekeeper 执行检查；它不会进入 release payload，也不能替代正式包的 Developer ID 签名、公证与 staple。
+
+随后执行的 `scripts/prepare-node-pty-macos-dev.mjs` 只恢复当前 `darwin-${arch}` node-pty `spawn-helper` 的执行位，用于修复上游 npm 包权限缺失导致的 `posix_spawnp failed`。它不读取或修改 `win32-*` 预构建目录；正式 macOS payload 仍需在 staging 阶段独立验证文件模式。
+
+macOS 开发态 smoke：
+
+```bash
+pnpm smoke:electron:chat:mac
+pnpm smoke:terminal:mac
+```
+
+Electron Chat smoke 使用 `.test-artifact/` 下的隔离数据库、Workspace 和附件目录，并为 backend 与 Vite 分配动态端口。它验证真实 Electron 登录、Chat Composer、普通附件 Draft、鉴权上传与落盘，不要求配置外部 LLM，也不把 Provider 回复计入本项证据。Terminal smoke 单独验证 POSIX 临时命令、持久 PTY 会话复用与进程组清理。
 
 桌面端打包和用户下载统一使用 `Chujie.crx`，ZIP 产物使用 `Chujie.zip`。Electron、Tauri 和 shared desktop artifacts 必须引用相同文件名。
 

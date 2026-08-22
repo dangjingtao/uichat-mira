@@ -135,11 +135,18 @@ function stripAnsi(value) {
   return value.replace(/\u001b\[[0-9;]*m/g, "");
 }
 
+function resolveShellCommand(
+  command,
+  platform = process.platform,
+  baseEnv = process.env,
+) {
+  return platform === "win32"
+    ? { file: baseEnv.ComSpec || "cmd.exe", args: ["/d", "/s", "/c", command] }
+    : { file: "sh", args: ["-c", command] };
+}
+
 function spawnManagedProcess(name, cwd, command, options = {}) {
-  const shellCommand =
-    process.platform === "win32"
-      ? { file: process.env.ComSpec || "cmd.exe", args: ["/d", "/s", "/c", command] }
-      : { file: "sh", args: ["-lc", command] };
+  const shellCommand = resolveShellCommand(command);
 
   const readiness = options.readyWhen
     ? waitForReadySignal(name, options.readyWhen, options.timeoutMs ?? STARTUP_TIMEOUT_MS)
@@ -340,5 +347,6 @@ if (require.main === module) {
 
 module.exports = {
   buildBackendEnv,
+  resolveShellCommand,
   resolveBackendWorkspaceRoot,
 };

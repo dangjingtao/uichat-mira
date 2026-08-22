@@ -160,7 +160,10 @@ test("DELETE /threads/history removes all user threads and keeps workspaces", as
   const workspace = threadService.createChatWorkspace({
     userId: user.id,
     name: "Keep me",
-    rootPath: "D:\\workspace\\keep-me",
+    rootPath:
+      process.platform === "win32"
+        ? "D:\\workspace\\keep-me"
+        : "/workspace/keep-me",
   });
   const archived = threadService.createThread({
     userId: user.id,

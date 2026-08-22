@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/build-native-host.mjs --reuse-running && node scripts/package-extension.mjs --mode dev",
+    "dev:extension": "node scripts/package-extension.mjs --mode dev",
     "prod": "node scripts/package-extension.mjs --mode prod",
     "native:build": "node scripts/build-native-host.mjs",
     "test": "npm run test:extension",

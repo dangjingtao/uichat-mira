@@ -112,7 +112,8 @@ Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 
 - [[development/agent-observability]]：Agent / SubAgent 观测与诊断；
 - [[microapp/README]]：MicroApps Hub、Integration binding、Studio 与领域 Runtime 入口；
 - [[chat/README]]：Chat 与 Agent UI 入口；
-- [[platform/tauri]]：Tauri 平台路径。
+- [[platform/tauri]]：Tauri 平台路径；
+- [[platform/macos-implementation-phases]]：macOS 支持缺口、改造进度与验收门槛（Proposed，不代表当前已支持）。
 
 ## Provider 文档引用规则
 

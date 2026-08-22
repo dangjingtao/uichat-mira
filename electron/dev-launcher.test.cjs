@@ -6,11 +6,29 @@ const path = require("node:path");
 
 const {
   buildBackendEnv,
+  resolveShellCommand,
   resolveBackendWorkspaceRoot,
 } = require("./dev-launcher.cjs");
 
 const createTempRoot = () =>
   fs.mkdtempSync(path.join(os.tmpdir(), "mira-electron-launcher-"));
+
+test("POSIX child commands inherit the current PATH without a login shell", () => {
+  assert.deepEqual(resolveShellCommand("pnpm dev", "darwin"), {
+    file: "sh",
+    args: ["-c", "pnpm dev"],
+  });
+});
+
+test("Windows child commands keep the existing cmd invocation", () => {
+  assert.deepEqual(
+    resolveShellCommand("pnpm dev", "win32", { ComSpec: "C:\\Windows\\cmd.exe" }),
+    {
+      file: "C:\\Windows\\cmd.exe",
+      args: ["/d", "/s", "/c", "pnpm dev"],
+    },
+  );
+});
 
 test("buildBackendEnv creates and exports the owned default workspace", (t) => {
   const tempRoot = createTempRoot();

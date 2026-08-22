@@ -1,18 +1,20 @@
 // @vitest-environment jsdom
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider, initReactI18next } from "react-i18next";
 import i18next from "i18next";
 
 const mockedApis = vi.hoisted(() => ({
   modalConfirmMock: vi.fn(),
+  createChatWorkspaceMock: vi.fn(),
   deleteChatWorkspaceMock: vi.fn(),
   runtimeArchiveThreadMock: vi.fn(),
   runtimeDeleteThreadMock: vi.fn(),
   runtimeSetActiveThreadIdMock: vi.fn(),
   resetDraftMock: vi.fn(),
+  desktopPlatform: "win32",
 }));
 
 const mockSidebarState = {
@@ -57,9 +59,23 @@ vi.mock("@/features/chat/core/runtime", () => ({
 
 vi.mock("@/shared/api/thread", () => ({
   listChatWorkspaces: async () => [],
-  createChatWorkspace: vi.fn(),
+  createChatWorkspace: mockedApis.createChatWorkspaceMock,
   deleteChatWorkspace: mockedApis.deleteChatWorkspaceMock,
 }));
+
+vi.mock("@/shared/platform/desktopRuntime", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/shared/platform/desktopRuntime")>();
+  return {
+    ...actual,
+    getDesktopRuntime: () => ({
+      hostKind: "electron",
+      platform: mockedApis.desktopPlatform,
+      isPackaged: false,
+      backendUrl: "http://127.0.0.1:3000",
+    }),
+  };
+});
 
 vi.mock("@/shared/ui", async () => {
   const actual = await vi.importActual("@/shared/ui");
@@ -155,6 +171,11 @@ void i18n.use(initReactI18next).init({
 });
 
 describe("UChatThreadListSidebar", () => {
+  beforeEach(() => {
+    mockedApis.createChatWorkspaceMock.mockReset();
+    mockedApis.desktopPlatform = "win32";
+  });
+
   it("shows confirmation before deleting a thread", async () => {
     const user = userEvent.setup();
 
@@ -268,5 +289,37 @@ describe("UChatThreadListSidebar", () => {
     await user.click(within(dialog).getByRole("button", { name: "Create Workspace" }));
 
     expect(screen.getByText("Enter a valid absolute directory path")).toBeInTheDocument();
+  });
+
+  it("creates a workspace with a POSIX absolute path on macOS", async () => {
+    mockedApis.desktopPlatform = "darwin";
+    const user = userEvent.setup();
+
+    render(
+      <I18nextProvider i18n={i18n}>
+        <UChatThreadListSidebar />
+      </I18nextProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Create Workspace" }));
+    await user.type(
+      await screen.findByRole("textbox", { name: "Workspace Name" }),
+      "Mac Project",
+    );
+    await user.type(
+      await screen.findByRole("textbox", { name: "Workspace Root Path" }),
+      "/Users/tao/Documents/UIChat Mira/中文工作区",
+    );
+    const dialog = await screen.findByRole("dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Create Workspace" }),
+    );
+
+    await waitFor(() => {
+      expect(mockedApis.createChatWorkspaceMock).toHaveBeenCalledWith({
+        name: "Mac Project",
+        rootPath: "/Users/tao/Documents/UIChat Mira/中文工作区",
+      });
+    });
   });
 });

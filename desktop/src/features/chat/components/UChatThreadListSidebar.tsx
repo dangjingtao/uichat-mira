@@ -16,6 +16,7 @@ import {
   listChatWorkspaces,
   type ChatWorkspace,
 } from "@/shared/api/thread";
+import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import { UChatSidebarToolsModal } from "./UChatSidebarToolsModal";
 import { isValidWorkspaceRootPath } from "../core/runtimePolicies";
 
@@ -156,7 +157,7 @@ export function UChatThreadListSidebar() {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
       return;
     }
-    if (!isValidWorkspaceRootPath(rootPath)) {
+    if (!isValidWorkspaceRootPath(rootPath, getDesktopRuntime().platform)) {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }

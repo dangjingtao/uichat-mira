@@ -28,6 +28,7 @@ import {
   type ChatWorkspace,
 } from "@/shared/api/thread";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
+import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import {
   UChatThreadView,
   type UChatThreadSlots,
@@ -449,7 +450,7 @@ export default function UChatThread() {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
       return;
     }
-    if (!isValidWorkspaceRootPath(rootPath)) {
+    if (!isValidWorkspaceRootPath(rootPath, getDesktopRuntime().platform)) {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }
