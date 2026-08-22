@@ -48,11 +48,11 @@ related:
 
 ### 1. 本地服务
 
-- 前端开发地址：`http://127.0.0.1:5173`
+- 前端开发地址：`http://127.0.0.1:5757`
 - 后端健康检查：`http://127.0.0.1:8787/health`
 - 开发态浏览器访问走 hash 路由：
-  - 登录页：`http://127.0.0.1:5173/#/login`
-  - 微应用列表页：`http://127.0.0.1:5173/#/settings/micro-apps`
+  - 登录页：`http://127.0.0.1:5757/#/login`
+  - 微应用列表页：`http://127.0.0.1:5757/#/settings/micro-apps`
 
 ### 2. ComfyUI 连接配置
 
@@ -111,9 +111,9 @@ curl http://127.0.0.1:8188/history/not-a-real-id
 
 ### A. 进入产品入口
 
-1. 用 Chrome 打开 `http://127.0.0.1:5173/#/login`
+1. 用 Chrome 打开 `http://127.0.0.1:5757/#/login`
 2. 如果已经有会话，可直接跳到设置页；如果没有，就用 `Tomz / 123456` 登录
-3. 打开 `http://127.0.0.1:5173/#/settings/micro-apps`
+3. 打开 `http://127.0.0.1:5757/#/settings/micro-apps`
 
 通过标准：
 
@@ -295,7 +295,7 @@ ComfyUI Local 冒烟未通过。
 - <写清楚页面文案、报错信息、停留状态和是否出现 provider job id>
 
 环境信息：
-- frontend: http://127.0.0.1:5173
+- frontend: http://127.0.0.1:5757
 - backend: http://127.0.0.1:8787
 - comfyui baseUrl: <你的实际地址>
 - 登录账号: <Tomz 或其他账号>

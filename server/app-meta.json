@@ -38,11 +38,11 @@
         {
           "version": "0.99.7",
           "commit": {
-            "hash": "e2b36ed3f049efd152b86fd8c3bd6a3a7642af5b",
-            "shortHash": "e2b36ed",
-            "message": "Merge Mira Relay remote transport into dev",
-            "author": "DangJingtao",
-            "date": "2026-08-09T21:58:38+08:00"
+            "hash": "584cef5640df640e164d5886877461a030b40e60",
+            "shortHash": "584cef5",
+            "message": "feat(macos): add isolated Electron development support",
+            "author": "Tomz Dang",
+            "date": "2026-08-22T13:52:30+08:00"
           }
         },
         {

@@ -24,7 +24,7 @@ module.exports = {
   },
   dev: {
     apiProxyPrefix: "/api",
-    desktopPort: readPort("UI_CHAT_DESKTOP_PORT", 5173),
+    desktopPort: readPort("UI_CHAT_DESKTOP_PORT", 5757),
     docsSitePort: readPort("UI_CHAT_DOCS_SITE_PORT", 4180),
   },
 };

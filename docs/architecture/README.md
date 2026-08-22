@@ -73,6 +73,10 @@ renderer (Vite dev server) -- /api proxy --> Fastify backend
 desktop shell --------------------------------^
 ```
 
+本地 renderer 开发服务默认监听 `http://127.0.0.1:5757`。端口统一来自
+`runtime.config.cjs`，需要覆盖时使用 `UI_CHAT_DESKTOP_PORT`，Electron、
+Tauri 和 Vite 不分别维护端口常量。
+
 ### 打包态
 
 ```text

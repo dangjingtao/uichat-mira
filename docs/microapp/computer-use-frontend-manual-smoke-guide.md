@@ -18,8 +18,8 @@ related:
 
 ## 一、测试前提
 
-- 前台地址：`http://localhost:5173/#/chat`
-- Computer Use Debugger 地址：`http://localhost:5173/#/settings/micro-apps/computer-use-studio`
+- 前台地址：`http://localhost:5757/#/chat`
+- Computer Use Debugger 地址：`http://localhost:5757/#/settings/micro-apps/computer-use-studio`
 - 测试站点：`https://example.com`
 - Allowed Domains：`example.com`
 - Runtime：优先选择 `Managed Chromium`
