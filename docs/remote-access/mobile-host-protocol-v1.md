@@ -1,22 +1,32 @@
 ---
-title: Mira Mobile Host Protocol V1
-status: current
-doc_type: current-contract
-canonical: true
-last_verified: 2026-08-01
+title: Mira Mobile Host Protocol V1 (legacy host contract)
+status: reference
+doc_type: reference
+canonical: false
+last_verified: 2026-08-26
+canonical_source: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
+canonical_source_branch: dev
+superseded_by: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
 ---
 
 # Mira Mobile Host Protocol V1
 
+> Remote transport and pairing selection are no longer defined here. The
+> authoritative contract is the Mobile `dev` document at
+> `uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md`,
+> synchronized on **2026-08-26**. This page remains a route, credential, and
+> scope reference for the existing Host V1 API.
+
 ## 1. 目标
 
-`uichat-mira-mobile` 通过 Tailscale 访问 Mira Desktop Host。Tailscale 只负责私网可达、节点身份与 TLS；Mira 继续负责配对、设备凭证、用户归属、能力范围、工具审批、撤销和审计。
+`uichat-mira-mobile` 通过 Direct（Tailscale）或 Mira Relay 访问 Mira Desktop Host。Transport 只负责可达性与转发；Mira 继续负责配对、设备凭证、用户归属、能力范围、工具审批、撤销和审计。
 
 V1 不复制一套 Thread、Message 或 Agent Runtime。完成配对后，设备凭证只被允许访问一组明确的现有 canonical routes，由 Remote Gateway 在进入业务路由前完成设备认证与 scope 校验。
 
 ```text
 Mobile
-  ├─ Tailscale / MagicDNS / HTTPS
+  ├─ Direct / Tailscale / HTTPS
+  ├─ Relay / WSS
   ├─ Device Credential
   ▼
 Remote Gateway
@@ -53,7 +63,7 @@ POST /remote/admin/pairing/challenges
 Authorization: Bearer <desktop user jwt>
 ```
 
-Host 仅在 Tailscale Remote Access 状态为 `ready` 时创建挑战。响应包含：
+Host 在 Tailscale Direct 为 `ready` 或 Mira Relay 为 `connected` 时创建挑战；两者都可用时，二维码同时携带两个 endpoint。响应包含：
 
 - `challengeId`
 - 8 位一次性配对码
@@ -73,12 +83,15 @@ Content-Type: application/json
   "code": "ABCDEFGH",
   "deviceName": "K70",
   "platform": "android",
+  "transport": "relay",
   "publicKey": "optional-device-public-key",
   "requestedScopes": ["threads:read", "messages:read", "messages:write"]
 }
 ```
 
 响应返回 `claimId` 与一次性 `pollToken`。Host 只保存 poll token 的哈希。
+
+`transport` 可选值为 `relay` 或 `direct`，只记录 Mobile 实际选择的申请通道，供 Desktop 配对确认界面展示。它不参与认证、scope、审批或 endpoint 判定；旧 Mobile 不发送该字段时按“未知”展示。
 
 ### 3.3 Desktop 确认
 

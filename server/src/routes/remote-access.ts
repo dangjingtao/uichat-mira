@@ -23,7 +23,10 @@ import {
   notFound,
   routeHandler,
 } from "@/utils/route-errors.js";
-import { REMOTE_DEVICE_SCOPES } from "@/db/repositories/tailscale-remote-access.repository.js";
+import {
+  REMOTE_DEVICE_SCOPES,
+  REMOTE_PAIRING_TRANSPORTS,
+} from "@/db/repositories/tailscale-remote-access.repository.js";
 
 const looseObjectSchema = {
   type: "object",
@@ -356,6 +359,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
       code: string;
       deviceName?: string;
       platform?: string;
+      transport?: "relay" | "direct";
       publicKey?: string;
       requestedScopes?: string[];
     };
@@ -375,6 +379,10 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
             code: { type: "string", minLength: 8, maxLength: 16 },
             deviceName: { type: "string", maxLength: 80 },
             platform: { type: "string", maxLength: 40 },
+            transport: {
+              type: "string",
+              enum: [...REMOTE_PAIRING_TRANSPORTS],
+            },
             publicKey: { type: "string", maxLength: 4096 },
             requestedScopes: {
               type: "array",

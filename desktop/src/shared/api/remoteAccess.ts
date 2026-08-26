@@ -26,6 +26,7 @@ export type RemoteRelayConnectorState =
   | "stopped";
 
 export type RemoteRelayEndpointMode = "default" | "custom";
+export type RemotePairingTransport = "relay" | "direct";
 
 export interface RemoteRelayUserConfig {
   enabled: boolean;
@@ -51,6 +52,7 @@ export interface PairingClaimSummary {
   claimId: string;
   deviceName: string;
   platform: string;
+  transport: RemotePairingTransport | null;
   publicKeyFingerprint: string | null;
   requestedScopes: RemoteDeviceScope[];
   claimedAt: string;

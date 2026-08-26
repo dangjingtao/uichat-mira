@@ -31,6 +31,7 @@ type Challenge = {
   claimTokenHash: string | null;
   deviceName: string | null;
   platform: string | null;
+  claimTransport: "relay" | "direct" | null;
   publicKey: string | null;
   requestedScopes: string[];
   approvedScopes: string[];
@@ -61,6 +62,7 @@ const repositoryMock = vi.hoisted(() => ({
       claimTokenHash: null,
       deviceName: null,
       platform: null,
+      claimTransport: null,
       publicKey: null,
       requestedScopes: [],
       approvedScopes: [],
@@ -95,6 +97,10 @@ const repositoryMock = vi.hoisted(() => ({
     challenge.claimTokenHash = String(input.claimTokenHash);
     challenge.deviceName = String(input.deviceName);
     challenge.platform = String(input.platform);
+    challenge.claimTransport =
+      input.transport === "relay" || input.transport === "direct"
+        ? input.transport
+        : null;
     challenge.publicKey = input.publicKey ? String(input.publicKey) : null;
     challenge.requestedScopes = [...(input.requestedScopes as string[])];
     challenge.claimedAt = String(input.claimedAt);
@@ -206,6 +212,7 @@ describe("RemoteAccessPairingService", () => {
       code: challenge.code,
       deviceName: "K70",
       platform: "android",
+      transport: "relay",
       publicKey: "mobile-public-key",
       requestedScopes: ["threads:read", "messages:read"],
     });
@@ -213,6 +220,9 @@ describe("RemoteAccessPairingService", () => {
     expect(service.poll(claim.claimId, claim.pollToken)).toMatchObject({
       status: "claimed",
       scopes: [],
+    });
+    expect(service.getChallengeForUser(challenge.challengeId, 7).claim).toMatchObject({
+      transport: "relay",
     });
 
     const approved = service.approve({
@@ -284,5 +294,23 @@ describe("RemoteAccessPairingService", () => {
       }),
     ).toThrowError(PairingServiceError);
     expect(state.devices).toHaveLength(0);
+  });
+
+  it("keeps old Mobile claims compatible when transport is omitted", () => {
+    const service = new RemoteAccessPairingService();
+    const challenge = service.createChallenge({
+      userId: 7,
+      hostUrl: "https://mira.example.ts.net",
+    });
+
+    service.claim({
+      challengeId: challenge.challengeId,
+      code: challenge.code,
+      requestedScopes: ["threads:read"],
+    });
+
+    expect(service.getChallengeForUser(challenge.challengeId, 7).claim).toMatchObject({
+      transport: null,
+    });
   });
 });

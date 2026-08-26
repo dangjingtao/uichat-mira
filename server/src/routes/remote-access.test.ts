@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import Fastify from "fastify";
+import fastifyWebsocket from "@fastify/websocket";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sendRouteError } from "@/utils/route-errors.js";
 
@@ -49,6 +50,7 @@ vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
     "agent:control",
     "artifacts:read",
   ],
+  REMOTE_PAIRING_TRANSPORTS: ["relay", "direct"],
 }));
 
 import remoteAccessRoute from "./remote-access.js";
@@ -64,6 +66,7 @@ const readySnapshot = {
 const createApp = async (options: { authenticated?: boolean; device?: unknown } = {}) => {
   const app = Fastify();
   app.setErrorHandler(sendRouteError);
+  await app.register(fastifyWebsocket);
   await app.addHook("preHandler", async (request) => {
     if (options.authenticated) {
       request.authUser = user;
@@ -154,6 +157,7 @@ describe("remote access routes", () => {
     expect(mocks.pairing.createChallenge).toHaveBeenCalledWith({
       userId: user.id,
       hostUrl: "https://mira.example.ts.net",
+      relay: null,
     });
     assert.equal(response.json().data.challengeId, "challenge-1");
     await app.close();
@@ -197,6 +201,7 @@ describe("remote access routes", () => {
         code: "ABCD2345",
         deviceName: "K70",
         platform: "android",
+        transport: "relay",
         requestedScopes: ["threads:read"],
       },
     });
@@ -213,6 +218,7 @@ describe("remote access routes", () => {
       code: "ABCD2345",
       deviceName: "K70",
       platform: "android",
+      transport: "relay",
       requestedScopes: ["threads:read"],
     });
     expect(mocks.pairing.poll).toHaveBeenCalledWith(
