@@ -6,7 +6,7 @@
 >
 > 本页只记录 Direct（Tailscale）运行时。Transport 选择和配对合同以
 > Mobile `dev` canonical 文档为准：
-> `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`
+> `uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md`
 >（同步日期：2026-08-26）。
 
 ## 1. 目标

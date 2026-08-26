@@ -4,7 +4,7 @@ status: current-inventory
 doc_type: inventory
 canonical: false
 last_verified: 2026-08-12
-canonical_source: /Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md
+canonical_source: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
 canonical_source_branch: dev
 related:
   - docs/remote-access/mobile-host-protocol-v1.md
@@ -14,7 +14,7 @@ related:
 # Mira Mobile Surface API Inventory
 
 > Transport and pairing selection follow the Mobile `dev` canonical document
-> at `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`
+> at `uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md`
 > (synchronized on **2026-08-26**). This inventory does not redefine them.
 
 ## 1. Purpose
@@ -157,7 +157,8 @@ This inventory does not:
 - add any new Remote Device scope;
 - change the Remote Gateway allowlist;
 - expose Desktop JWT/account APIs to Mobile;
-- add Relay-only pairing or Relay transport behavior;
+- redefine Relay-only pairing or Relay transport behavior; follow the Mobile
+  `dev` canonical contract instead;
 - treat Memory as Personalization;
 - treat Chat Workspace as Product Project without confirmation;
 - treat Agent runtime planning as “已计划” scheduled tasks;

@@ -1,18 +1,19 @@
 ---
 title: Mira Mobile Host Protocol V1 (legacy host contract)
-status: current
+status: reference
 doc_type: reference
 canonical: false
 last_verified: 2026-08-26
-canonical_source: /Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md
+canonical_source: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
 canonical_source_branch: dev
+superseded_by: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
 ---
 
 # Mira Mobile Host Protocol V1
 
 > Remote transport and pairing selection are no longer defined here. The
 > authoritative contract is the Mobile `dev` document at
-> `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`,
+> `uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md`,
 > synchronized on **2026-08-26**. This page remains a route, credential, and
 > scope reference for the existing Host V1 API.
 

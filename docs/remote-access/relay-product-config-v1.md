@@ -4,7 +4,7 @@ Status: Current
 Related: `relay-transport-v1.md`
 
 > Transport selection and pairing semantics follow the Mobile `dev` canonical
-> document at `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`,
+> document `uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md`,
 > synchronized on **2026-08-26**. This page only defines Desktop Relay product
 > configuration and does not create a separate pairing contract.
 
@@ -109,7 +109,12 @@ version=1
 ```text
 relay=<https relay endpoint>
 relayId=<relay id>
+relayToken=<short-lived client token>
 ```
+
+`relayToken` is a short-lived Relay transport credential carried in the pairing
+material. It is distinct from the `mira_device_*` business credential and does
+not participate in scopes, approval, or endpoint authorization.
 
 Mobile parser 继续兼容既有 Direct-only URI，并按 canonical 合同读取可选
 Relay endpoint 字段；缺少 Relay 字段时仍可完成 Direct 配对。

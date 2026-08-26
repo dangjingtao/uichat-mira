@@ -4,14 +4,14 @@ status: current
 doc_type: implementation-note
 canonical: false
 last_verified: 2026-08-26
-canonical_source: /Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md
+canonical_source: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
 canonical_source_branch: dev
 ---
 
 # Mira Remote Relay Transport V1
 
 > **Normative source:** the Mobile `dev` branch document at
-> `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`.
+> `uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md`.
 > This PC note was synchronized on **2026-08-26**. When the two documents differ,
 > the Mobile document is authoritative for transport selection and pairing
 > semantics; this page only records PC implementation context and evidence.
