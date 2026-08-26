@@ -1,4 +1,20 @@
+---
+title: Mira Remote Relay Transport V1 (PC implementation note)
+status: current
+doc_type: implementation-note
+canonical: false
+last_verified: 2026-08-26
+canonical_source: /Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md
+canonical_source_branch: dev
+---
+
 # Mira Remote Relay Transport V1
+
+> **Normative source:** the Mobile `dev` branch document at
+> `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`.
+> This PC note was synchronized on **2026-08-26**. When the two documents differ,
+> the Mobile document is authoritative for transport selection and pairing
+> semantics; this page only records PC implementation context and evidence.
 
 ## 1. 文档定位
 
@@ -46,7 +62,7 @@ src/api/remoteMiraHost.ts
 src/connectivity/tailscaleConnectivity.ts
 ```
 
-当前 Tailscale 的职责主要是：
+当前 Direct Transport（Tailscale）的职责主要是：
 
 ```text
 Mobile
@@ -259,13 +275,9 @@ scopes
 
 不要因为增加 Relay 再生成一套完全独立的业务 credential。
 
-## 8. 配对流程调整
+## 8. 配对流程实现对齐
 
-当前 Desktop 创建 pairing challenge 时要求 Tailscale `ready`，并把 Tailscale `accessUrl` 写入 `mira://pair`。
-
-这是现有实现最主要的 Transport 硬耦合点。
-
-V1 目标不是立即重写 pairing，而是把 Host endpoint 来源抽象出来：
+PC 当前实现已按 canonical 合同解析可选 endpoint：
 
 ```text
 create pairing challenge
@@ -279,9 +291,9 @@ resolve pairing endpoints
 mira://pair
 ```
 
-配对 URI V2 是否改格式应单独评估。
+只要 Direct ready 或 Relay connected 任一成立即可创建 challenge；两者同时成立时，二维码同时携带两套 endpoint。实现层不得把“可配对”定义为“Tailscale 必须 ready”。
 
-第一阶段允许继续兼容 `version=1`，但实现层不得再把“可配对”定义为“Tailscale 必须 ready”。
+配对 URI 继续兼容 `version=1`。Mobile 负责按 canonical 选择策略完成 preflight 与 claim，PC 只记录实际 claim transport，不在审批阶段重新选路。
 
 ## 9. Relay Frame V1
 
@@ -367,7 +379,7 @@ Desktop Connector 只需要把本地 HTTP/SSE 响应转换为通用 Relay `chunk
 
 这些都属于 Mira Remote Host V1，而不是 Relay。
 
-## 11. Transport 选择策略
+## 11. Transport 选择策略（以 Mobile canonical 为准）
 
 用户层默认提供：
 

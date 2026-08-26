@@ -3,10 +3,15 @@
 > 状态：首个可执行版本
 > 目标分支：`feature/tailscale-remote-access-runtime`
 > 基线：`dev`
+>
+> 本页只记录 Direct（Tailscale）运行时。Transport 选择和配对合同以
+> Mobile `dev` canonical 文档为准：
+> `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`
+>（同步日期：2026-08-26）。
 
 ## 1. 目标
 
-`uichat-mira-mobile` 通过同一 Tailnet 访问运行在桌面端的 Mira Host。Tailscale 负责私网可达与节点身份基础，Mira 继续负责应用登录、会话权限、工具审批和设备撤销。
+Direct Transport 通过同一 Tailnet 访问运行在桌面端的 Mira Host。Tailscale 负责私网可达与节点身份基础，Mira 继续负责应用登录、会话权限、工具审批和设备撤销。
 
 该功能不是通用远程桌面，也不通过 Funnel 暴露公网。
 

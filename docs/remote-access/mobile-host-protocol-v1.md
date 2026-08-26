@@ -1,22 +1,31 @@
 ---
-title: Mira Mobile Host Protocol V1
+title: Mira Mobile Host Protocol V1 (legacy host contract)
 status: current
-doc_type: current-contract
-canonical: true
-last_verified: 2026-08-01
+doc_type: reference
+canonical: false
+last_verified: 2026-08-26
+canonical_source: /Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md
+canonical_source_branch: dev
 ---
 
 # Mira Mobile Host Protocol V1
 
+> Remote transport and pairing selection are no longer defined here. The
+> authoritative contract is the Mobile `dev` document at
+> `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`,
+> synchronized on **2026-08-26**. This page remains a route, credential, and
+> scope reference for the existing Host V1 API.
+
 ## 1. 目标
 
-`uichat-mira-mobile` 通过 Tailscale 访问 Mira Desktop Host。Tailscale 只负责私网可达、节点身份与 TLS；Mira 继续负责配对、设备凭证、用户归属、能力范围、工具审批、撤销和审计。
+`uichat-mira-mobile` 通过 Direct（Tailscale）或 Mira Relay 访问 Mira Desktop Host。Transport 只负责可达性与转发；Mira 继续负责配对、设备凭证、用户归属、能力范围、工具审批、撤销和审计。
 
 V1 不复制一套 Thread、Message 或 Agent Runtime。完成配对后，设备凭证只被允许访问一组明确的现有 canonical routes，由 Remote Gateway 在进入业务路由前完成设备认证与 scope 校验。
 
 ```text
 Mobile
-  ├─ Tailscale / MagicDNS / HTTPS
+  ├─ Direct / Tailscale / HTTPS
+  ├─ Relay / WSS
   ├─ Device Credential
   ▼
 Remote Gateway

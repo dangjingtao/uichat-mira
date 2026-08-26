@@ -3,6 +3,11 @@
 Status: Current
 Related: `relay-transport-v1.md`
 
+> Transport selection and pairing semantics follow the Mobile `dev` canonical
+> document at `/Users/tao/Developer/uichat-mira-mobile/docs/remote-access/remote-connection-canonical-v1.md`,
+> synchronized on **2026-08-26**. This page only defines Desktop Relay product
+> configuration and does not create a separate pairing contract.
+
 ## 用户入口
 
 Remote Relay 的产品入口统一位于：
@@ -106,6 +111,9 @@ relay=<https relay endpoint>
 relayId=<relay id>
 ```
 
-当前 Mobile V1 parser 只读取既有四个字段，因此会忽略新增参数，不破坏当前 Tailscale 配对。
+Mobile parser 继续兼容既有 Direct-only URI，并按 canonical 合同读取可选
+Relay endpoint 字段；缺少 Relay 字段时仍可完成 Direct 配对。
 
-Relay-only pairing、Client Relay credential 下发和 Mobile RelayTransport 属于后续 Mobile 接入任务，不在本配置任务中伪装为已完成。
+Mobile RelayTransport and client credential handling remain Mobile implementation
+work; Desktop challenge creation already accepts Relay-only endpoint availability
+as defined by the canonical pairing contract.
