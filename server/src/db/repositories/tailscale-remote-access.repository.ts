@@ -13,6 +13,10 @@ export const REMOTE_DEVICE_SCOPES = [
 
 export type RemoteDeviceScope = (typeof REMOTE_DEVICE_SCOPES)[number];
 
+export const REMOTE_PAIRING_TRANSPORTS = ["relay", "direct"] as const;
+export type RemotePairingTransport =
+  (typeof REMOTE_PAIRING_TRANSPORTS)[number];
+
 export type TailscaleRemoteAccessConfig = {
   enabled: boolean;
   servePort: number;
@@ -54,6 +58,7 @@ export type PairingChallengeRecord = {
   claimTokenHash: string | null;
   deviceName: string | null;
   platform: string | null;
+  claimTransport: RemotePairingTransport | null;
   publicKey: string | null;
   requestedScopes: RemoteDeviceScope[];
   approvedScopes: RemoteDeviceScope[];
@@ -95,6 +100,7 @@ type PairingChallengeRow = {
   claim_token_hash: string | null;
   device_name: string | null;
   platform: string | null;
+  claim_transport: string | null;
   public_key: string | null;
   requested_scopes_json: string;
   approved_scopes_json: string;
@@ -149,6 +155,11 @@ const normalizeChallengeStatus = (value: string): PairingChallengeStatus => {
   return "expired";
 };
 
+const normalizePairingTransport = (
+  value: unknown,
+): RemotePairingTransport | null =>
+  value === "relay" || value === "direct" ? value : null;
+
 const ensureDeviceColumns = () => {
   const sqlite = getSqlite();
 
@@ -165,6 +176,21 @@ const ensureDeviceColumns = () => {
   if (!hasSqliteColumn(sqlite, "tailscale_remote_devices", "token_hash")) {
     sqlite.exec(
       "ALTER TABLE tailscale_remote_devices ADD COLUMN token_hash TEXT",
+    );
+  }
+};
+
+const ensurePairingChallengeColumns = () => {
+  const sqlite = getSqlite();
+  if (
+    !hasSqliteColumn(
+      sqlite,
+      "tailscale_pairing_challenges",
+      "claim_transport",
+    )
+  ) {
+    sqlite.exec(
+      "ALTER TABLE tailscale_pairing_challenges ADD COLUMN claim_transport TEXT",
     );
   }
 };
@@ -205,6 +231,7 @@ const ensureTables = () => {
       claim_token_hash TEXT,
       device_name TEXT,
       platform TEXT,
+      claim_transport TEXT,
       public_key TEXT,
       requested_scopes_json TEXT NOT NULL DEFAULT '[]',
       approved_scopes_json TEXT NOT NULL DEFAULT '[]',
@@ -218,6 +245,7 @@ const ensureTables = () => {
   `);
 
   ensureDeviceColumns();
+  ensurePairingChallengeColumns();
   sqlite.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tailscale_remote_devices_token_hash
       ON tailscale_remote_devices(token_hash)
@@ -283,6 +311,7 @@ const toPairingChallenge = (
   claimTokenHash: row.claim_token_hash,
   deviceName: row.device_name,
   platform: row.platform,
+  claimTransport: normalizePairingTransport(row.claim_transport),
   publicKey: row.public_key,
   requestedScopes: parseScopes(row.requested_scopes_json),
   approvedScopes: parseScopes(row.approved_scopes_json),
@@ -518,6 +547,7 @@ export const tailscaleRemoteAccessRepository = {
     claimTokenHash: string;
     deviceName: string;
     platform: string;
+    transport?: RemotePairingTransport | null;
     publicKey?: string | null;
     requestedScopes: readonly RemoteDeviceScope[];
     claimedAt: string;
@@ -531,6 +561,7 @@ export const tailscaleRemoteAccessRepository = {
              claim_token_hash = ?,
              device_name = ?,
              platform = ?,
+             claim_transport = ?,
              public_key = ?,
              requested_scopes_json = ?,
              claimed_at = ?
@@ -541,6 +572,7 @@ export const tailscaleRemoteAccessRepository = {
         input.claimTokenHash,
         input.deviceName,
         input.platform,
+        normalizePairingTransport(input.transport),
         input.publicKey ?? null,
         JSON.stringify(normalizeScopes(input.requestedScopes)),
         input.claimedAt,
