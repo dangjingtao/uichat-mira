@@ -163,6 +163,11 @@ if (skipTests) {
 execSync("pnpm internal:build:desktop", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm internal:build:server", { cwd: projectRoot, stdio: "inherit" });
 execSync("pnpm prepare:terminal-runtime", { cwd: projectRoot, stdio: "inherit" });
+execSync("node scripts/smoke-staged-server-runtime.mjs", {
+  cwd: projectRoot,
+  stdio: "inherit",
+  env: process.env,
+});
 execSync("pnpm prepare:piper-runtime", { cwd: projectRoot, stdio: "inherit" });
 
 if (!fs.existsSync(serverBundleArtifactsRoot)) {
