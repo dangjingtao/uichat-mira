@@ -110,6 +110,16 @@ export const getRequiredRemoteScope = (
     return "threads:read";
   }
 
+  if (
+    normalizedMethod === "GET" &&
+    parts.length === 3 &&
+    parts[0] === "remote" &&
+    parts[1] === "v1" &&
+    parts[2] === "roles"
+  ) {
+    return "threads:read";
+  }
+
   if (normalizedMethod === "GET" && parts.length === 1 && parts[0] === "threads") {
     return "threads:read";
   }
