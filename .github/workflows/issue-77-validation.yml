@@ -1,0 +1,43 @@
+name: Issue 77 Validation
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - "server/src/routes/remote-access.ts"
+      - "server/src/routes/remote-access.test.ts"
+      - "server/src/services/remote-device-auth.service.ts"
+      - "server/src/services/remote-device-auth.service.test.ts"
+      - ".github/workflows/issue-77-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Server typecheck
+        run: pnpm --filter @ui-chat-mira/server typecheck
+
+      - name: Focused remote tests
+        run: pnpm --filter @ui-chat-mira/server exec vitest run src/routes/remote-access.test.ts src/services/remote-device-auth.service.test.ts
