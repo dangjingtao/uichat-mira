@@ -139,15 +139,6 @@ beforeEach(() => {
   ]);
   mocks.workspaces.list.mockReturnValue([
     {
-      id: "workspace-active",
-      userId: user.id,
-      name: "Mira BASE",
-      rootPath: "/Users/tester/mira",
-      status: "active",
-      createdAt: "2026-08-01T00:00:00.000Z",
-      updatedAt: "2026-08-02T00:00:00.000Z",
-    },
-    {
       id: "workspace-archived",
       userId: user.id,
       name: "Old project",
@@ -343,7 +334,7 @@ describe("remote access routes", () => {
     expect(mocks.thread.listChatWorkspaces).toHaveBeenCalledWith(user.id);
     expect(mocks.workspaces.list).toHaveBeenCalledWith({
       userId: user.id,
-      status: "all",
+      status: "archived",
     });
     assert.deepEqual(response.json().data, [
       {
