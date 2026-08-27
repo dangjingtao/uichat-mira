@@ -1,4 +1,5 @@
 import type { ModelType, ProviderTemplateCode } from "@/db/schema.js";
+import type { ModelSettingsBackup } from "@/services/provider-settings.service.js";
 
 /** Path params for provider-scoped settings endpoints. */
 export interface ProviderIdParams {
@@ -45,3 +46,5 @@ export interface ResetRoleModelParams {
   /** Model role whose provider and remote model fields should be cleared. */
   role: ModelType;
 }
+
+export type ImportModelSettingsBody = ModelSettingsBackup;

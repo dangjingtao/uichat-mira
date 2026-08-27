@@ -384,7 +384,6 @@ export default function KnowledgeBaseSettings() {
     <SettingsPageLayout
       miniTitle={t("settings.knowledgeBase.page.miniTitle")}
       title={t("settings.knowledgeBase.page.title")}
-      description={t("settings.knowledgeBase.page.descriptionFallback")}
       slot={
         <div className="w-[200px] lg:hidden">
           <Select
@@ -396,8 +395,7 @@ export default function KnowledgeBaseSettings() {
         </div>
       }
       bodyClassName="overflow-hidden"
-      containerClassName="max-w-none"
-      contentClassName="flex h-full min-h-0 flex-col gap-3 pt-4 px-0"
+      contentClassName="flex h-full min-h-0 flex-col gap-3 pt-4"
       scrollBody={false}
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 border-0 bg-transparent p-0 shadow-none">

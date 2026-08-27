@@ -94,7 +94,7 @@ describe("MiraDocs canonical Skill", () => {
     );
   });
 
-  it("loads only the three workflow references plus the shared draft and examples", async () => {
+  it("loads only the three workflow references plus the shared draft, versioned scaffold, and examples", async () => {
     const manifest = await loadMiraDocsManifest();
     const loader = new SkillLoader();
     const content = await loader.loadContent(manifest);
@@ -113,6 +113,7 @@ describe("MiraDocs canonical Skill", () => {
       "skill://miradocs/references/create-site.md",
       "skill://miradocs/references/maintain-site.md",
       "skill://miradocs/references/publish-content.md",
+      "skill://miradocs/templates/create-site-v0.1.1.md",
       "skill://miradocs/templates/site-draft.md",
     ]);
   });
@@ -146,6 +147,11 @@ describe("MiraDocs canonical Skill", () => {
       manifest,
       "skill://miradocs/templates/site-draft.md",
     );
+    const createSiteScaffold = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/templates/create-site-v0.1.1.md",
+    );
 
     expect(content.body).toContain("恢复任务时先回读 checkpoint");
     expect(createSite).toContain("github_repository.create");
@@ -160,12 +166,51 @@ describe("MiraDocs canonical Skill", () => {
     expect(maintainSite).toContain("不创建重复施工分支或重复 PR");
     expect(maintainSite).toContain("只重试未完成的 `configure_pages`");
     expect(conversations).toContain("不会重复创建仓库");
-    expect(conversations).toContain("不重新创建仓库、重写内容或新建重复 PR");
+    expect(conversations).toContain("不重新创建仓库、重写内容、重新安装或重新构建");
     expect(deliveryTemplate).toContain("completed");
     expect(deliveryTemplate).toContain("blocked");
     expect(deliveryTemplate).toContain("failed");
     expect(deliveryTemplate).toContain("not_run");
-    expect(deliveryTemplate).toContain("恢复入口必须指向第一个未完成步骤");
+    expect(deliveryTemplate).toContain("恢复入口必须指向第一个未完成阶段");
+    expect(createSiteScaffold).toContain("@uichat-mira/docs\": \"0.1.1");
+    expect(createSiteScaffold).toContain("resolveGithubPagesBase");
+    expect(createSiteScaffold).toContain("actions/configure-pages@v5");
+    expect(createSiteScaffold).toContain("actions/upload-pages-artifact@v4");
+    expect(createSiteScaffold).toContain("actions/deploy-pages@v4");
+    expect(createSiteScaffold).toContain("targetMode = local");
+    expect(createSiteScaffold).toContain("省略 `siteUrl` 与 `github`");
+    expect(createSiteScaffold).toContain("repository = <owner>.github.io");
+    expect(createSiteScaffold).toContain("### deployment = none");
+    expect(createSiteScaffold).toContain("````md");
+  });
+
+  it("makes GitHub Pages the create-site default and fixes the execution stages", async () => {
+    const manifest = await loadMiraDocsManifest();
+    const loader = new SkillLoader();
+    const content = await loader.loadContent(manifest);
+    const createSite = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/references/create-site.md",
+    );
+    const conversations = await loadResourceContent(
+      loader,
+      manifest,
+      "skill://miradocs/examples/conversations.md",
+    );
+
+    expect(content.body).toContain("github.deployment: github_pages");
+    expect(content.body).toContain("local.deployment: none");
+    expect(content.body).toContain("允许直接写默认分支");
+    expect(content.body).toContain("inspect_target");
+    expect(content.body).toContain("verify_pages");
+    expect(createSite).toContain("GitHub 目标默认 `github_pages`");
+    expect(createSite).toContain("只执行第一个未完成阶段");
+    expect(createSite).toContain("不得通过 npm README");
+    expect(createSite).toContain("PR 不是默认必需阶段");
+    expect(conversations).toContain("部署：GitHub Pages（默认）");
+    expect(conversations).toContain("先不部署");
+    expect(conversations).toContain("Actions 与 GitHub Pages 将标记为 not_run");
   });
 
   it("binds the GitHub site workflow to the repository capabilities available on dev", async () => {

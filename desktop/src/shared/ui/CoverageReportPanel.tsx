@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import Card from "./Card";
 import { ModalShell } from "./Modal";
+import Table from "./Table";
 
 export interface CoverageMetric {
   total: number;
@@ -116,6 +118,7 @@ export interface CoverageReportPanelProps {
   title?: ReactNode;
   emptyText?: ReactNode;
   errorText?: ReactNode;
+  loadingFallback?: ReactNode;
   className?: string;
 }
 
@@ -291,6 +294,7 @@ export default function CoverageReportPanel({
   title,
   emptyText = "覆盖率报告暂不可用",
   errorText = "覆盖率报告加载失败",
+  loadingFallback,
   className = "",
 }: CoverageReportPanelProps) {
   const { t } = useTranslation();
@@ -529,11 +533,85 @@ export default function CoverageReportPanel({
     );
   };
 
+  const tableColumns = useMemo<ColumnDef<FileTableEntry, any>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: () => <SortHeader label="File" activeKey="name" />,
+        cell: ({ row }) => <span title={row.original.path}>{row.original.name}</span>,
+        meta: { width: 300, mono: true, ellipsisTooltip: true },
+      },
+      {
+        accessorKey: "tests",
+        header: () => <SortHeader label="Tests" activeKey="tests" />,
+        meta: { width: 72 },
+      },
+      {
+        accessorKey: "passed",
+        header: () => <SortHeader label="Passed" activeKey="passed" />,
+        cell: ({ getValue }) => <span className="text-success">{getValue<number>()}</span>,
+        meta: { width: 80 },
+      },
+      {
+        accessorKey: "failed",
+        header: () => <SortHeader label="Failed" activeKey="failed" />,
+        cell: ({ getValue }) => {
+          const failed = getValue<number>();
+          return <span className={failed > 0 ? "text-danger" : "text-text-primary"}>{failed}</span>;
+        },
+        meta: { width: 76 },
+      },
+      {
+        accessorKey: "skipped",
+        header: () => <SortHeader label="Skipped" activeKey="skipped" />,
+        meta: { width: 82, muted: true },
+      },
+      {
+        accessorKey: "durationMs",
+        header: () => <SortHeader label="Duration" activeKey="duration" />,
+        cell: ({ getValue }) => {
+          const durationMs = getValue<number>();
+          return durationMs > 0 ? formatDuration(durationMs) : "-";
+        },
+        meta: { width: 94, muted: true },
+      },
+      ...(["statements", "branches", "functions", "lines"] as const).map((key) => ({
+        id: key,
+        accessorFn: (row: FileTableEntry) => row.coverage?.[key].pct,
+        header: () => <SortHeader label={key[0].toUpperCase() + key.slice(1)} activeKey={key} />,
+        cell: (context: CellContext<FileTableEntry, unknown>) => (
+          <CoveragePctCell pct={context.getValue() as number | undefined} />
+        ),
+        meta: { width: 116 },
+      })),
+      {
+        id: "details",
+        header: () => <span className="text-xs font-medium">Details</span>,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => setSelectedFilePath(row.original.path)}
+            className="inline-flex items-center gap-1 rounded-ui-control border border-border/70 px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:bg-surface-secondary"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            查看
+          </button>
+        ),
+        meta: { width: 86 },
+      },
+    ],
+    [sortKey, sortOrder],
+  );
+
   const isLoading =
     (coverageState.status === "checking" || coverageState.status === "idle") &&
     (resultState.status === "checking" || resultState.status === "idle");
 
   if (isLoading) {
+    if (loadingFallback) {
+      return <>{loadingFallback}</>;
+    }
+
     return (
       <Card className={`space-y-3 ${className}`}>
         {title ? (
@@ -701,101 +779,13 @@ export default function CoverageReportPanel({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border/70">
-          <div className="h-full overflow-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 z-10 bg-surface-secondary">
-                <tr className="border-b border-border">
-                  <th className="px-3 py-2 font-medium text-text-secondary">
-                    <SortHeader label="File" activeKey="name" />
-                  </th>
-                  <th className="px-3 py-2 font-medium text-text-secondary">
-                    <SortHeader label="Tests" activeKey="tests" />
-                  </th>
-                  <th className="px-3 py-2 font-medium text-text-secondary">
-                    <SortHeader label="Passed" activeKey="passed" />
-                  </th>
-                  <th className="px-3 py-2 font-medium text-text-secondary">
-                    <SortHeader label="Failed" activeKey="failed" />
-                  </th>
-                  <th className="hidden px-3 py-2 font-medium text-text-secondary lg:table-cell">
-                    <SortHeader label="Skipped" activeKey="skipped" />
-                  </th>
-                  <th className="hidden px-3 py-2 font-medium text-text-secondary lg:table-cell">
-                    <SortHeader label="Duration" activeKey="duration" />
-                  </th>
-                  <th className="px-3 py-2 font-medium text-text-secondary">
-                    <SortHeader label="Statements" activeKey="statements" />
-                  </th>
-                  <th className="hidden px-3 py-2 font-medium text-text-secondary xl:table-cell">
-                    <SortHeader label="Branches" activeKey="branches" />
-                  </th>
-                  <th className="hidden px-3 py-2 font-medium text-text-secondary xl:table-cell">
-                    <SortHeader label="Functions" activeKey="functions" />
-                  </th>
-                  <th className="hidden px-3 py-2 font-medium text-text-secondary xl:table-cell">
-                    <SortHeader label="Lines" activeKey="lines" />
-                  </th>
-                  <th className="px-3 py-2 font-medium text-text-secondary">
-                    <span className="text-xs font-medium">Details</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedEntries.map((entry) => (
-                  <tr
-                    key={entry.path}
-                    className="border-b border-border/70 last:border-b-0 hover:bg-surface-secondary/40"
-                  >
-                    <td
-                      className="max-w-[220px] truncate px-3 py-2 font-mono text-text-primary sm:max-w-[300px]"
-                      title={entry.path}
-                    >
-                      {entry.name}
-                    </td>
-                    <td className="px-3 py-2 text-text-primary">{entry.tests}</td>
-                    <td className="px-3 py-2 text-success">{entry.passed}</td>
-                    <td
-                      className={`px-3 py-2 ${
-                        entry.failed > 0 ? "text-danger" : "text-text-primary"
-                      }`}
-                    >
-                      {entry.failed}
-                    </td>
-                    <td className="hidden px-3 py-2 text-text-secondary lg:table-cell">
-                      {entry.skipped}
-                    </td>
-                    <td className="hidden px-3 py-2 text-text-secondary lg:table-cell">
-                      {entry.durationMs > 0 ? formatDuration(entry.durationMs) : "-"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <CoveragePctCell pct={entry.coverage?.statements.pct} />
-                    </td>
-                    <td className="hidden px-3 py-2 xl:table-cell">
-                      <CoveragePctCell pct={entry.coverage?.branches.pct} />
-                    </td>
-                    <td className="hidden px-3 py-2 xl:table-cell">
-                      <CoveragePctCell pct={entry.coverage?.functions.pct} />
-                    </td>
-                    <td className="hidden px-3 py-2 xl:table-cell">
-                      <CoveragePctCell pct={entry.coverage?.lines.pct} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFilePath(entry.path)}
-                        className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-xs font-medium text-text-primary transition-colors hover:bg-surface-secondary"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        查看
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <Table
+          data={sortedEntries}
+          columns={tableColumns}
+          stickyHeader
+          stickyFirstColumn
+          className="min-h-0 flex-1"
+        />
 
         {!coverageTotal && resultSummary ? (
           <div className="rounded-lg border border-border/70 bg-surface-secondary/40 px-3 py-4 text-sm text-text-secondary">

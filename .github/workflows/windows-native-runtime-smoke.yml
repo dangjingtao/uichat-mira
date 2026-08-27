@@ -1,0 +1,57 @@
+name: Windows Native Runtime Smoke
+
+on:
+  push:
+    branches:
+      - dev
+      - fix/windows-electron-node-abi
+    paths:
+      - '.github/workflows/windows-native-runtime-smoke.yml'
+      - '.github/workflows/build-desktop.yml'
+      - 'server/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: windows-native-runtime-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staged-server-runtime:
+    name: Staged server runtime
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Terminal Dev Runtime
+        uses: actions/cache@v4
+        with:
+          path: .local-runtimes/terminal-dev
+          key: windows-native-runtime-${{ hashFiles('scripts/terminal-runtime.lock.json') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Build server bundle
+        run: pnpm internal:build:server
+
+      - name: Prepare pinned Node runtime
+        run: pnpm prepare:terminal-runtime
+
+      - name: Verify native modules with pinned runtime
+        run: node scripts/smoke-staged-server-runtime.mjs

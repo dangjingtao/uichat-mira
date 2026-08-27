@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
@@ -7,6 +7,10 @@ import {
   ChevronRight,
   LoaderCircle,
 } from "lucide-react";
+import {
+  getStreamingTextVisibleRevision,
+  subscribeStreamingTextVisible,
+} from "@/shared/ui/StreamingTextRenderer";
 import {
   getDisplayExecutionStep,
   normalizeInlineText,
@@ -33,6 +37,10 @@ type AgentTraceStatus =
   | "failed"
   | "blocked"
   | "cancelled";
+
+type InnerStatusDisplay =
+  | { kind: "subagent"; state: SubAgentWorkingState }
+  | { kind: "status"; text: string };
 
 const getStepDetailString = (step: RagNodeLike, key: string) => {
   const value = step.details?.[key];
@@ -196,18 +204,81 @@ export function UChatExecutionTrace({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
-
-  if (steps.length === 0) return null;
-
-  const workingState = getLatestSubAgentWorkingState(steps);
   const displaySteps = getDisplayExecutionSteps(steps);
+  const workingState = getLatestSubAgentWorkingState(steps);
   const approvalTraceState = getApprovalTraceState(displaySteps, agentStatus);
   const fallbackInnerStatus = workingState
     ? null
     : getAgentInnerStatus(displaySteps, approvalTraceState);
-  const hasAnswerStarted = displaySteps.some(
-    (step) => step.nodeType === "generate",
+  const candidateInnerDisplay: InnerStatusDisplay | null = workingState
+    ? { kind: "subagent", state: workingState }
+    : fallbackInnerStatus
+      ? { kind: "status", text: fallbackInnerStatus }
+      : null;
+  const hasFailed = displaySteps.some((step) => step.phase === "error");
+  const latestGenerateStep = [...displaySteps]
+    .reverse()
+    .find((step) => step.nodeType === "generate");
+  const generationKey = latestGenerateStep
+    ? `${messageId ?? "unknown"}:${latestGenerateStep.attemptKey ?? latestGenerateStep.nodeId}`
+    : null;
+  const currentVisibleRevision = getStreamingTextVisibleRevision();
+  const generationKeyRef = useRef<string | null>(null);
+  const visibilityBaselineRef = useRef(currentVisibleRevision);
+  const [visibleGenerationKey, setVisibleGenerationKey] = useState<string | null>(
+    null,
   );
+  const stableMessageIdRef = useRef(messageId);
+  const stableInnerDisplayRef = useRef<InnerStatusDisplay | null>(null);
+
+  if (stableMessageIdRef.current !== messageId) {
+    stableMessageIdRef.current = messageId;
+    stableInnerDisplayRef.current = null;
+  }
+
+  if (candidateInnerDisplay) {
+    stableInnerDisplayRef.current = candidateInnerDisplay;
+  } else if (hasFailed) {
+    stableInnerDisplayRef.current = null;
+  }
+
+  if (generationKeyRef.current !== generationKey) {
+    const previousGenerationKey = generationKeyRef.current;
+    generationKeyRef.current = generationKey;
+    if (previousGenerationKey !== null || generationKey === null) {
+      visibilityBaselineRef.current = currentVisibleRevision;
+    }
+  }
+
+  const innerDisplay = hasFailed
+    ? null
+    : candidateInnerDisplay ?? stableInnerDisplayRef.current;
+  const hasVisibleAssistantText =
+    generationKey !== null && visibleGenerationKey === generationKey;
+
+  useLayoutEffect(() => {
+    if (!generationKey || !innerDisplay || hasVisibleAssistantText) {
+      if (!generationKey) {
+        visibilityBaselineRef.current = getStreamingTextVisibleRevision();
+      }
+      return undefined;
+    }
+
+    const markVisibleAnswer = () => {
+      if (
+        generationKeyRef.current === generationKey &&
+        getStreamingTextVisibleRevision() > visibilityBaselineRef.current
+      ) {
+        setVisibleGenerationKey(generationKey);
+      }
+    };
+
+    markVisibleAnswer();
+    return subscribeStreamingTextVisible(markVisibleAnswer);
+  }, [generationKey, hasVisibleAssistantText, innerDisplay]);
+
+  if (steps.length === 0) return null;
+
   const latestSubAgentTitle = getLatestSubAgentTraceTitle(displaySteps);
   const summary =
     approvalTraceState === "waiting_approval"
@@ -358,19 +429,20 @@ export function UChatExecutionTrace({
         </div>
       ) : null}
 
-      {workingState || fallbackInnerStatus ? (
+      {innerDisplay ? (
         <div
-          aria-hidden={hasAnswerStarted}
+          data-testid="agent-inner-status-region"
+          aria-hidden={hasVisibleAssistantText}
           className={`grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${
-            hasAnswerStarted
+            hasVisibleAssistantText
               ? "mt-0 grid-rows-[0fr] opacity-0"
               : "mt-2 grid-rows-[1fr] opacity-100"
           }`}
         >
           <div className="min-h-0 overflow-hidden">
-            {workingState ? (
-              <SubAgentWorkingStateView state={workingState} />
-            ) : fallbackInnerStatus ? (
+            {innerDisplay.kind === "subagent" ? (
+              <SubAgentWorkingStateView state={innerDisplay.state} />
+            ) : (
               <div
                 data-testid="agent-inner-status"
                 className="flex items-start gap-2 px-1 text-[13px] leading-5 text-text-secondary"
@@ -379,9 +451,9 @@ export function UChatExecutionTrace({
                   className="mt-[7px] h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary/70"
                   aria-hidden="true"
                 />
-                <p className="min-w-0 break-words">{fallbackInnerStatus}</p>
+                <p className="min-w-0 break-words">{innerDisplay.text}</p>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       ) : null}

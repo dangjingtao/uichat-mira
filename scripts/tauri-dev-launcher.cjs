@@ -3,10 +3,43 @@ const path = require("path");
 const fs = require("fs");
 const { spawn, spawnSync } = require("child_process");
 const { pathToFileURL } = require("url");
+const os = require("os");
 
 const STARTUP_TIMEOUT_MS = 60000;
 const childProcesses = [];
 let isShuttingDown = false;
+
+function assertExistingDirectory(directoryPath, label) {
+  if (!fs.existsSync(directoryPath)) {
+    throw new Error(`${label} does not exist: ${directoryPath}`);
+  }
+  if (!fs.statSync(directoryPath).isDirectory()) {
+    throw new Error(`${label} must be a directory: ${directoryPath}`);
+  }
+  return directoryPath;
+}
+
+function resolveBackendWorkspaceRoot(
+  baseEnv = process.env,
+  defaultWorkspaceRoot = path.join(
+    os.homedir(),
+    "Documents",
+    "UIChat Mira",
+    "Default Workspace",
+  ),
+) {
+  const explicitWorkspaceRoot = baseEnv.UI_CHAT_WORKSPACE_ROOT?.trim();
+  if (explicitWorkspaceRoot) {
+    return assertExistingDirectory(
+      path.resolve(explicitWorkspaceRoot),
+      "UI_CHAT_WORKSPACE_ROOT",
+    );
+  }
+
+  const resolvedDefaultRoot = path.resolve(defaultWorkspaceRoot);
+  fs.mkdirSync(resolvedDefaultRoot, { recursive: true });
+  return assertExistingDirectory(resolvedDefaultRoot, "Default workspace");
+}
 
 function loadRuntimeConfig() {
   const candidates = [
@@ -234,6 +267,7 @@ async function main() {
       spawnManagedProcess("server", serverDir, "pnpm dev", {
         env: {
           UI_CHAT_ALLOW_BACKEND_REUSE: "1",
+          UI_CHAT_WORKSPACE_ROOT: resolveBackendWorkspaceRoot(process.env),
         },
         readyWhen: (_text, combined) =>
           combined.includes(`Server running on http://${backendHost}:${backendPort}`),
@@ -258,21 +292,27 @@ async function main() {
   console.log("Tauri dev services are ready.");
 }
 
-process.on("SIGINT", () => shutdown(0));
-process.on("SIGTERM", () => shutdown(0));
-process.on("SIGBREAK", () => shutdown(0));
-process.on("SIGHUP", () => shutdown(0));
-process.on("beforeExit", () => shutdown(0));
-process.on("uncaughtException", (error) => {
-  console.error(error);
-  shutdown(1);
-});
-process.on("unhandledRejection", (error) => {
-  console.error(error);
-  shutdown(1);
-});
+if (require.main === module) {
+  process.on("SIGINT", () => shutdown(0));
+  process.on("SIGTERM", () => shutdown(0));
+  process.on("SIGBREAK", () => shutdown(0));
+  process.on("SIGHUP", () => shutdown(0));
+  process.on("beforeExit", () => shutdown(0));
+  process.on("uncaughtException", (error) => {
+    console.error(error);
+    shutdown(1);
+  });
+  process.on("unhandledRejection", (error) => {
+    console.error(error);
+    shutdown(1);
+  });
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  shutdown(1);
-});
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    shutdown(1);
+  });
+}
+
+module.exports = {
+  resolveBackendWorkspaceRoot,
+};

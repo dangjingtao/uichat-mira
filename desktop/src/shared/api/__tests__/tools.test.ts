@@ -20,6 +20,8 @@ import { get, post, put, patch, del } from "@/shared/lib/request";
 import {
   getTools,
   getMcpMarketplaceServers,
+  getMcpMarketplaceSyncStatus,
+  requestMcpMarketplaceSync,
   getExternalMcpServers,
   createExternalMcpServer,
   connectExternalMcpServer,
@@ -151,13 +153,46 @@ describe("tools api", () => {
       cursor: "c1",
       limit: 10,
       query: "search",
+      category: "developer-tools",
+      transport: "local",
+      installable: true,
     });
 
     expect(get).toHaveBeenCalledWith(
-      "/mcp/marketplace/servers?cursor=c1&limit=10&query=search",
+      "/mcp/marketplace/servers?cursor=c1&limit=10&query=search&category=developer-tools&transport=local&installable=true",
       { signal: undefined, timeout: 300000 },
     );
     expect(result.servers).toEqual([sampleMarketplaceServer]);
+  });
+
+  it("reads marketplace sync status and requests an update", async () => {
+    const status = {
+      sourceUrl: "registry",
+      status: "syncing" as const,
+      mode: "incremental" as const,
+      lastAttemptAt: "2026-07-31T00:00:00.000Z",
+      lastSuccessfulSyncAt: null,
+      lastFullSyncAt: null,
+      updatedCount: 0,
+      lastError: null,
+      nextAutoSyncAt: null,
+    };
+    vi.mocked(get).mockResolvedValueOnce(status);
+    vi.mocked(post).mockResolvedValueOnce({ started: true, status });
+
+    await expect(getMcpMarketplaceSyncStatus()).resolves.toEqual(status);
+    await expect(requestMcpMarketplaceSync()).resolves.toEqual({
+      started: true,
+      status,
+    });
+    expect(get).toHaveBeenCalledWith("/mcp/marketplace/sync-status", {
+      timeout: 300000,
+    });
+    expect(post).toHaveBeenCalledWith(
+      "/mcp/marketplace/sync",
+      undefined,
+      { timeout: 300000 },
+    );
   });
 
   it("getExternalMcpServers 返回外部服务器列表", async () => {

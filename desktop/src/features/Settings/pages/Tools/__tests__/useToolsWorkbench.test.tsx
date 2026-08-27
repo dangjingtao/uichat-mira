@@ -166,6 +166,55 @@ describe("useToolsWorkbench", () => {
     });
   });
 
+  it("selects the first displayed group instead of the alphabetically first tool", async () => {
+    const createTool = (
+      id: string,
+      title: string,
+      groupId: string,
+      groupLabel: string,
+      groupOrder: number,
+    ) => ({
+      id,
+      title,
+      description: "",
+      domain: groupId,
+      source: "internal",
+      mode: "sync",
+      inputSchema: {},
+      tags: [],
+      capabilities: {
+        sideEffect: "none",
+        requiresApproval: false,
+      },
+      workbench: {
+        groupId,
+        groupLabel,
+        groupDescription: groupLabel,
+        groupOrder,
+        icon: "wrench",
+      },
+    });
+    getMcpToolsMock.mockResolvedValueOnce([
+      createTool("ask_external_expert", "Ask External Expert", "external_expert", "问策", 70),
+      createTool("read_open", "Read Open", "read", "阅读", 10),
+    ]);
+
+    const useToolsWorkbench = await importHook();
+    const { result } = renderHook(() => useToolsWorkbench());
+
+    await waitFor(() => {
+      expect(result.current.tools).toHaveLength(2);
+    }, { timeout: 3000 });
+
+    expect(result.current.groupSummaries.map((group) => group.id)).toEqual([
+      "read",
+      "external_expert",
+    ]);
+    expect(result.current.activeGroupId).toBe("read");
+    expect(result.current.selectedTool?.id).toBe("read_open");
+    expect(result.current.filteredTools.map((tool) => tool.id)).toEqual(["read_open"]);
+  });
+
   it("groups and filters tools by capability ownership instead of runtime domain", async () => {
     const createBrowserTool = (
       id: string,
@@ -194,9 +243,9 @@ describe("useToolsWorkbench", () => {
       },
     });
     getMcpToolsMock.mockResolvedValueOnce([
-      createBrowserTool("browser_observe", "browser_computer_use", "Computer Use", 50),
-      createBrowserTool("browser_act", "browser_computer_use", "Computer Use", 50),
-      createBrowserTool("browser_assert", "browser_computer_use", "Computer Use", 50),
+      createBrowserTool("browser_observe", "browser_computer_use", "智控", 50),
+      createBrowserTool("browser_act", "browser_computer_use", "智控", 50),
+      createBrowserTool("browser_assert", "browser_computer_use", "智控", 50),
       createBrowserTool("browser_attached_look", "browser_attached", "触界", 60),
       createBrowserTool("browser_attached_browse", "browser_attached", "触界", 60),
       createBrowserTool("browser_attached_act", "browser_attached", "触界", 60),
@@ -211,7 +260,7 @@ describe("useToolsWorkbench", () => {
     }, { timeout: 3000 });
 
     expect(result.current.groupSummaries).toEqual([
-      expect.objectContaining({ id: "browser_computer_use", label: "Computer Use", count: 3 }),
+      expect.objectContaining({ id: "browser_computer_use", label: "智控", count: 3 }),
       expect.objectContaining({ id: "browser_attached", label: "触界", count: 4 }),
     ]);
     expect(result.current.filteredTools.map((tool) => tool.id).sort()).toEqual([

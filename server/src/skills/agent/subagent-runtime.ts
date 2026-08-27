@@ -1,5 +1,12 @@
 import crypto from "node:crypto";
-import { getWorkspaceSelection } from "@/mcp/workspace.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import {
+  ensureParentDir,
+  getWorkspaceSelection,
+  resolveWorkspaceWritePath,
+  runWithWorkspaceRootOverride,
+} from "@/mcp/workspace.js";
 import { loadSkillResource } from "@/skills/context/provider.js";
 import type {
   SkillContext,
@@ -23,11 +30,153 @@ import type {
   SubAgentWorkingState,
 } from "./types.js";
 
-const createSkillResourceTool = (skillId: string): SubAgentToolBinding => ({
+type SkillResourceRequestResolution =
+  | { status: "resolved"; uri: string }
+  | {
+      status: "not_found" | "rejected";
+      requested: string;
+      availableUris: string[];
+      reason: string;
+    };
+
+const cleanResourceRequest = (value: string) =>
+  value
+    .trim()
+    .replace(/^`+|`+$/g, "")
+    .replace(/^['"]|['"]$/g, "")
+    .trim();
+
+export const resolveSkillResourceRequest = (input: {
+  skillId: string;
+  requested: string;
+  availableUris: string[];
+}): SkillResourceRequestResolution => {
+  const requested = cleanResourceRequest(input.requested);
+  const prefix = `skill://${input.skillId}/`;
+  const availableUris = [...new Set(input.availableUris)].filter((uri) =>
+    uri.startsWith(prefix),
+  );
+
+  if (!requested) {
+    return {
+      status: "not_found",
+      requested,
+      availableUris,
+      reason: "No Skill resource URI or package-relative path was provided.",
+    };
+  }
+
+  if (requested.startsWith("skill://") && !requested.startsWith(prefix)) {
+    return {
+      status: "rejected",
+      requested,
+      availableUris,
+      reason: `Skill resource must belong to active Skill ${input.skillId}.`,
+    };
+  }
+
+  let candidate = requested.startsWith(prefix)
+    ? requested
+    : `${prefix}${requested.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "")}`;
+  const relative = candidate.slice(prefix.length);
+  const normalizedRelative = path.posix.normalize(relative);
+  if (
+    !normalizedRelative ||
+    normalizedRelative === "." ||
+    normalizedRelative === ".." ||
+    normalizedRelative.startsWith("../")
+  ) {
+    return {
+      status: "rejected",
+      requested,
+      availableUris,
+      reason: "Skill resource path must stay inside the active Skill package.",
+    };
+  }
+  candidate = `${prefix}${normalizedRelative}`;
+
+  const exact = availableUris.find(
+    (uri) => uri.toLowerCase() === candidate.toLowerCase(),
+  );
+  if (exact) return { status: "resolved", uri: exact };
+
+  const requestedName = path.posix.basename(normalizedRelative).toLowerCase();
+  const basenameMatches = availableUris.filter(
+    (uri) => path.posix.basename(uri).toLowerCase() === requestedName,
+  );
+  if (basenameMatches.length === 1) {
+    return { status: "resolved", uri: basenameMatches[0]! };
+  }
+
+  return {
+    status: "not_found",
+    requested,
+    availableUris,
+    reason: "Requested resource is not present in the active Skill package.",
+  };
+};
+
+const resolveScriptResourceRelativePath = (input: {
+  skillId: string;
+  uri: string;
+}) => {
+  const prefix = `skill://${input.skillId}/`;
+  if (!input.uri.startsWith(prefix)) {
+    throw new Error(`Skill resource must belong to active Skill ${input.skillId}`);
+  }
+  if (!/^[A-Za-z0-9._-]+$/.test(input.skillId)) {
+    throw new Error(`Invalid Skill id for workspace materialization: ${input.skillId}`);
+  }
+
+  const relative = path.posix.normalize(input.uri.slice(prefix.length));
+  if (
+    !relative ||
+    relative === "." ||
+    relative === ".." ||
+    relative.startsWith("../") ||
+    path.posix.isAbsolute(relative)
+  ) {
+    throw new Error(`Invalid Skill resource path: ${input.uri}`);
+  }
+
+  return path.posix.join(
+    ".mira",
+    "staging",
+    "skill-resources",
+    input.skillId,
+    relative,
+  );
+};
+
+export const materializeSkillScriptResource = async (input: {
+  skillId: string;
+  uri: string;
+  content: string;
+  workspaceRoot: string;
+}) => {
+  const workspacePath = resolveScriptResourceRelativePath({
+    skillId: input.skillId,
+    uri: input.uri,
+  });
+
+  await runWithWorkspaceRootOverride(input.workspaceRoot, async () => {
+    const targetPath = resolveWorkspaceWritePath(workspacePath);
+    ensureParentDir(targetPath);
+    await fs.writeFile(targetPath, input.content, "utf8");
+  });
+
+  return workspacePath;
+};
+
+const createSkillResourceTool = (input: {
+  skillId: string;
+  availableUris: string[];
+  workspaceRoot?: string;
+}): SubAgentToolBinding => ({
   id: "skill_read_resource",
   label: "Read Skill Resource",
   description:
-    "Read one reference/template/example/script text resource belonging to the active Skill. This does not expand tool permissions.",
+    "Read one available reference/template/example/script resource belonging to the active Skill. Script resources are materialized into the bound workspace and return workspacePath; execute that path directly and never copy script source into a shell command. Pass either the exact skill:// URI or its package-relative path. A missing resource returns a recoverable result instead of failing the subAgent.",
   inputSchema: {
     type: "object",
     required: ["uri"],
@@ -35,28 +184,85 @@ const createSkillResourceTool = (skillId: string): SubAgentToolBinding => ({
     properties: {
       uri: {
         type: "string",
-        description: `A resource URI owned by skill://${skillId}/...`,
+        description: `One of ${JSON.stringify(input.availableUris)}, or its package-relative path.`,
       },
     },
   },
   execute: async (args) => {
-    const uri = typeof args.uri === "string" ? args.uri.trim() : "";
-    if (!uri.startsWith(`skill://${skillId}/`)) {
-      throw new Error(`Skill resource must belong to active Skill ${skillId}: ${uri}`);
+    const requested = typeof args.uri === "string" ? args.uri : "";
+    const resolution = resolveSkillResourceRequest({
+      skillId: input.skillId,
+      requested,
+      availableUris: input.availableUris,
+    });
+    if (resolution.status !== "resolved") {
+      return {
+        result: resolution,
+      };
     }
-    const loaded = await loadSkillResource({ skillId, uri });
-    return {
-      result: {
-        uri: loaded.uri,
-        kind: loaded.kind,
-        content: loaded.content,
-      },
-      evidence: {
-        status: "completed",
-        actionTaken: `Loaded Skill resource ${uri}`,
-        facts: [`Loaded ${uri}`],
-      },
-    };
+
+    try {
+      const loaded = await loadSkillResource({
+        skillId: input.skillId,
+        uri: resolution.uri,
+      });
+
+      if (loaded.kind === "script") {
+        if (!input.workspaceRoot) {
+          return {
+            result: {
+              status: "workspace_required",
+              uri: loaded.uri,
+              kind: loaded.kind,
+              reason: "Script resources require a bound workspace for materialization.",
+            },
+          };
+        }
+        const workspacePath = await materializeSkillScriptResource({
+          skillId: input.skillId,
+          uri: loaded.uri,
+          content: loaded.content,
+          workspaceRoot: input.workspaceRoot,
+        });
+        return {
+          result: {
+            status: "materialized",
+            uri: loaded.uri,
+            kind: loaded.kind,
+            workspacePath,
+            bytes: Buffer.byteLength(loaded.content, "utf8"),
+          },
+          evidence: {
+            status: "completed",
+            actionTaken: `Materialized Skill script ${loaded.uri}`,
+            facts: [`Materialized ${loaded.uri} at ${workspacePath}`],
+          },
+        };
+      }
+
+      return {
+        result: {
+          status: "loaded",
+          uri: loaded.uri,
+          kind: loaded.kind,
+          content: loaded.content,
+        },
+        evidence: {
+          status: "completed",
+          actionTaken: `Loaded Skill resource ${loaded.uri}`,
+          facts: [`Loaded ${loaded.uri}`],
+        },
+      };
+    } catch (error) {
+      return {
+        result: {
+          status: "unavailable",
+          uri: resolution.uri,
+          availableUris: input.availableUris,
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
   },
 });
 
@@ -231,7 +437,18 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
     onRuntimeEvent: input.onRuntimeEvent,
   };
 
-  const tools: SubAgentToolBinding[] = [createSkillResourceTool(skillId)];
+  const availableResourceUris = input.skillContext.resources
+    .filter((resource) => resource.skillId === skillId)
+    .map((resource) => resource.uri);
+  const tools: SubAgentToolBinding[] = availableResourceUris.length > 0
+    ? [
+        createSkillResourceTool({
+          skillId,
+          availableUris: availableResourceUris,
+          workspaceRoot,
+        }),
+      ]
+    : [];
   const missingCapabilities: SubAgentRequirement[] = [];
   let availableCapabilityCount = 0;
   const declaredCapabilityCount =

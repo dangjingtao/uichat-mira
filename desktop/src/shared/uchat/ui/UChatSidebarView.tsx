@@ -11,6 +11,7 @@ type ChatWorkspaceGroup = {
   id: string;
   name: string;
   rootPath?: string | null;
+  isDefault?: boolean;
   threads: ChatThreadSummary[];
   collapsed?: boolean;
 };
@@ -283,13 +284,23 @@ export function UChatSidebarView({
                         >
                           <span className="block truncate text-sm font-medium text-text-primary">
                             {workspace.name}
+                            {workspace.isDefault ||
+                            workspace.name === "Default Workspace" ||
+                            workspace.name === "Mira BASE" ? (
+                              <span className="ml-1 text-[10px] font-normal text-text-tertiary">
+                                {t("chat.sidebar.workspaceDefault")}
+                              </span>
+                            ) : null}
                           </span>
                         </Tooltip>
                       </span>
                     </button>
 
                     <div className="flex items-center gap-1">
-                      {onDeleteWorkspace ? (
+                      {onDeleteWorkspace &&
+                      !workspace.isDefault &&
+                      workspace.name !== "Default Workspace" &&
+                      workspace.name !== "Mira BASE" ? (
                         <DropdownMenu
                           trigger={
                             <button

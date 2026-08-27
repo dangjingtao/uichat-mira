@@ -26,6 +26,7 @@ function loadRuntimeConfig() {
 }
 
 const runtimeConfig = loadRuntimeConfig();
+const DEFAULT_REMOTE_RELAY_URL = "https://relay.tomz.io";
 
 const CONFIG = {
   PORT: Number(
@@ -46,6 +47,10 @@ const CONFIG = {
   EXTEND_TOOLS_DIR: process.env.UI_CHAT_EXTEND_TOOLS_DIR ?? "extendTools",
   ATTACHMENTS_DIR: process.env.UI_CHAT_ATTACHMENTS_DIR ?? "data/attachments",
   WECOM_BIND_RELAY_BASE_URL: process.env.WECOM_BIND_RELAY_BASE_URL ?? "",
+  REMOTE_RELAY_DEFAULT_URL:
+    process.env.UI_CHAT_REMOTE_RELAY_DEFAULT_URL ??
+    runtimeConfig.remoteRelay?.defaultUrl ??
+    DEFAULT_REMOTE_RELAY_URL,
   HARNESS_RETENTION_MAX_ENTRIES: Number(
     process.env.UI_CHAT_HARNESS_RETENTION_MAX_ENTRIES ?? 200,
   ),

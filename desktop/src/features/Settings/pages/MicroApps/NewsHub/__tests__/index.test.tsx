@@ -9,6 +9,8 @@ const apiMocks = vi.hoisted(() => ({
   getNewsHubConfig: vi.fn(),
   refreshNewsHub: vi.fn(),
   saveNewsHubConfig: vi.fn(),
+  listNewsFeedSubscriptions: vi.fn(),
+  detectNewsFeed: vi.fn(),
 }));
 
 const messageMocks = vi.hoisted(() => ({
@@ -28,6 +30,12 @@ vi.mock("@/shared/api/newsHub", () => ({
   getNewsHubConfig: apiMocks.getNewsHubConfig,
   refreshNewsHub: apiMocks.refreshNewsHub,
   saveNewsHubConfig: apiMocks.saveNewsHubConfig,
+  listNewsFeedSubscriptions: apiMocks.listNewsFeedSubscriptions,
+  detectNewsFeed: apiMocks.detectNewsFeed,
+  createNewsFeedSubscription: vi.fn(),
+  updateNewsFeedSubscription: vi.fn(),
+  refreshNewsFeedSubscription: vi.fn(),
+  deleteNewsFeedSubscription: vi.fn(),
 }));
 
 vi.mock("@/shared/ui", async (importOriginal) => {
@@ -161,6 +169,7 @@ vi.mock("@/shared/ui", async (importOriginal) => {
 
 describe("NewsHubPage", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     apiMocks.getNewsHubOverview.mockResolvedValue({
       sources: [],
       items: [],
@@ -190,6 +199,8 @@ describe("NewsHubPage", () => {
       sources: [],
     });
     apiMocks.saveNewsHubConfig.mockImplementation(async (payload) => payload);
+    apiMocks.listNewsFeedSubscriptions.mockResolvedValue([]);
+    apiMocks.detectNewsFeed.mockResolvedValue([]);
     messageMocks.success.mockReset();
     messageMocks.error.mockReset();
   });
@@ -197,7 +208,12 @@ describe("NewsHubPage", () => {
   it("loads persisted config and saves updated ttl through the config modal", async () => {
     render(<NewsHubPage />);
 
-    expect(screen.getByTestId("news-hub-loading-skeleton")).toBeInTheDocument();
+    expect(screen.getByText("settings.microApps.newsHub.filters.source")).toBeInTheDocument();
+    expect(screen.getByText("settings.microApps.newsHub.filters.query")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: /settings\.microApps\.newsHub\.actions\.manageFeeds/,
+    })).toBeInTheDocument();
+    expect(screen.getByTestId("news-hub-results-loading-skeleton")).toBeInTheDocument();
     expect(
       screen.queryByText("settings.microApps.newsHub.states.loading"),
     ).not.toBeInTheDocument();
@@ -238,5 +254,30 @@ describe("NewsHubPage", () => {
         refreshTtlMinutes: 240,
       });
     });
+  });
+
+  it("opens RSS and Atom subscription management", async () => {
+    render(<NewsHubPage />);
+
+    const manageButton = await screen.findByRole("button", {
+      name: /settings\.microApps\.newsHub\.actions\.manageFeeds/,
+    });
+    fireEvent.click(manageButton);
+
+    expect(await screen.findByText("settings.microApps.newsHub.feeds.title")).toBeInTheDocument();
+    await waitFor(() => expect(apiMocks.listNewsFeedSubscriptions).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", {
+      name: /settings\.microApps\.newsHub\.feeds\.add/,
+    }));
+
+    expect(screen.getByText("settings.microApps.newsHub.feeds.detectHint")).toBeInTheDocument();
+    expect(screen.getByRole("button", {
+      name: /settings\.microApps\.newsHub\.feeds\.cancel/,
+    })).toBeInTheDocument();
+    expect(screen.queryByText("common.actions.back")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {
+      name: /settings\.microApps\.newsHub\.feeds\.subscribe/,
+    })).not.toBeInTheDocument();
   });
 });

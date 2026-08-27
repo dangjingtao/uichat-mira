@@ -34,14 +34,26 @@ describe("workspace selection", () => {
     expect(() => getWorkspaceRoot()).toThrow("workspace root is not selected");
   });
 
-  it("uses configured workspace root when UI_CHAT_WORKSPACE_ROOT is explicitly set", () => {
-    fs.mkdirSync(tempRoot, { recursive: true });
+  it("reports a configured workspace path without creating a missing directory", () => {
     process.env.UI_CHAT_WORKSPACE_ROOT = tempRoot;
+    expect(fs.existsSync(tempRoot)).toBe(false);
 
     expect(getWorkspaceSelection()).toMatchObject({
       rootPath: path.resolve(tempRoot),
       source: "configured",
     });
+    expect(fs.existsSync(tempRoot)).toBe(false);
+    expect(() => getWorkspaceRoot()).toThrow(
+      `workspace path does not exist: ${path.resolve(tempRoot)}`,
+    );
+    expect(fs.existsSync(tempRoot)).toBe(false);
+  });
+
+  it("rejects selecting a missing custom workspace without creating it", () => {
+    expect(() => selectWorkspaceRoot(tempRoot)).toThrow(
+      `workspace path does not exist: ${path.resolve(tempRoot)}`,
+    );
+    expect(fs.existsSync(tempRoot)).toBe(false);
   });
 
   it("selects workspace root explicitly", () => {

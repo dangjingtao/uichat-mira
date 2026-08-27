@@ -1,4 +1,15 @@
-import { FileSearch, Globe, MousePointerClick, PencilLine, SquareTerminal, Wrench } from "lucide-react";
+import {
+  Bot,
+  FileSearch,
+  GitBranch,
+  Globe,
+  Mail,
+  MousePointerClick,
+  Newspaper,
+  PencilLine,
+  SquareTerminal,
+  Wrench,
+} from "lucide-react";
 import Badge from "@/shared/ui/Badge";
 import { UChatOverflowTooltip } from "@/shared/uchat/ui/UChatOverflowTooltip";
 import type { ToolGroupSummary, ToolWorkbenchGroupId } from "../types";
@@ -10,7 +21,11 @@ const groupIcons: Record<string, typeof FileSearch> = {
   globe: Globe,
   terminal: SquareTerminal,
   "mouse-pointer": MousePointerClick,
+  github: GitBranch,
   wrench: Wrench,
+  external_expert: Bot,
+  mail: Mail,
+  news_research: Newspaper,
 };
 
 type ToolsSidebarProps = {
@@ -25,52 +40,50 @@ export default function ToolsSidebar({
   onSelectGroup,
 }: ToolsSidebarProps) {
   return (
-    <div className="stable-scrollbar flex min-h-0 flex-col gap-3 overflow-y-auto border-r border-border pr-4">
-      <div className="space-y-2 pb-2">
+    <nav
+      aria-label="Tool groups"
+      className="stable-scrollbar flex min-h-0 flex-col overflow-y-auto border-r border-border pr-3"
+    >
+      <ul className="divide-y divide-border pb-2">
         {summaries.map((summary) => {
-          const Icon = groupIcons[summary.icon] ?? Wrench;
+          const Icon = groupIcons[summary.id] ?? groupIcons[summary.icon] ?? Wrench;
           const isActive = summary.id === activeGroupId;
 
           return (
-            <button
-              key={summary.id}
-              type="button"
-              onClick={() => onSelectGroup(summary.id)}
-              className={`flex h-[84px] w-full items-start gap-3 overflow-hidden rounded-ui-control border px-3 py-2 text-left transition-colors ${
-                isActive
-                  ? "border-primary/30 bg-primary/5"
-                  : "border-border bg-surface-primary hover:bg-surface-secondary"
-              }`}
-            >
-              <div
-                className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-ui-control ${
-                  isActive ? "bg-primary/10 text-primary" : "bg-surface-secondary text-icon-secondary"
+            <li key={summary.id}>
+              <button
+                type="button"
+                onClick={() => onSelectGroup(summary.id)}
+                aria-current={isActive ? "page" : undefined}
+                className={`grid w-full grid-cols-[28px_minmax(0,1fr)_24px] items-center gap-3 border-l-2 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 ${
+                  isActive
+                    ? "border-l-primary bg-surface-soft"
+                    : "border-l-transparent hover:bg-surface-secondary"
                 }`}
               >
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <UChatOverflowTooltip
-                    text={summary.label || formatToolGroup(summary.id)}
-                    placement="right"
-                  >
-                    <div className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
-                      {summary.label || formatToolGroup(summary.id)}
-                    </div>
-                  </UChatOverflowTooltip>
-                  <Badge variant="muted">{summary.count}</Badge>
+                <div
+                  className={`flex h-7 w-7 items-center justify-center rounded-ui-control ${
+                    isActive ? "bg-primary/10 text-primary" : "bg-surface-secondary text-icon-secondary"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
                 </div>
-                <UChatOverflowTooltip text={summary.description} placement="right">
-                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">
-                    {summary.description}
+                <UChatOverflowTooltip
+                  text={summary.label || formatToolGroup(summary.id)}
+                  placement="right"
+                >
+                  <div className="min-w-0 truncate text-sm font-medium text-text-primary">
+                    {summary.label || formatToolGroup(summary.id)}
                   </div>
                 </UChatOverflowTooltip>
-              </div>
-            </button>
+                <Badge variant="muted" className="justify-self-end">
+                  {summary.count}
+                </Badge>
+              </button>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </nav>
   );
 }

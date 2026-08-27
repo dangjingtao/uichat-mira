@@ -975,7 +975,7 @@ function UChatMessageRow({
           src={assistantAvatarSrc}
           name={assistantDisplayName}
         />
-        <div className={`min-w-0 ${assistantBubbleWidthClassName}`}>
+        <div className={`min-w-0 w-full ${assistantBubbleWidthClassName}`}>
           <UChatExecutionTrace
             messageId={message.id}
             steps={messageTrace.steps}

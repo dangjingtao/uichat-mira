@@ -72,6 +72,20 @@ fn ensure_secret_file(secret_path: &Path, secret_name: &str) -> Result<String, S
     Ok(secret)
 }
 
+#[cfg(not(debug_assertions))]
+fn ensure_directory(directory_path: &Path, label: &str) -> Result<(), String> {
+    std::fs::create_dir_all(directory_path)
+        .map_err(|error| format!("Failed to create {} {:?}: {}", label, directory_path, error))?;
+
+    let metadata = std::fs::metadata(directory_path)
+        .map_err(|error| format!("Failed to inspect {} {:?}: {}", label, directory_path, error))?;
+    if !metadata.is_dir() {
+        return Err(format!("{} must be a directory: {:?}", label, directory_path));
+    }
+
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 struct RuntimeConfig {
     backend_host: String,
@@ -436,6 +450,7 @@ async fn check_database_health_command(token: Option<String>) -> Result<Database
 fn start_backend_process(
     data_dir: &Path,
     log_dir: &Path,
+    default_workspace_root: &Path,
     jwt_secret: &str,
     settings_secret: &str,
 ) -> Result<std::process::Child, String> {
@@ -471,6 +486,7 @@ fn start_backend_process(
         .env("UI_CHAT_DESKTOP_RESOURCES_ROOT", &resources_root)
         .env("UI_CHAT_DATABASE_DIR", data_dir)
         .env("UI_CHAT_LOG_DIR", log_dir)
+        .env("UI_CHAT_WORKSPACE_ROOT", default_workspace_root)
         .env("LOCAL_MODEL_RESOURCE_ROOT", local_model_resource_root)
         .env("LOCAL_MODEL_USER_DATA_DIR", data_dir.parent().unwrap_or(data_dir))
         .env("LOCAL_ONNX_WASM_ROOT", local_onnx_wasm_root);
@@ -754,16 +770,27 @@ pub fn run() {
                 .map_err(|error| format!("Failed to resolve app data directory: {}", error))?;
             let data_dir = app_data_dir.join("data");
             let log_dir = app_data_dir.join("logs");
+            let default_workspace_root = app
+                .path()
+                .document_dir()
+                .map_err(|error| format!("Failed to resolve documents directory: {}", error))?
+                .join("UIChat Mira")
+                .join("Default Workspace");
             let secrets_dir = app_data_dir.join("secrets");
             let jwt_secret = ensure_secret_file(&secrets_dir.join("jwt-secret.txt"), "JWT secret")?;
             let settings_secret = ensure_secret_file(&secrets_dir.join("settings-secret.txt"), "settings secret")?;
 
-            std::fs::create_dir_all(&data_dir)
-                .map_err(|error| format!("Failed to create data directory {:?}: {}", data_dir, error))?;
-            std::fs::create_dir_all(&log_dir)
-                .map_err(|error| format!("Failed to create log directory {:?}: {}", log_dir, error))?;
+            ensure_directory(&data_dir, "data directory")?;
+            ensure_directory(&log_dir, "log directory")?;
+            ensure_directory(&default_workspace_root, "default workspace")?;
 
-            let process = start_backend_process(&data_dir, &log_dir, &jwt_secret, &settings_secret)?;
+            let process = start_backend_process(
+                &data_dir,
+                &log_dir,
+                &default_workspace_root,
+                &jwt_secret,
+                &settings_secret,
+            )?;
             *app.state::<BackendProcess>().0.lock().unwrap() = Some(process);
             Ok(())
         });

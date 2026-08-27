@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import { render, screen } from "@testing-library/react";
-import { test, vi } from "vitest";
+import { afterAll, beforeAll, test, vi } from "vitest";
+import i18n from "@/shared/i18n";
 import "../i18n";
 import RoleLlmProfileCard from "./RoleLlmProfileCard";
+
+beforeAll(async () => {
+  await i18n.changeLanguage("en-US");
+});
+
+afterAll(async () => {
+  await i18n.changeLanguage("zh-CN");
+});
 
 test("RoleLlmProfileCard shows the configured count and summary", () => {
   render(

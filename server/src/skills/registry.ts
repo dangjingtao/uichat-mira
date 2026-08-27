@@ -1,4 +1,10 @@
-export type BuiltInSkillPackageId = "docx" | "pdf" | "xlsx" | "pptx";
+export type BuiltInSkillPackageId =
+  | "docx"
+  | "pdf"
+  | "xlsx"
+  | "pptx"
+  | "github-collaboration"
+  | "wechat-article-layout";
 
 export const MIRA_LAB_SKILL_SOURCE = "Mira Lab";
 
@@ -70,6 +76,45 @@ const deferredStatefulRuntime = () => ({
  * contract for workflows that truly need lifecycle/state/reducers.
  */
 const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
+  {
+    id: "github-collaboration",
+    version: "0.1.0",
+    name: "GitHub 协作",
+    source: MIRA_LAB_SKILL_SOURCE,
+    category: "开发协作",
+    description:
+      "读取已授权 GitHub 项目的状态、Issue、Pull Request 和 Actions，并在 Harness 审批边界内推进远程协作。",
+    bundled: true,
+    runtimeCapabilities: [],
+    packageFiles: [
+      "SKILL.md",
+      "references/project-pulse.md",
+      "references/issue-stewardship.md",
+      "references/pr-review.md",
+      "references/actions-triage.md",
+      "references/delivery-flow.md",
+    ],
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
+  },
+  {
+    id: "wechat-article-layout",
+    version: "0.1.0",
+    name: "微信公众号文章排版",
+    source: MIRA_LAB_SKILL_SOURCE,
+    category: "内容创作",
+    description:
+      "把 URL、Markdown 或正文排版成微信公众号编辑器可直接粘贴的 HTML，并通过通用终端执行无第三方依赖的 Python 生成器。",
+    bundled: true,
+    runtimeCapabilities: [],
+    packageFiles: [
+      "SKILL.md",
+      "references/dark-mode-mapping.md",
+      "scripts/build_wechat_html.py",
+    ],
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
+  },
   {
     id: "docx",
     version: "1.0.0",

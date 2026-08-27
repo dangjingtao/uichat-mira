@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Circle, CircleHelp, Copy, Download, Eye, ExternalLink, FileDown, FileUp, Globe2, KeyRound, MousePointer2, Pencil, Plus, PlugZap, RefreshCw, RotateCcw, Send, ShieldCheck } from "lucide-react";
+import { BookOpen, Circle, CircleHelp, Copy, Download, Eye, FileDown, FileUp, Globe2, KeyRound, MousePointer2, Pencil, Plus, PlugZap, RefreshCw, RotateCcw, Send, ShieldCheck } from "lucide-react";
 import { Alert, Badge, Button, Card, FileUploadDropzone, IconButton, Modal, NavigationCardTabs, Select, Table, TextInput, Tooltip } from "@/shared/ui";
 import type { ColumnDef } from "@tanstack/react-table";
 import { message } from "@/shared/ui/Message";
@@ -136,19 +136,6 @@ export default function JianXingPage() {
   useEffect(() => {
     void refreshNativeHostStatus();
   }, [refreshNativeHostStatus]);
-
-  useEffect(() => {
-    const handleExtensionMessage = (event: MessageEvent) => {
-      if (event.source !== window || event.origin !== window.location.origin) return;
-      if (event.data?.source !== "mira-webbridge-extension" || event.data?.type !== "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE_RESULT") return;
-      if (event.data.ok === false) {
-        setError(String(event.data.message || t("settings.microApps.jianXing.messages.openAuthFailed")));
-      }
-    };
-
-    window.addEventListener("message", handleExtensionMessage);
-    return () => window.removeEventListener("message", handleExtensionMessage);
-  }, [t]);
 
   const connected = status.status === "connected";
   const extensionConnected = status.extensionConnected === true;
@@ -507,25 +494,12 @@ export default function JianXingPage() {
     try {
       const response = await post<{ code: string }>("/oauth/extension/authorization-code");
       setExtensionCode(response.code);
-      window.postMessage({
-        source: "mira-webbridge-ui",
-        type: "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE",
-        requestId: `authorize_${Date.now()}`,
-      }, window.location.origin);
       message.success(t("settings.microApps.jianXing.messages.codeGenerated"));
     } catch (cause) {
       message.error(cause instanceof ApiError ? cause.message : t("settings.microApps.jianXing.messages.codeGenerateFailed"));
     } finally {
       setExtensionCodeLoading(false);
     }
-  };
-
-  const openExtensionAuthorizationPage = () => {
-    window.postMessage({
-      source: "mira-webbridge-ui",
-      type: "WEBBRIDGE_OPEN_AUTHORIZATION_PAGE",
-      requestId: `authorize_${Date.now()}`,
-    }, window.location.origin);
   };
 
   const copyExtensionCode = async () => {
@@ -716,15 +690,14 @@ export default function JianXingPage() {
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-text-secondary" />
             <p className="text-sm leading-6 text-text-secondary">{t("settings.microApps.jianXing.auth.intro")}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="space-y-2">
             <Button size="sm" disabled={extensionCodeLoading} onClick={() => void generateExtensionCode()}>
               <KeyRound className="h-4 w-4" />{extensionCodeLoading ? t("settings.microApps.jianXing.auth.generating") : t("settings.microApps.jianXing.auth.generate")}
             </Button>
-            {extensionCode ? <>
-              <code className="rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm font-semibold tracking-[0.16em] text-text-primary">{extensionCode}</code>
+            {extensionCode ? <div className="flex min-w-0 items-center gap-2">
+              <code title={extensionCode} className="min-w-0 flex-1 truncate rounded-ui-control border border-border bg-surface-secondary px-3 py-2 text-sm font-semibold tracking-[0.16em] text-text-primary">{extensionCode}</code>
               <Button variant="ghost" size="sm" onClick={() => void copyExtensionCode()}><Copy className="h-4 w-4" />{t("settings.microApps.jianXing.auth.copy")}</Button>
-              <Button variant="ghost" size="sm" onClick={openExtensionAuthorizationPage}><ExternalLink className="h-4 w-4" />{t("settings.microApps.jianXing.auth.open")}</Button>
-            </> : null}
+            </div> : null}
           </div>
           <p className="text-xs leading-5 text-text-tertiary">{t("settings.microApps.jianXing.auth.expiry")}</p>
         </div>

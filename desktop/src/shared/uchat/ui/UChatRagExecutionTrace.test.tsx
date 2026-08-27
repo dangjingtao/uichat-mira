@@ -1,10 +1,18 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { test } from "vitest";
+import { afterAll, beforeAll, test } from "vitest";
 import i18n from "@/shared/i18n";
 import { UChatExecutionTrace } from "./UChatRagExecutionTrace";
 import type { RagNodeLike } from "./ragTypes";
+
+beforeAll(async () => {
+  await i18n.changeLanguage("en-US");
+});
+
+afterAll(async () => {
+  await i18n.changeLanguage("zh-CN");
+});
 
 test("UChatExecutionTrace renders tool nodes in the shared execution timeline", () => {
   render(

@@ -48,18 +48,37 @@ export default function ToolsPackagePanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-ui-panel border border-border bg-surface-primary">
       <div className="border-b border-border px-4 py-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-medium text-text-primary">{labels.packageTitle}</div>
           </div>
-          <Badge variant="muted">{tools.length}</Badge>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onOpenArgsModal}
+              disabled={!selectedTool}
+            >
+              <Settings2 className="h-4 w-4" />
+              {labels.config}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onRun}
+              disabled={isRunning || !selectedTool}
+            >
+              {isRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              {labels.execute}
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="border-b border-border px-4 py-3">
         {tools.length > 0 ? (
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <SegmentedTabs
                 items={tools.map((tool) => ({
                   value: tool.id,
@@ -75,26 +94,6 @@ export default function ToolsPackagePanel({
                 className="min-w-0"
                 size="sm"
               />
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onOpenArgsModal}
-                  disabled={!selectedTool}
-                >
-                  <Settings2 className="h-4 w-4" />
-                  {labels.config}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={onRun}
-                  disabled={isRunning || !selectedTool}
-                >
-                  {isRunning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  {labels.execute}
-                </Button>
-              </div>
             </div>
 
             {selectedTool?.id === "terminal_session" && terminalSummary ? (

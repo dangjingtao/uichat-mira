@@ -15,7 +15,6 @@ const roleTranslations = {
   },
   editor: {
     title: "Edit Role",
-    hint: "Adjust role definition and prompt structure.",
   },
   list: {
     title: "Role List",

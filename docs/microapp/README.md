@@ -1,472 +1,143 @@
-# MicroAPP 模块总纲
-
-Status: Planned
-Owner: integrations / knowledge-base / runtime
-Last verified: 2026-07-23
-Layer: raw-source
-Module: MicroAPP
-Feature: MicroAppRuntime
-Doc Type: overview
-Canonical: true
-Related:
-  - ../integrations/third-party-integration-architecture.md
-  - ../integrations/third-party-integration-consumption-model.md
-  - ../integrations/wecom-microapp-interface-design.md
+---
+status: current
+owner: runtime / integrations / desktop
+last_verified: 2026-07-30
+layer: wiki
+module: MicroAPP
+feature: Overview
+doc_type: overview
+canonical: true
+related:
+  - ../MICROAPP_CURRENT_TRUTH.md
+  - ../CURRENT_PRODUCT_TRUTH.md
   - office-runtime-task-contract.md
-  - office-suite-microapp-design.md
-  - image-generation-microapp-poc.md
-  - media-capability-packaging-design.md
-  - computer-use-microapp-poc.md
-  - computer-use-feature-design.md
-  - notion-microapp-functional-design.md
+  - wenshu-skill-runtime.md
   - tts-studio-runtime-notes.md
-  - gpt-sovits-microapp-poc.md
+  - github-capability-design.md
+  - ../archive/microapp/README.md
+---
 
-## 单点真相范围
+# MicroApp 模块入口
 
-这页只回答一件事：
+> 先读 [[MICROAPP_CURRENT_TRUTH]]。本页只提供当前模块导航，不再用一张候选清单替代每项能力的真实生命周期。
 
-当前项目里，`MicroAPP` 到底是什么，它和第三方平台接入之间是什么关系。
+## 一句话定义
 
-它覆盖：
+Mira 的“微应用”目前有两层含义：
 
-- `MicroAPP` 的正式定义
-- `Platform / Instance / AccessPoint / MicroAPP` 的边界
-- 为什么 `知识库调用` 不再被视为接入方式
-- 为什么一个接入方式绑定一个 `MicroAPP`
-- `MicroAPP` 对未来企微、飞书、钉钉扩展的约束
-
-它不覆盖：
-
-- 某个平台的具体开放 API
-- 某个机器人或 webhook 的配置步骤
-- MCP / Tool / Harness 的实现设计
-
-## 结论先说
-
-`MicroAPP` 不是平台，也不是接入方式。
-
-`MicroAPP` 是一套可以被复用、可以被注册、可以被不同接入点消费的成熟业务工作流。
-
-当前语境下：
-
-- `企业微信智能机器人` 是接入点
-- `企业微信 webhook 机器人` 是接入点
-- `知识库调用` 是一个 `MicroAPP`
-
-所以系统不再表达成：
-
-- “接了一个机器人，就天然带一个知识库能力”
-
-而表达成：
-
-- “某个接入点，绑定了某个 `MicroAPP`”
-
-当前主约束定为：
-
-> 一个接入方式绑定一个 MicroAPP。
-
-## 为什么要单独抽 `MicroAPP`
-
-如果继续把“知识库调用”写成接入方式的一部分，会马上遇到三个问题：
-
-1. 同一套知识库问答链路会被重复塞进企微、飞书、钉钉各自的配置逻辑里。
-2. 接入点和业务能力会被耦死，后面无法明确“这个入口到底在消费什么业务能力”。
-3. 前端会自然退化成“平台配置页”，而不是“入口绑定业务能力”的轻量产品。
-
-所以这里必须拆：
-
-- 接入方式负责“消息怎么进、结果怎么回、认证怎么做”
-- `MicroAPP` 负责“收到一个兼容请求后，具体跑哪条业务工作流”
-
-## 核心概念
-
-### 1. Platform
-
-平台提供方。
-
-例如：
-
-- `wecom`
-- `lark`
-- `dingtalk`
-
-它解决的是协议来源，不解决业务工作流。
-
-### 2. Instance
-
-一个平台下的一个接入实例。
-
-它解决的是配置边界。
-
-例如：
-
-- 某个企业微信企业实例
-- 某个飞书租户实例
-
-实例承载：
-
-- 基础凭据
-- 实例名称
-- 可用能力列表
-- 当前状态
-
-### 3. AccessPoint
-
-实例下面一个实际对外收发的入口或出口。
-
-例如：
-
-- 企业微信智能机器人
-- 企业微信 webhook 机器人
-- 飞书 bot
-- 飞书 webhook
-- 未来的自定义智能体入口
-
-它解决的是：
-
-- 外部消息从哪进
-- 外部结果往哪回
-- 接口形态是什么
-
-### 4. MicroAPP
-
-一个可注册、可复用、可配置的业务能力单元。
-
-它解决的是：
-
-- 这条入口进来以后，到底跑哪套业务逻辑
-
-第一批 `MicroAPP` 候选：
-
-- `knowledge_query`
-- `knowledge_ingest`
-- `org_directory_lookup`
-- `sales_copilot`
-- `mail_center`
-- `image_generation`
-- `computer_use`
-- `office_suite`（文枢）
-
-## 当前绑定关系
-
-当前模型明确采用：
+1. **MicroApps Hub**：设置页中的能力中心，容纳独立 Studio、领域 Runtime、Skill、Tool / MCP 集成和外部连接；
+2. **Integration MicroAPP Runtime**：AccessPoint 绑定并调用标准化业务工作流的窄协议。
 
 ```text
-Platform
-  -> Instance
-    -> AccessPoint
-      -> MicroAPP
+产品入口集合
+!= Integration MicroAPP registry
 ```
 
-这里的关键不是平台，而是最后两层：
+## 当前严格 Registry
 
-- `AccessPoint` 负责适配平台协议
-- `MicroAPP` 负责承接业务工作流
+`server/src/microapps/runtime.ts` 当前注册：
 
-当前约束：
+```text
+knowledge_query
+news_hub
+image_generation
+computer_use
+tts
+codegraph
+evolving_knowledge
+```
 
-- 一个 `AccessPoint` 同时只绑定一个 `MicroAPP`
+其中只有 `knowledge_query` 当前完成外部 AccessPoint invoke，并且只支持 `wecom.smart_robot`。
 
-这样做的原因很直接：
+其余 definition 主要为桌面 Studio 保留共享定义和稳定 runtime key；真实能力由各自 service / routes 提供，统一 `MicroAppDefinition.invoke()` 当前明确返回 Studio-only 或 not implemented。
 
-1. 桌面端产品要轻，不做 SaaS 运维后台。
-2. 单个入口绑定单个微应用，用户心智最清楚。
-3. 调试边界更干净，失败时容易判断是入口问题还是工作流问题。
+## 当前能力索引
 
-## `MicroAPP` 的接口责任
+| 能力 | 当前身份 | 当前状态 | 主要参考 |
+| --- | --- | --- | --- |
+| Knowledge Query | Integration MicroAPP | WeCom smart robot 可绑定并真实调用 | [[MICROAPP_CURRENT_TRUTH]] |
+| Image Generation | Studio + Domain Runtime | 有任务、实时进度、Artifact、Provider / ComfyUI；无 external invoke | [[microapp/image-generation-comfyui-smoke-guide]] |
+| Computer Use | Studio + Managed Browser Runtime + Tool | 有持久任务、Evidence、模型执行器、审批；无 external invoke | [[microapp/computer-use-frontend-manual-smoke-guide]] |
+| TTS | Studio + Domain Runtime | Windows / Piper / GPT-SoVITS / API Provider 已接 | [[microapp/tts-studio-runtime-notes]] |
+| News Hub | Studio + Domain Service + Tool source | 有抓取、缓存、搜索；通过 `news_search` 进入 Harness | [[MICROAPP_CURRENT_TRUTH]] |
+| CodeGraph | Studio + Managed Runtime + Tool | Agent 只看 `codebase_explore`；无 external invoke | [[TOOL_CURRENT_TRUTH]] |
+| 智识进化库 | Experimental Studio + Service | 有真实入口，稳定产品合同仍在演进 | [[MICROAPP_CURRENT_TRUTH]] |
+| Mail Center | Product Studio + Domain Service + Tool | 有 SMTP / IMAP、本地缓存和 `mail_query`；不在 strict registry | [[MICROAPP_CURRENT_TRUTH]] |
+| 文枢 | Studio + Domain Runtime + Skill-private Runtime | Office Runtime 与 Skill-owned execution 已成立 | [[microapp/office-runtime-task-contract]] / [[microapp/wenshu-skill-runtime]] |
+| GitHub | Connection UI + Governed Tool Pack | Device Flow、installation 与四领域工具已成立 | [[microapp/github-capability-design]] |
+| 问策 | External Expert Bridge + Tool | 网页桥接可用，Provider 独立握手仍有限 | [[microapp/external-expert-bridge-design]] |
+| Notion | Connection / AccessPoint partial implementation | 连接和部分资源能力存在；完整 Agent / sync 未完成 | [[microapp/notion-microapp-functional-design]] |
 
-一个 `MicroAPP` 不是任意脚本集合，它至少要声明三类信息：
+## 当前合同
 
-### 1. 支持哪些接入点
+### 文枢 / Office
 
-例如：
+- [[microapp/office-runtime-task-contract]]：`office-runtime.v1`；
+- [[microapp/wenshu-skill-runtime]]：DOCX / XLSX / PDF / PPTX Skill 与 Runtime；
+- [[skill/pi-skill-agent-execution]]：Skill-owned SubAgent 执行边界。
 
-- `knowledge_query`
-  - 支持：
-    - `wecom.smart_robot`
-    - `lark.bot`
-    - `future.custom_agent`
-  - 不支持：
-    - `wecom.webhook_robot`
+### TTS
 
-因为 `webhook` 更像通知出口，不是问答入口。
+- [[microapp/tts-studio-runtime-notes]]：Windows、Piper、GPT-SoVITS、API Provider；
+- [[microapp/gpt-sovits-microapp-poc]]：当前 GPT-SoVITS bridge 细节。
 
-### 2. 接口兼容契约
+### Mail Center / 工作台邮件摘要
 
-`MicroAPP` 不能直接依赖某个平台的原始消息结构。
+- Mail Center 保存本地邮箱账号配置，通过 SMTP 发送测试邮件，通过 IMAP 拉取并缓存真实收件箱邮件；
+- Mira 工作台按上海自然日同步各账号邮件并生成关注摘要，邮件轮播展示关注数量、内容摘要、量化优先级、关注原因和建议下一步；
+- 邮件优先级由服务端按 0–100 分统一计算，不直接采用模型给出的等级。24 小时内截止、明确行动要求、工作阻塞、安全或法律风险、财务影响、直接点名、邮箱星标和未读状态加分，群发营销和纯通知扣分；25 分进入关注列表，50 分为高优先级，75 分为紧急；
+- 模型只提取内容摘要和评分信号，邮件中心保存的未读、星标状态由服务端直接计分；
+- `GET /dashboard/mail` 按用户、日期和语言缓存邮件摘要 1 小时。缓存有效期内不访问 IMAP，也不重复调用 Task Model；缓存到期后的首次访问执行一次当日范围的只读 IMAP 同步；
+- 邮件状态指纹未变化时复用既有分析并续期缓存；相同缓存键的并发请求共用一次刷新。结果按分数降序排列，同分按收件时间倒序排列；
+- 该接口不发送邮件，也不改变远端已读或星标状态。
 
-它应该只接受标准化后的请求，例如：
+### GitHub
 
-- `text`
-- `sender`
-- `conversation`
-- `mentions`
-- `attachments`
-- `knowledgeBaseSelector`
+- [[microapp/github-capability-design]]：连接入口、仓库边界和四个领域工具。
 
-也就是说：
+### 问策
 
-- 平台差异在 `AccessPoint Adapter`
-- 业务逻辑在 `MicroAPP`
+- [[microapp/external-expert-bridge-design]]：External Expert / WebBridge 当前边界。
 
-### 3. 运行配置
+## 验收与操作指引
 
-`MicroAPP` 自己不保存“某个入口当前绑了什么业务参数”。
+- [[microapp/image-generation-comfyui-smoke-guide]]；
+- [[microapp/computer-use-frontend-manual-smoke-guide]]；
+- `project-control/tasks/`、`project-control/reviews/` 与 `project-control/testEvidence/` 中的对应施工证据。
 
-它只声明：
+这些文档说明某条链路如何验收，不自动扩大产品能力边界。
 
-- 支持哪些接入点
-- 绑定时要求填写哪些字段
-- 运行时交给哪个执行器
+## 方案与部分实现
 
-例如 `knowledge_query` 只声明它需要：
+以下内容仍需按正文范围阅读，不能提升为完整产品事实：
 
-- `knowledgeBaseId`
+- [[microapp/notion-microapp-functional-design]]；
+- 智识进化库相关设计与 Studio 记录；
+- 尚未完成 external invoke 的各 Studio definition；
+- 未进入 current contract 的未来 Integration provider / AccessPoint。
 
-但具体某个企微智能机器人这次选了哪个知识库，不保存在 `MicroAPP` 本体里，而保存在“接入点绑定记录”里。
+## 四条阅读规则
 
-## 为什么 `MicroAPP` 不是 MCP / Tool
+### 1. 不从页面卡片推断 Runtime
 
-这里必须切开：
+设置页出现入口，只说明产品提供了进入点。
 
-- `Tool`
-  - 是 agent 或 runtime 可以执行的具体工具
-- `MCP`
-  - 是能力暴露和调用协议
-- `MicroAPP`
-  - 是企业集成域里的业务工作流单元
+### 2. 不从 definition 推断可调用
 
-`MicroAPP` 可以内部调用工具，也可以未来被包装成 MCP 能力。
+definition 可能只是稳定 ID、binding schema 和 desktop access-point 的共享注册。
 
-但在产品建模上，它不等于：
+### 3. 不从 HTTP route 推断 Agent access
 
-- 工具注册
-- MCP Server
-- Harness capability
+Agent 必须通过明确 Tool 或 Skill contract 使用能力。
 
-否则第三方集成会再次被 runtime 细节绑架。
+### 4. 不从 Agent access 推断 Integration invoke
 
-## 第一批建议的 `MicroAPP`
+`news_search`、`mail_query`、GitHub tools、Browser tools 和文枢 Skill 都不因此成为 `MicroAppDefinition.invoke()`。
 
-### `knowledge_query`
+## 历史归档
 
-作用：
+旧的 MicroAPP 总纲、实现前 POC、早期 Studio 设计和迁移前 GitHub 合同保存在：
 
-- 接收文本问题
-- 调用本地知识库 / RAG 工作流
-- 返回一条稳定回答
+- [[archive/microapp/README]]
 
-这是当前第三方集成主线。
-
-### `knowledge_ingest`
-
-作用：
-
-- 接收外部文档或消息源
-- 进入知识库导入流程
-
-### `office_suite` / 文枢
-
-作用：
-
-- 统一承接 Word / Excel / PowerPoint 文件处理任务
-- 产品上保持一个微应用，内部保持三个 Office 领域 Runtime
-- 当前桌面入口主要用于调试和验证
-- 当前任务级 Runtime 合同见 `office-runtime-task-contract.md`
-- 未来 Skill 只消费稳定 Runtime 合同，不直接依赖底层 Office SDK
-
-当前实现边界与未来方向见：
-
-- `office-runtime-task-contract.md`
-- `office-suite-microapp-design.md`
-
-## 当前活跃文档
-
-- `office-runtime-task-contract.md`
-- `office-suite-microapp-design.md`
-- `media-capability-packaging-design.md`
-- `image-generation-microapp-poc.md`
-- `computer-use-microapp-poc.md`
-- `gpt-sovits-microapp-poc.md`
-- `tts-studio-runtime-notes.md`
-
-这更适合飞书等文档平台。
-
-### `org_directory_lookup`
-
-作用：
-
-- 对组织通讯录、部门和成员摘要做统一查询
-
-### `sales_copilot`
-
-作用：
-
-- 未来按业务角色提供销售导向工作流
-
-这类 `MicroAPP` 不应该提前塞进 `smart robot` 逻辑里，而应单独建模。
-
-### `image_generation`
-
-作用：
-
-- 接收 prompt、风格和画幅参数
-- 调用外部生图 provider
-- 返回可预览、可复用的图片结果与生成元数据
-
-当前 docs-only POC 见：
-
-- `image-generation-microapp-poc.md`
-
-### `mail_center`
-
-作用：
-
-- 保存本地邮箱账号配置
-- 通过 SMTP 发送测试邮件
-- 通过 IMAP 拉取最近一批收件箱邮件
-- 在桌面内展示真实收件箱列表
-
-当前第一版只覆盖：
-
-- backend HTTP 路由
-- 本地 SQLite 账号与收件箱缓存
-- 邮件中心页面真实列表展示
-
-当前不覆盖：
-
-- 规则中心
-- 模板中心
-- 多端同步任务编排
-
-### `computer_use`
-
-作用：
-
-- 接收一个明确目标
-- 在受控执行面里完成最小界面操作
-- 返回截图、步骤状态、结果摘要和失败原因
-
-当前 docs-only POC 见：
-
-- `computer-use-microapp-poc.md`
-- `computer-use-feature-design.md`
-
-## 对前端的产品约束
-
-为了避免重新做成平台后台，前端应该遵守下面这条心智：
-
-- 用户在企业集成页里配置的是“接入实例”和“入口”
-- 用户为某个入口选择它绑定的 `MicroAPP`
-- 用户在“接入点绑定微应用”时填写业务参数
-
-所以：
-
-- `知识库调用` 不应继续伪装成“机器人内部一个字段”
-- 它应作为独立 `MicroAPP` 出现
-
-## 对后端的设计约束
-
-后端后续实现时，应至少拆出两层接口：
-
-### AccessPoint Adapter
-
-负责：
-
-- 平台鉴权
-- 事件接收
-- 消息标准化
-- 回复投递
-
-### MicroAPP Runtime
-
-负责：
-
-- 业务入参校验
-- 工作流执行
-- 输出标准化
-
-两层之间通过内部标准请求对象通信，而不是直接传平台原始 payload。
-
-## 当前落地形态
-
-第一版代码已经按下面的物理结构收口：
-
-- `server/src/microapps/`
-  - 放微应用运行时与具体微应用实现
-- `server/src/integrations/wecom/`
-  - 只保留企微入口适配与消息收发
-
-当前第一个真正落地的 `MicroAPP` 是：
-
-- `knowledge_query`
-
-也就是说：
-
-- 企微智能机器人不再直接内嵌知识库调用逻辑
-- 它先解析自己绑定的 `MicroAPP`
-- 再由 `MicroAPP Runtime` 去执行 `knowledge_query`
-
-## 当前持久化模型
-
-为了让 `MicroAPP` 不只是代码概念，当前已经增加两张主表：
-
-### `micro_app_definitions`
-
-表示一个可绑定、可执行的微应用定义。
-
-当前核心字段包括：
-
-- `id`
-- `type`
-- `name`
-- `description`
-- `supported_access_points_json`
-- `binding_schema_json`
-- `runtime_key`
-- `enabled`
-
-### `integration_capability_micro_app_bindings`
-
-表示“某个接入点能力当前绑定哪个微应用定义，以及这次绑定填写了什么配置”。
-
-当前核心字段包括：
-
-- `capability_id`
-- `micro_app_definition_id`
-- `binding_config_json_encrypted`
-- `enabled`
-
-这层关系就是：
-
-- 一个接入方式绑定一个 `MicroAPP`
-
-在数据库里的实际投影。
-
-## 和企业微信文档的关系
-
-企业微信相关设计不再单独定义“知识库调用是什么”。
-
-企业微信文档只需要回答：
-
-- 企业微信有哪些 `AccessPoint`
-- 哪些 `AccessPoint` 能绑定哪些 `MicroAPP`
-- 它们之间的接口适配如何设计
-
-详见：
-
-- `../integrations/wecom-microapp-interface-design.md`
-
-## 当前阶段最重要的落地判断
-
-现在先不要把 `MicroAPP` 做成大而全平台。
-
-第一阶段只需要立住这四件事：
-
-1. `MicroAPP` 是顶级产品模块，不再是接入点内部字段。
-2. `knowledge_query` 从概念上独立于 `wecom.smart_robot`。
-3. 一个接入方式绑定一个 `MicroAPP`。
-4. 接入点必须声明自己支持哪些 `MicroAPP`。
-
-做到这四条，后面无论扩企微还是飞书，系统都不会再次退回“机器人配置页思维”。
+原路径的兼容页只用于旧链接跳转，不再定义当前实现。

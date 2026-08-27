@@ -5,6 +5,7 @@ import {
   RefreshCcw,
   Search,
   ExternalLink as ExternalLinkIcon,
+  Rss,
   SlidersHorizontal,
 } from "lucide-react";
 import Card from "@/shared/ui/Card";
@@ -30,6 +31,7 @@ import {
   type NewsHubOverview,
 } from "@/shared/api/newsHub";
 import MicroAppPageLayout from "../components/MicroAppPageLayout";
+import FeedSubscriptionsModal from "./FeedSubscriptionsModal";
 
 const formatDateTime = (value: string | null, locale: string) => {
   if (!value) {
@@ -101,6 +103,7 @@ export default function NewsHubPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [feedsOpen, setFeedsOpen] = useState(false);
   const [overview, setOverview] = useState<NewsHubOverview | null>(null);
   const [config, setConfig] = useState<NewsHubConfig>(defaultConfig);
   const [draftConfig, setDraftConfig] = useState<NewsHubConfig>(defaultConfig);
@@ -289,95 +292,6 @@ export default function NewsHubPage() {
     }
   };
 
-  if (loading && !overview) {
-    return (
-      <MicroAppPageLayout
-        miniTitle={t("settings.microApps.newsHub.page.miniTitle")}
-        title={t("settings.microApps.newsHub.page.title")}
-        description={t("settings.microApps.newsHub.page.description")}
-        slot={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled>
-              <RefreshCcw className="h-4 w-4" />
-              {t("settings.microApps.newsHub.actions.refresh")}
-            </Button>
-          </div>
-        }
-        contentClassName="h-full pt-6"
-        scrollBody={false}
-      >
-        <div data-testid="news-hub-loading-skeleton" className="min-h-0 flex-1">
-          <Card className="min-h-0 flex-1 overflow-hidden p-5">
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="shrink-0">
-                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_auto]">
-                  <div className="grid gap-2">
-                    <label className="h-5 text-xs font-medium text-text-secondary">
-                      {t("settings.microApps.newsHub.filters.source")}
-                    </label>
-                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-                      <Skeleton height={40} className="rounded-ui-control" />
-                      <Skeleton height={40} width={156} className="rounded-ui-control" />
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="h-5 text-xs font-medium text-text-secondary">
-                      {t("settings.microApps.newsHub.filters.query")}
-                    </label>
-                    <Skeleton height={40} className="rounded-ui-control" />
-                  </div>
-                  <div className="flex items-end">
-                    <Skeleton height={40} className="w-full rounded-ui-control" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="my-5 shrink-0 border-t border-border" />
-
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="flex shrink-0 items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Newspaper className="h-4 w-4 text-primary" />
-                    <div className="text-sm font-semibold text-text-primary">
-                      {t("settings.microApps.newsHub.sections.items")}
-                    </div>
-                  </div>
-                  <Skeleton height={24} width={72} className="rounded-full" />
-                </div>
-
-                <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-ui-panel border border-border bg-surface-secondary/10 px-4 py-4">
-                  <div className="space-y-4">
-                    {Array.from({ length: 4 }).map((_, index) => (
-                      <div key={index} className="space-y-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Skeleton height={24} width={118} className="rounded-full" />
-                          <Skeleton height={24} width={84} className="rounded-full" />
-                          <Skeleton height={24} width={54} className="rounded-full" />
-                        </div>
-                        <Skeleton height={22} width={`${72 - index * 6}%`} />
-                        <Skeleton.Text lines={2} lastLineWidth={`${64 - index * 5}%`} />
-                        <div className="flex flex-wrap gap-2">
-                          <Skeleton height={24} width={66} className="rounded-full" />
-                          <Skeleton height={24} width={78} className="rounded-full" />
-                          <Skeleton height={24} width={58} className="rounded-full" />
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <Skeleton height={14} width={220} />
-                          <Skeleton height={14} width={120} />
-                        </div>
-                        {index < 3 ? <div className="border-t border-border" /> : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </MicroAppPageLayout>
-    );
-  }
-
   return (
     <>
       <MicroAppPageLayout
@@ -389,8 +303,16 @@ export default function NewsHubPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setFeedsOpen(true)}
+            >
+              <Rss className="h-4 w-4" />
+              {t("settings.microApps.newsHub.actions.manageFeeds")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => void handleRefresh()}
-              disabled={refreshing}
+              disabled={loading || refreshing}
             >
               <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
               {t("settings.microApps.newsHub.actions.refresh")}
@@ -415,10 +337,12 @@ export default function NewsHubPage() {
                         setSourceKey(value);
                       }}
                       options={sourceOptions}
+                      disabled={loading}
                     />
                     <Button
                       variant="outline"
                       onClick={openConfigModal}
+                      disabled={loading}
                       className="whitespace-nowrap"
                     >
                       <SlidersHorizontal className="h-4 w-4" />
@@ -430,6 +354,7 @@ export default function NewsHubPage() {
                   label={t("settings.microApps.newsHub.filters.query")}
                   value={draftQuery}
                   onChange={setDraftQuery}
+                  disabled={loading}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       void handleApplyFilters();
@@ -438,7 +363,11 @@ export default function NewsHubPage() {
                   placeholder={t("settings.microApps.newsHub.filters.queryPlaceholder")}
                 />
                 <div className="flex items-end">
-                  <Button className="w-full" onClick={() => void handleApplyFilters()}>
+                  <Button
+                    className="w-full"
+                    onClick={() => void handleApplyFilters()}
+                    disabled={loading}
+                  >
                     <Search className="h-4 w-4" />
                     {t("settings.microApps.newsHub.actions.applyFilters")}
                   </Button>
@@ -457,13 +386,31 @@ export default function NewsHubPage() {
                   </div>
                 </div>
                 <Badge variant="muted" size="sm">
-                  {t("settings.microApps.newsHub.labels.total", {
-                    count: overview?.total ?? 0,
-                  })}
+                  {loading && !overview
+                    ? "—"
+                    : t("settings.microApps.newsHub.labels.total", {
+                        count: overview?.total ?? 0,
+                      })}
                 </Badge>
               </div>
 
-              {(overview?.items ?? []).length === 0 ? (
+              {loading && !overview ? (
+                <div
+                  data-testid="news-hub-results-loading-skeleton"
+                  className="mt-4 min-h-0 flex-1 overflow-hidden rounded-ui-panel border border-border bg-surface-secondary/10 px-4 py-4"
+                >
+                  <div className="space-y-5">
+                    {Array.from({ length: 4 }).map((_, index) => (
+                      <div key={index} className="space-y-3">
+                        <Skeleton height={20} width={`${68 - index * 7}%`} />
+                        <Skeleton.Text lines={2} lastLineWidth={`${58 - index * 4}%`} />
+                        <Skeleton height={14} width={210} />
+                        {index < 3 ? <div className="border-t border-border" /> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (overview?.items ?? []).length === 0 ? (
                 <div className="mt-4 rounded-ui-panel border border-border bg-surface-secondary/30 px-4 py-5 text-sm text-text-secondary">
                   {t("settings.microApps.newsHub.states.emptyDescription")}
                 </div>
@@ -533,6 +480,12 @@ export default function NewsHubPage() {
           </div>
         </Card>
       </MicroAppPageLayout>
+
+      <FeedSubscriptionsModal
+        open={feedsOpen}
+        onClose={() => setFeedsOpen(false)}
+        onChanged={() => loadOverview()}
+      />
 
       <Modal
         open={configOpen}

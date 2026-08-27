@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-mira/desktop",
-  "version": "0.99.4",
+  "version": "0.99.9",
   "private": true,
   "description": "Frontend for UIChat Mira.",
   "author": "Tomz Dang <dangjing@gmail.com>",
@@ -10,6 +10,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:memory": "vitest run src/features/Settings/pages/Personalization/index.test.tsx",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:protocol": "tsx --tsconfig tsconfig.test.json --test --test-force-exit src/features/chat/transport/*.test.ts src/features/chat/adapters/*.test.ts src/shared/uchat/core/*.test.ts"
@@ -37,6 +38,8 @@
     "markdown-table": "^3.0.4",
     "mermaid": "^11.15.0",
     "npm": "^11.17.0",
+    "qrcode.react": "^4.2.0",
+    "qweather-icons": "1.8.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^17.0.8",

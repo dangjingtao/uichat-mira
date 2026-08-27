@@ -91,8 +91,7 @@ describe("KnowledgeBaseSidebar", () => {
     );
 
     const activeButton = screen.getByText("Product Docs").closest("button");
-    expect(activeButton).toHaveClass("border-primary/30");
-    expect(activeButton).toHaveClass("bg-primary/5");
+    expect(activeButton).toHaveClass("bg-surface-soft");
   });
 
   it("calls onSelectKnowledgeBase when item clicked", async () => {

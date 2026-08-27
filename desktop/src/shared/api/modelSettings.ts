@@ -106,6 +106,32 @@ export interface CreateProviderConnectionPayload {
   apiKey?: string;
 }
 
+export interface ModelSettingsBackup {
+  format: "uichat-mira-model-settings";
+  version: 1;
+  exportedAt: string;
+  connections: Array<{
+    id: string;
+    templateCode: string;
+    providerCode: string | null;
+    displayName: string;
+    baseUrl: string;
+    apiKey: string;
+  }>;
+  assignments: Array<{
+    type: RoleModelType;
+    name: string;
+    providerConnectionId: string | null;
+    remoteModelId: string | null;
+    params: Record<string, unknown>;
+  }>;
+}
+
+export interface ImportModelSettingsResult {
+  connectionCount: number;
+  assignmentCount: number;
+}
+
 export async function getRoleModelConfigs(): Promise<RoleModelConfig[]> {
   return get<RoleModelConfig[]>("/models");
 }
@@ -119,6 +145,19 @@ export async function updateRoleModelConfigParams(
 
 export async function getProviders(): Promise<ProviderSummary[]> {
   return get<ProviderSummary[]>("/providers");
+}
+
+export async function exportModelSettings(): Promise<ModelSettingsBackup> {
+  return get<ModelSettingsBackup>("/providers/model-settings/export");
+}
+
+export async function importModelSettings(
+  backup: ModelSettingsBackup,
+): Promise<ImportModelSettingsResult> {
+  return put<ImportModelSettingsResult>(
+    "/providers/model-settings/import",
+    backup,
+  );
 }
 
 export async function getProviderTemplates(): Promise<ProviderTemplateSummary[]> {

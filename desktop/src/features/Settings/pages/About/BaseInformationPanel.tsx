@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import type { AppMetaData } from "@/shared/api/system";
 import { openExternalUrl } from "@/shared/platform/desktopRuntime";
 import { Button } from "@/shared/ui/Button";
+import Badge from "@/shared/ui/Badge";
 import { message } from "@/shared/ui/Message";
 import { Modal } from "@/shared/ui/Modal";
 import MarkdownText from "@/shared/ui/MarkdownText";
@@ -258,85 +259,6 @@ export default function BaseInformationPanel({
   return (
     <div className="space-y-4">
       <SectionCard
-        data-testid="git-version-list"
-        title={t("settings.about.gitInfo")}
-        action={
-          <Button
-            size="xs"
-            variant="ghost"
-            disabled={checkingForUpdates}
-            onClick={() => void handleCheckForUpdates()}
-          >
-            {checkingForUpdates ? (
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            {t(
-              checkingForUpdates
-                ? "settings.about.updateCheck.checking"
-                : "settings.about.updateCheck.action",
-            )}
-          </Button>
-        }
-        divided
-      >
-        <SectionCardRow>
-          <div>
-            <div className="text-xs text-text-tertiary">
-              {t("settings.about.currentBranch")}
-            </div>
-            <div className="text-sm font-medium text-text-primary">
-              {gitInfo?.branch}
-            </div>
-          </div>
-        </SectionCardRow>
-        {gitInfo?.versions?.length ? (
-          <>
-            {gitInfo.versions
-              .slice(0, MAX_VISIBLE_GIT_VERSIONS)
-              .map((item) => (
-                <SectionCardRow
-                  key={item.version}
-                  data-testid={`git-version-${item.version}`}
-                >
-                  <div
-                    data-testid={`git-version-main-${item.version}`}
-                    className="flex min-w-0 items-center gap-3"
-                  >
-                    <GitCommit className="h-3.5 w-3.5 shrink-0 text-icon-secondary" />
-                    <span className="shrink-0 text-sm font-semibold text-text-primary">
-                      {item.version}
-                    </span>
-                    <span
-                      className="truncate text-sm text-text-secondary"
-                      title={item.commit.message}
-                    >
-                      {item.commit.message}
-                    </span>
-                  </div>
-                  <div
-                    data-testid={`git-version-meta-${item.version}`}
-                    className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-text-tertiary"
-                  >
-                    <span
-                      className="max-w-40 truncate"
-                      title={item.commit.author}
-                    >
-                      {item.commit.author}
-                    </span>
-                    <span>·</span>
-                    <time dateTime={item.commit.date}>
-                      {formatCommitDate(item.commit.date)}
-                    </time>
-                  </div>
-                </SectionCardRow>
-              ))}
-          </>
-        ) : null}
-      </SectionCard>
-
-      <SectionCard
         data-testid="base-information-links"
         title={t("settings.about.projectSupport")}
         divided
@@ -407,6 +329,91 @@ export default function BaseInformationPanel({
           <MessageSquarePlus className="h-4 w-4 shrink-0 text-icon-secondary" />
         </SectionCardRow>
       </SectionCard>
+
+      <SectionCard
+        data-testid="git-version-list"
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <span>{t("settings.about.gitInfo")}</span>
+            {gitInfo?.branch ? (
+              <span data-testid="git-current-branch" className="min-w-0">
+                <Badge
+                  variant="primary"
+                  outline
+                  className="max-w-48 overflow-hidden"
+                >
+                  <span className="truncate">{gitInfo.branch}</span>
+                </Badge>
+              </span>
+            ) : null}
+          </span>
+        }
+        action={
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={checkingForUpdates}
+            onClick={() => void handleCheckForUpdates()}
+          >
+            {checkingForUpdates ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {t(
+              checkingForUpdates
+                ? "settings.about.updateCheck.checking"
+                : "settings.about.updateCheck.action",
+            )}
+          </Button>
+        }
+        divided
+      >
+        {gitInfo?.versions?.length ? (
+          <>
+            {gitInfo.versions
+              .slice(0, MAX_VISIBLE_GIT_VERSIONS)
+              .map((item) => (
+                <SectionCardRow
+                  key={item.version}
+                  data-testid={`git-version-${item.version}`}
+                >
+                  <div
+                    data-testid={`git-version-main-${item.version}`}
+                    className="flex min-w-0 items-center gap-3"
+                  >
+                    <GitCommit className="h-3.5 w-3.5 shrink-0 text-icon-secondary" />
+                    <span className="shrink-0 text-sm font-semibold text-text-primary">
+                      {item.version}
+                    </span>
+                    <span
+                      className="truncate text-sm text-text-secondary"
+                      title={item.commit.message}
+                    >
+                      {item.commit.message}
+                    </span>
+                  </div>
+                  <div
+                    data-testid={`git-version-meta-${item.version}`}
+                    className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-text-tertiary"
+                  >
+                    <span
+                      className="max-w-40 truncate"
+                      title={item.commit.author}
+                    >
+                      {item.commit.author}
+                    </span>
+                    <span>·</span>
+                    <time dateTime={item.commit.date}>
+                      {formatCommitDate(item.commit.date)}
+                    </time>
+                  </div>
+                </SectionCardRow>
+              ))}
+          </>
+        ) : null}
+      </SectionCard>
+
     </div>
   );
 }

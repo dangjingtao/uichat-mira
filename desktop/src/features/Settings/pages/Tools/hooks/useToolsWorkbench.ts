@@ -111,10 +111,13 @@ export function useToolsWorkbench() {
           maxResults: normalizeWebSearchMaxResults(persistedWebSearchConfig.maxResults),
         });
 
-        const nextSelectedTool = sortedTools[0] ?? null;
+        const nextActiveGroupId = getToolGroups(sortedTools)[0] ?? null;
+        const nextSelectedTool = nextActiveGroupId
+          ? sortedTools.find((tool) => tool.workbench.groupId === nextActiveGroupId) ?? null
+          : null;
         if (nextSelectedTool) {
           setSelectedToolId(nextSelectedTool.id);
-          setActiveGroupId(nextSelectedTool.workbench.groupId);
+          setActiveGroupId(nextActiveGroupId);
           setArgsDraft(buildToolDraft(nextSelectedTool));
         }
       } catch (error) {

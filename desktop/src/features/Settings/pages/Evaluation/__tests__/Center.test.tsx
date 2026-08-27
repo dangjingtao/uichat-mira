@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import EvaluationCenter from "../Center";
 
@@ -42,8 +43,16 @@ vi.mock("@/shared/ui/Modal", () => ({
 }));
 
 vi.mock("@/features/Settings/components/SettingsPageLayout", () => ({
-  default: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="layout">{children}</div>
+  default: ({
+    children,
+    containerClassName,
+  }: {
+    children: React.ReactNode;
+    containerClassName?: string;
+  }) => (
+    <div data-testid="layout" data-container-class={containerClassName}>
+      {children}
+    </div>
   ),
 }));
 
@@ -60,6 +69,17 @@ vi.mock("../exportMarkdown", () => ({
 }));
 
 describe("EvaluationCenter", () => {
+  it("uses the standard settings content width", async () => {
+    render(<EvaluationCenter />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("layout")).not.toHaveAttribute(
+        "data-container-class",
+        "max-w-none",
+      );
+    });
+  });
+
   it("renders empty state when no runs exist", async () => {
     render(<EvaluationCenter />);
 
@@ -69,5 +89,40 @@ describe("EvaluationCenter", () => {
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("groups row actions in an overflow menu", async () => {
+    const { getEvaluationRuns } = await import("@/shared/api/evaluation");
+    vi.mocked(getEvaluationRuns).mockResolvedValueOnce([
+      {
+        id: "run-1",
+        name: "running evaluation",
+        status: "running",
+        startedAt: "2026-07-27T08:00:00.000Z",
+        dataset: {
+          datasetName: "dataset",
+          summary: { sampleCount: 1 },
+        },
+        metrics: { hitAtK: 0, faithfulness: 0 },
+      },
+    ] as never);
+
+    const user = userEvent.setup();
+    render(<EvaluationCenter />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "common.actions.more: running evaluation",
+      }),
+    );
+
+    expect(screen.getByRole("menuitem", { name: "common.actions.view" })).toBeVisible();
+    expect(
+      screen.getByRole("menuitem", { name: "common.actions.download" }),
+    ).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: "common.actions.delete" })).toHaveAttribute(
+      "data-disabled",
+      "",
+    );
   });
 });

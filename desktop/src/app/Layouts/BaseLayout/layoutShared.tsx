@@ -5,6 +5,7 @@ import { NavLink, useLocation, type To } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { ArrowLeft } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import Sidebar from "../Sidebar";
 import NavItem from "@/shared/ui/NavItem";
 import Divider from "@/shared/ui/Divider";
@@ -160,6 +161,7 @@ function SettingsNavigationGroup({
   items: SettingsNavigationItem[];
 }) {
   const location = useLocation();
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-1">
@@ -178,8 +180,8 @@ function SettingsNavigationGroup({
             className={() =>
               `flex items-center gap-3 rounded-[10px] px-3 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated ${
                 isSettingsNavigationItemActive(item, location.pathname)
-                  ? "bg-primary/10 text-text-primary"
-                  : "text-text-secondary hover:bg-surface-secondary/70 hover:text-text-primary"
+                  ? "bg-surface-soft text-text-primary"
+                  : "text-text-secondary hover:bg-surface-soft hover:text-text-primary"
               }`
             }
           >
@@ -188,6 +190,17 @@ function SettingsNavigationGroup({
           </NavLink>
         );
       })}
+      {title === undefined ? (
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-[10px] px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${isActive ? "bg-surface-soft text-text-primary" : "text-text-secondary hover:bg-surface-soft hover:text-text-primary"}`
+          }
+        >
+          <LayoutDashboard size={16} className="shrink-0" />
+          <span className="truncate">{t("settings.navigation.dashboard")}</span>
+        </NavLink>
+      ) : null}
     </div>
   );
 }

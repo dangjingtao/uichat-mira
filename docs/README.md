@@ -1,228 +1,314 @@
-# docs/ 索引
-
-Status: Current
-Owner: docs
-Last verified: 2026-07-23
-Layer: schema
-Module: Docs
-Feature: DocsSystem
-Doc Type: current-contract
-Canonical: true
-Related:
+---
+status: current
+owner: docs
+last_verified: 2026-07-31
+layer: schema
+module: Docs
+feature: DocsSystem
+doc_type: current-contract
+canonical: true
+related:
+  - CURRENT_PRODUCT_TRUTH.md
+  - PROVIDER_CURRENT_TRUTH.md
+  - KNOWLEDGE_BASE_CURRENT_TRUTH.md
+  - EVALUATION_CURRENT_TRUTH.md
+  - AGENT_CURRENT_TRUTH.md
+  - TOOL_CURRENT_TRUTH.md
+  - MICROAPP_CURRENT_TRUTH.md
   - ENGINEERING_MEMORY.md
   - VAULT_HOME.md
-  - WIKI_SYSTEM_SCHEMA.md
-  - knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md
-  - harness/agentgraph-harness-protocol.md
+  - archive/README.md
+  - knowledge-system/DOCUMENTATION_STANDARDS.md
+---
 
-## 这页干什么
+# UIChat Mira 项目文档入口
 
-`docs/` 的入口页。别把它当说明书，它就是目录。
+这套文档站直接读取主仓库 `dev` 分支的 `docs/`。
 
-## 先看
+它的首要职责不是展示“写了多少文档”，而是让人快速判断：
 
-- `ENGINEERING_MEMORY.md`
-- `VAULT_HOME.md`
-- `WIKI_SYSTEM_SCHEMA.md`
-- `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
-- `architecture/README.md`
-- `harness/agentgraph-harness-protocol.md`
-- `harness/README.md`
-- `tooling-runtime/README.md`
-- `concepts/CONCEPT_MCP.md`
-- `uchat.md`
-- `platform/tauri.md`
+- 什么是当前真实能力；
+- 什么仍在施工；
+- 什么只是方案或 POC；
+- 什么已经归档；
+- 什么尚未核验；
+- 当前代码是否偏离 settled contract。
 
-## 推荐阅读顺序
+## 先读这九页
 
-1. `../README.md`
-2. `ENGINEERING_MEMORY.md`
-3. `VAULT_HOME.md`
-4. `architecture/README.md`
-5. `uchat.md`
-6. `harness/agentgraph-harness-protocol.md`
-7. `harness/README.md`
-8. `tooling-runtime/README.md`
-9. `concepts/CONCEPT_MCP.md`
-10. `platform/tauri.md`
-11. `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+1. [[CURRENT_PRODUCT_TRUTH]]：产品能力、边界与稳定迭代阶段；
+2. [[PROVIDER_CURRENT_TRUTH]]：首次模型配置、Provider Connection、角色绑定、运行解析与已知漂移；
+3. [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：知识库、入库、索引、混合检索、RAG 与接入边界；
+4. [[EVALUATION_CURRENT_TRUTH]]：评测包、Dataset、Run、指标、报告与恢复边界；
+5. [[AGENT_CURRENT_TRUTH]]：Agent、SubAgent、终止语义与已知漂移；
+6. [[TOOL_CURRENT_TRUTH]]：Tool / Harness 公共面、暴露、审批、执行与降级；
+7. [[MICROAPP_CURRENT_TRUTH]]：MicroApps Hub、Integration MicroAPP、Studio、Tool / Skill 接入与成熟度；
+8. [[ENGINEERING_MEMORY]]：工程共同记忆和不可破坏的合同；
+9. [[knowledge-system/DOCUMENTATION_STANDARDS]]：文档如何进入当前、施工、计划或历史区。
 
-## 目录
+新安装首先阅读 [[provider/FIRST_MODEL_SETUP]]，不要先尝试一次配齐所有模型角色。
 
-### 文档系统
+## 五类文档
 
-- `ENGINEERING_MEMORY.md`
-- `VAULT_HOME.md`
-- `concepts/CONCEPTS_INDEX.md`
-- `concepts/CONCEPT_AGENT.md`
-- `maps/AREA_MAP_RUNTIME.md`
-- `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
+### 当前真相
 
-### 运行时
+已经核验的 current-contract、current-snapshot、总纲和稳定参考。
 
-- `architecture/README.md`
-- `architecture/ipc-and-preload.md`
-- `architecture/rag-node-development.md`
-- `architecture/rag-langgraph-flow.md`
-- `architecture/api-response-spec.md`
-- `architecture/model-config-api.md`
-- `architecture/model-settings-roadmap.md`
-- `architecture/context-budget-runtime.md`
+当前真相必须：
 
-### SKILL
+- 明确 Owner；
+- 有 Last verified；
+- 有代码或验证依据；
+- 区分 settled contract 与已知实现偏差。
 
-- `skill/README.md`（Skill 当前定义与边界）
-- `skill/skill-runtime-design.md`（Skill Runtime V1 设计）
+### 施工与验证
 
-### 对话
+正在推进的 checklist、workboard、ledger、implementation notes 和验收记录。
 
-- `chat/README.md`
-- `uchat.md`
-- `uchat-internal-maintenance.md`
-- `chat/agent-loop-v1.7-construction-plan.md`
-- `chat/chat-system-practices.md`
-- `chat/agent-frontend-workspace-smoke-method.md`
-- `chat/chat-tool-integration-research.md`
-- `chat/chat-tool-integration-poc.md`
-- `chat/chat-tool-integration-checklist.md`
-- `chat/agent-swot-plan.md`
-- `chat/agent-runtime-design.md`（历史设计输入，非当前合同）
+它们说明“正在做什么”，不自动等于产品已经具备什么。
 
-### 知识库
+### 方案与实验
 
-- `knowledge-base/README.md`
-- `knowledge-base/api.md`
-- `knowledge-base/backend-schema.md`
-- `knowledge-base/markdown-workspace-mode.md`
+design、plan、research、roadmap、draft、POC。
 
-### 平台
+它们保留思路和决策输入，不能被首页、搜索或 Agent 当成当前事实优先使用。
 
-- `build/README.md`
-- `build/terminal-dev-runtime.md`
-- `build/local-model-packaging.md`
-- `platform/tauri.md`
-- `platform/tauri-setup.md`
-- `CHANGELOG.md`（历史归档；当前产品更新日志见根目录 `../CHANGELOG.md`）
+### 历史归档
 
-### 开发支撑
+Historical、Archived、Superseded、Deprecated、Completed，以及 `archive/` 内容。
 
-- `development/agent-observability.md`
-- `developments/README.md`
-- `developments/project-general-cleanup.md`
-- `developments/frontend-route-navigation-protocol.md`
-- `developments/release-management.md`
-- `developments/request-wrapper.md`
-- `developments/frontend-i18n.md`
-- `developments/coding-standards.md`
-- `developments/defect-log.md`
-- `developments/product-roadmap-priorities.md`
-- `project-control/README.md`
-- `project-control/model-settings-workboard.md`
+它们只用于追溯背景。
 
-### 集成
+### 待核验
 
-- `microapp/README.md`
-- `microapp/office-runtime-task-contract.md`（文枢 Office Runtime 当前任务合同）
-- `microapp/office-suite-microapp-design.md`
-- `microapp/jianxing-webbridge-debug-status.md`
-- `microapp/tts-studio-runtime-notes.md`
-- `integrations/wecom-admin-setup-checklist.md`
-- `integrations/wecom-cloudflare-worker-poc.md`
-- `integrations/enterprise-wecom-implementation-checklist.md`
-- `integrations/enterprise-wecom-integration-poc.md`
-- `integrations/wecom-microapp-interface-design.md`
-- `integrations/wecom-instance-capability-design.md`
-- `integrations/wecom-instance-capability-implementation-checklist.md`
-- `integrations/third-party-integration-backend-design.md`
-- `integrations/wecom-robot-phase-1-retrospective.md`
-- `integrations/lark-feishu-integration-poc.md`
-- `integrations/third-party-integration-architecture.md`
-- `integrations/third-party-integration-frontend-design.md`
-- `integrations/third-party-integration-consumption-model.md`
-- `integrations/wecom-chat-tool-integration-plan.md`
-- `integrations/wecom-mcp-wrapper-design.md`
-- `integrations/wecom-vs-lark-integration-selection.md`
+缺少可信状态、文档类型或核验信息的页面。
 
-### 工具运行时
+待核验不是“默认当前”，而是明确不确定区。
 
-- `tooling-runtime/harness-runtime-design.md`
-- `tooling-runtime/read-skill-design.md`
-- `tooling-runtime/agent-runtime-t29-t33-ledger.md`
-- `tooling-runtime/terminal-capability-checklist.md`
-- `tooling-runtime/tools-protocol.md`
-- `tooling-runtime/tools-ecosystem-research.md`
-- `tooling-runtime/tool-runtime-retrospective-2026-06-27.md`
+## 当前模块入口
 
-### Harness / Agent Runtime
+- [[dashboard/README]]：Mira 工作台天气 Widget 数据契约；
+- [[PROVIDER_CURRENT_TRUTH]]：Provider、模型角色与调用总真相；
+- [[provider/FIRST_MODEL_SETUP]]：第一次模型配置；
+- [[provider/README]]：Provider 模块阅读入口；
+- [[KNOWLEDGE_BASE_CURRENT_TRUTH]]：Knowledge Base、索引与 RAG 总真相；
+- [[knowledge-base/README]]：Knowledge Base 模块阅读入口；
+- [[knowledge-base/rag-runtime]]：RAG Runtime；
+- [[EVALUATION_CURRENT_TRUTH]]：Evaluation 总真相；
+- [[evaluation/README]]：Evaluation 模块阅读入口；
+- [[evaluation/workbench]]：评测工作台与中心；
+- [[evaluation/package-format]]：评测 ZIP 合同；
+- [[evaluation/runtime]]：Run 生命周期；
+- [[evaluation/metrics]]：指标算法语义；
+- [[AGENT_CURRENT_TRUTH]]：Agent 总真相；
+- [[TOOL_CURRENT_TRUTH]]：Tool / Harness 总真相；
+- [[MICROAPP_CURRENT_TRUTH]]：MicroApp 总真相；
+- [[harness/agentgraph-harness-protocol]]：AgentGraph、Harness、Evidence 与委派技术协议；
+- [[harness/README]]：Harness 控制平面；
+- [[tooling-runtime/README]]：Tool 模块阅读入口；
+- [[tooling-runtime/tools-protocol]]：Tool 技术协议；
+- [[skill/README]]：Skill 当前定义与 SubAgent 执行边界；
+- [[skill/pi-skill-agent-execution]]：SubAgent 详细参考；
+- [[development/agent-observability]]：Agent / SubAgent 观测与诊断；
+- [[microapp/README]]：MicroApps Hub、Integration binding、Studio 与领域 Runtime 入口；
+- [[chat/README]]：Chat 与 Agent UI 入口；
+- [[platform/tauri]]：Tauri 平台路径；
+- [[platform/macos-implementation-phases]]：macOS 支持缺口、改造进度与验收门槛（Proposed，不代表当前已支持）。
 
-- `harness/agentgraph-harness-protocol.md`（Agent 当前运行时单点真相）
-- `harness/README.md`
-- `development/agent-observability.md`
-- `harness/harness-assessment-2026-06-28.md`
-- `harness/harness-phase-1-implementation-checklist.md`
-- `harness/sandbox-module.md`（历史沙箱资料，不能覆盖当前 Host Runtime 合同）
+## Provider 文档引用规则
 
-### 文档系统 schema
+```text
+current code + repeatable tests
+  -> PROVIDER_CURRENT_TRUTH
+  -> provider/FIRST_MODEL_SETUP（用户首次配置）
+  -> provider/README
+  -> architecture/provider-api-standards
+  -> architecture/provider-proxy-api
+  -> project-control evidence
+  -> design / optimization note / historical
+```
 
-- `WIKI_SYSTEM_SCHEMA.md`
-- `knowledge-system/DOCUMENTATION_STANDARDS.md`
-- `knowledge-system/DIRECTORY_AND_CLASSIFICATION_RULES.md`
-- `knowledge-system/IMPLEMENTATION_ROADMAP.md`
+Provider 阅读必须区分：
 
-## 当前规则
+```text
+Provider Template
+Provider Connection
+ProviderModel Cache
+Model Role Assignment
+Provider Resolution
+Protocol Adapter
+Runtime Invocation
+```
 
-当前文档系统以 [karpathy/442a6bf555914893e9891c11519de94f](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 为上位参考，优先按三层理解：
+还必须区分：
 
-- Raw sources
-- Wiki
-- Schema
+```text
+已保存模型绑定
+!= 最近一次模型目录同步成功
+!= 真实业务调用成功
+```
 
-同时尽量让每篇活跃文档回答三件事：
+## Knowledge Base 文档引用规则
 
-- 它属于哪一层
-- 它属于哪个模块
-- 它是什么文档角色
+```text
+current code + repeatable tests
+  -> KNOWLEDGE_BASE_CURRENT_TRUTH
+  -> knowledge-base/README
+  -> knowledge-base/api
+  -> knowledge-base/backend-schema
+  -> knowledge-base/rag-runtime
+  -> Provider / Agent / Evaluation current contract
+  -> project-control evidence
+  -> design / historical
+```
 
-活跃文档默认看这四个头部字段：
+Knowledge Base 阅读必须区分：
 
-- `Layer`
-- `Module`
-- `Doc Type`
-- `Status`
+```text
+Knowledge Base
+Document
+Chunk
+Vector Index
+Lexical Index
+RAG Runtime
+Evaluation
+Agent / Integration Access
+```
 
-如果是 current-contract、reference、overview 这类核心页，再补：
+还必须区分：
 
-- `Owner`
-- `Last verified`
-- `Canonical`
+```text
+上传请求成功
+!= 文档索引 ready
+!= 真实检索命中
+!= 最终回答正确
+```
 
-## 目录说明
+## Evaluation 文档引用规则
 
-- `microapp/`：微应用模块定义、接入点绑定关系、跨平台业务工作流边界
-- `skill/`：Skill 当前定义、内部状态、多工具编排、业务语义封装与 Skill Runtime 设计
-- `architecture/`：运行时边界、API 契约、实现边界
-- `build/`：构建、打包、release 产物与测试报告入包规则
-- `platform/`：桌面壳层与平台运行环境
-- `developments/`：版本、请求封装、i18n、工程规范、缺陷台账、路线规划
-- `project-control/`：任务台账、任务卡、评审、决策与阶段归档
-- `role/`：角色系统与 persona 相关文档
-- `maps/`：区域阅读地图
-- `concepts/`：概念页
-- `knowledge-system/`：文档系统 schema、索引、AI 接入与可视化规则
-- `archive/`：历史资料，默认不作为当前实现依据
+```text
+current code + repeatable tests
+  -> EVALUATION_CURRENT_TRUTH
+  -> evaluation/README
+  -> evaluation/workbench
+  -> evaluation/package-format
+  -> evaluation/runtime
+  -> evaluation/metrics
+  -> Knowledge Base / Provider current contract
+  -> project-control evidence
+  -> historical
+```
 
-## 阅读顺序
+Evaluation 阅读必须区分：
 
-- 先读 `ENGINEERING_MEMORY.md`，再进入具体 current-contract。
-- 先读总纲页，再读细页。
-- 先把 current-contract 和 reference 页读清，再看 design / plan。
-- Agent 相关施工、评审和架构说明必须先读 `harness/agentgraph-harness-protocol.md`。
-- `archive/` 和 superseded 文档只在明确需要历史背景时再进。
+```text
+Evaluation Package
+Evaluation Dataset
+Evaluation Run
+Sample Result
+Attempt
+Metric Summary
+Client-side Report
+```
 
-## 相关页
+还必须区分：
 
-- `ENGINEERING_MEMORY.md`
-- `WIKI_SYSTEM_SCHEMA.md`
-- `knowledge-system/DOCUMENTATION_STANDARDS.md`
-- `knowledge-system/KNOWLEDGE_SYSTEM_INDEX.md`
-- `harness/agentgraph-harness-protocol.md`
+```text
+评测模型
+!= Judge Model
+
+评测包
+!= Frozen Knowledge Base Snapshot
+
+Run 已持久化
+!= Run 可重启恢复
+
+Metric Label
+!= Current Formula
+!= Standard Benchmark
+!= Release Gate
+```
+
+任何指标说明必须以 [[evaluation/metrics]] 中的当前代码公式为准，不能仅凭名称推断标准实现。
+
+## Agent 文档引用规则
+
+```text
+current code + repeatable tests
+  -> AGENT_CURRENT_TRUTH
+  -> agentgraph-harness current contract
+  -> Skill / observability current reference
+  -> workboard / checklist / review
+  -> design / plan / historical
+```
+
+## Tool 文档引用规则
+
+```text
+current code + repeatable tests
+  -> TOOL_CURRENT_TRUTH
+  -> harness current overview / Agent-Harness protocol
+  -> tooling-runtime/tools-protocol
+  -> capability detail / runbook
+  -> project-control evidence
+  -> design / plan / historical
+```
+
+## MicroApp 文档引用规则
+
+```text
+current code + repeatable tests
+  -> MICROAPP_CURRENT_TRUTH
+  -> microapp/README
+  -> concrete runtime contract / current notes / smoke guide
+  -> project-control evidence
+  -> proposal / POC / historical
+```
+
+MicroApp 阅读必须另外区分：
+
+```text
+产品入口
+共享 definition
+领域 Runtime
+Integration invoke
+Agent Tool / Skill access
+```
+
+其中任一层成立都不能替代其余层。
+
+发现代码与 settled contract 不一致时，必须写清：
+
+- 目标合同；
+- 当前实现；
+- 用户影响；
+- 修复是否完成。
+
+不得把实现回归包装成新合同，也不得用目标合同假装代码已经正确。
+
+## 工程工作区
+
+[[VAULT_HOME]] 是 Obsidian / 工程资料工作区入口。
+
+它包含地图、概念、施工记录和项目控制资料，因此不等于产品真相首页。进入工作区后仍要遵守生命周期标记。
+
+## 文档站规则
+
+- YAML frontmatter 与旧式 `Status:` 头部都可识别；
+- 状态冲突时 Historical / Superseded 优先于 current doc type；
+- 缺状态不会自动进入“先读这里”；
+- 当前文档超过 90 天未核验会被标记；
+- `project-control/` 是施工与决策记录区，不是产品说明书；
+- 文档路径不代表可信度，生命周期与验证证据才代表可信度；
+- Current 文档发现实现漂移时，必须显式记录，而不是静默改写合同。
+
+## 归档
+
+归档规则见 [[archive/README]]。
+
+- Provider 历史：[[archive/provider/README]]；
+- Knowledge Base 历史：[[archive/knowledge-base/README]]；
+- Evaluation 历史：[[archive/evaluation/README]]；
+- Agent 历史：[[archive/agent/README]]；
+- Tool 历史：[[archive/tool/README]]；
+- MicroApp 历史：[[archive/microapp/README]]。

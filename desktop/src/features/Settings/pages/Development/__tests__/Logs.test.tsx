@@ -30,20 +30,14 @@ vi.mock("@/features/Settings/pages/General/LogsButtons", () => ({
 }));
 
 describe("DevelopmentLogs", () => {
-  it("shows an inline connecting state before the first log snapshot arrives", async () => {
+  it("shows one page skeleton before the first log snapshot arrives", async () => {
     streamRuntimeLogsMock.mockImplementationOnce(async () => {
       await new Promise(() => {});
     });
 
     render(<DevelopmentLogs />);
 
-    expect(
-      screen.getByText("[connecting to runtime log stream...]"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("> opening stream channel")).toBeInTheDocument();
-    expect(
-      screen.getByText("> requesting latest runtime snapshot"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("development-page-skeleton")).toBeInTheDocument();
   });
 
   it("caps appended entries to the latest limit", () => {

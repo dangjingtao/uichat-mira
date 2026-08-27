@@ -3,12 +3,14 @@ import { requireAuth } from "@/db/auth.db.js";
 import { registerThreadMessageRoutes } from "./messages.routes.js";
 import { registerThreadSkillReportRoutes } from "./skill-reports.routes.js";
 import { registerThreadRoutes } from "./threads.routes.js";
+import { registerWorkspaceThreadPageRoutes } from "./workspace-thread-page.routes.js";
 
 const threadRoute: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", requireAuth);
   await registerThreadRoutes(app);
   await registerThreadMessageRoutes(app);
   await registerThreadSkillReportRoutes(app);
+  await registerWorkspaceThreadPageRoutes(app);
 };
 
 export default threadRoute;

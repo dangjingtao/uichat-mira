@@ -10,7 +10,6 @@ import type { AvatarPickerOption } from "@/shared/ui/AvatarPicker";
 import AvatarPicker from "@/shared/ui/AvatarPicker";
 import Badge from "@/shared/ui/Badge";
 import { Button, IconButton } from "@/shared/ui/Button";
-import Card from "@/shared/ui/Card";
 import { TextInput } from "@/shared/ui/Input";
 import TagInput from "@/shared/ui/TagInput";
 import type { RoleField, RoleRecord } from "../types";
@@ -123,18 +122,38 @@ export default function RoleEditor({
   const { t: globalT } = useTranslation();
 
   return (
-    <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden p-0">
+    <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="border-b border-border px-3.5 py-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex min-h-9 items-center justify-between gap-3">
           <RoleSectionTitle
             icon={UserRoundPen}
             title={t("editor.title")}
-            hint={t("editor.hint")}
+            trailing={
+              <Badge variant={statusTone(selectedRole?.status ?? "draft")}>
+                {selectedRole ? getStatusLabel(t, selectedRole.status) : "-"}
+              </Badge>
+            }
           />
           <div className="flex shrink-0 items-center gap-2">
-            <Badge variant={statusTone(selectedRole?.status ?? "draft")}>
-              {selectedRole ? getStatusLabel(t, selectedRole.status) : "-"}
-            </Badge>
+            <IconButton
+              ariaLabel={t("actions.delete")}
+              onClick={onDelete}
+              styleType="ghost"
+              tone="danger"
+            >
+              <Trash2 className="h-4 w-4" />
+            </IconButton>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onReset}
+              disabled={!isEdited}
+            >
+              {globalT("common.actions.reset")}
+            </Button>
+            <Button size="sm" onClick={onSave} disabled={!isEdited}>
+              {globalT("common.actions.save")}
+            </Button>
             <Button
               variant="secondary"
               size="sm"
@@ -214,30 +233,7 @@ export default function RoleEditor({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-border bg-surface-primary px-3.5 py-3">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <IconButton
-              ariaLabel={t("actions.delete")}
-              onClick={onDelete}
-              styleType="ghost"
-              tone="danger"
-            >
-              <Trash2 className="h-4 w-4" />
-            </IconButton>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onReset}
-              disabled={!isEdited}
-            >
-              {globalT("common.actions.reset")}
-            </Button>
-            <Button size="sm" onClick={onSave} disabled={!isEdited}>
-              {globalT("common.actions.save")}
-            </Button>
-          </div>
-        </div>
       </div>
-    </Card>
+    </div>
   );
 }

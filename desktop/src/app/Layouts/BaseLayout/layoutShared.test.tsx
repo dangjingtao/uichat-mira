@@ -54,8 +54,8 @@ describe("SettingsNavigation", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("link", { name: "settings.navigation.knowledgeBase" })).toHaveClass("bg-primary/10");
-    expect(screen.getByRole("link", { name: "settings.navigation.evaluationCenter" })).not.toHaveClass("bg-primary/10");
+    expect(screen.getByRole("link", { name: "settings.navigation.knowledgeBase" })).toHaveClass("bg-surface-soft");
+    expect(screen.getByRole("link", { name: "settings.navigation.evaluationCenter" })).not.toHaveClass("bg-surface-soft");
   });
 
   it("preserves the active knowledge base query when linking inside the knowledge base section", () => {

@@ -23,6 +23,10 @@ export const AUTH_EXEMPT_ROUTES: AuthExemptRoute[] = [
   { path: "/assets/avatars", match: "prefix" },
   { path: "/client-coverage", match: "prefix" },
   { path: "/server-coverage", match: "prefix" },
+  // Pairing endpoints authenticate with a short-lived challenge code and poll
+  // token. Business routes remain protected by JWT or scoped device tokens.
+  { path: "/remote/pairing/claim", match: "exact" },
+  { path: "/remote/pairing/claims", match: "prefix" },
   // WebSocket clients authenticate in the first hello message because browser WebSocket cannot set Authorization headers.
   { path: "/webbridge", match: "exact" },
   { path: CONFIG.SWAGGER_PREFIX, match: "prefix" },

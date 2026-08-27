@@ -23,6 +23,7 @@ const chatPending = {
       workspaceDeleteTitle: "Delete Workspace",
       workspaceDeleteDescription: "Deleting this workspace will also delete all threads inside it. This action cannot be undone.",
       workspaceDeleteConfirm: "Delete Workspace",
+      workspaceDefault: "Default",
       threadDeleteTitle: "Delete Conversation",
       threadDeleteDescription: "Deleting this conversation will permanently remove all messages in it. This action cannot be undone.",
       threadDeleteConfirm: "Delete Conversation",

@@ -346,7 +346,7 @@
 - 搜索选择类弹窗默认走更紧凑的 modal 壳层，列表项应以单行标题、轻量元信息和较小圆角为主，避免大卡片堆叠
 - 加载占位优先使用共享 `Skeleton`，不要在业务页重复散落 `animate-pulse + bg-surface-secondary + rounded-*`
 - Table：用 `surface-*`、`border`、`text-*` 建结构，不做厚重报表蓝灰底
-- 紧凑业务表格优先使用共享 `Table` 的 `compact` 模式，先压缩表头和行高，再考虑删列
+- 共享 `Table` 默认使用开发报告表格的 `text-xs + px-3 py-2` 密度；更窄的业务表格再使用 `compact` 压缩为 `px-2.5 py-1.5`
 - 表头分隔线应由 `th` 承载，sticky 场景下更稳定
 - 表体首行不要再单独补 `border-t`，统一从第二行开始建立分隔节奏
 - StatusBadge / StatusIndicator：状态色仅在点、边、浅底中使用，避免整块高饱和填充
@@ -454,6 +454,7 @@
 
 - 调整聊天密度时优先修改 token，不在 UChat 组件内重新写任意值。
 - `MarkdownText` 的全局默认排版保持独立；聊天页通过 UChat 传入 `chat-*` 类，不能让聊天密度修改影响知识页等其他 Markdown 消费方。
+- 助手回复中的 LaTeX 由 `MarkdownText` 统一解析：`$...$` 用于行内公式，`$$...$$` 用于块级公式；业务页面不要绕过该组件直接注入公式 HTML。
 - 同一批 token 调整数值前必须做聊天长文、短消息、附件、执行轨迹和小屏宽度的视觉回归。
 
 ## 16. Composer Pattern

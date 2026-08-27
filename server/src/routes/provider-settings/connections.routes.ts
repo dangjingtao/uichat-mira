@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { providerSettingsService } from "@/services/provider-settings.service.js";
 import { success } from "@/utils/index.js";
-import { routeHandler } from "@/utils/route-errors.js";
+import { createRouteError, routeHandler } from "@/utils/route-errors.js";
 import { providerSettingsRouteSchemas } from "./schemas.js";
 import type {
   CreateProviderConnectionBody,
+  ImportModelSettingsBody,
   ProviderIdParams,
   SaveProviderConnectionBody,
 } from "./types.js";
@@ -24,6 +25,37 @@ export const registerProviderConnectionRoutes = async (
     { schema: providerSettingsRouteSchemas.listProviders },
     routeHandler("Failed to get providers", async () =>
       success(providerSettingsService.getProviderSummaries())),
+  );
+
+  app.get(
+    "/providers/model-settings/export",
+    { schema: providerSettingsRouteSchemas.exportModelSettings },
+    routeHandler("Failed to export model settings", async () =>
+      success(providerSettingsService.exportModelSettings())),
+  );
+
+  app.put<{ Body: ImportModelSettingsBody }>(
+    "/providers/model-settings/import",
+    { schema: providerSettingsRouteSchemas.importModelSettings },
+    routeHandler("Failed to import model settings", async (request) => {
+      try {
+        return success(
+          providerSettingsService.importModelSettings(request.body),
+          "Model settings imported",
+        );
+      } catch (error) {
+        throw createRouteError({
+          statusCode: 400,
+          code: "MODEL_SETTINGS_IMPORT_INVALID",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Invalid model settings backup",
+          cause: error,
+          logMessage: "Failed to import model settings",
+        });
+      }
+    }),
   );
 
   app.post<{ Body: CreateProviderConnectionBody }>(

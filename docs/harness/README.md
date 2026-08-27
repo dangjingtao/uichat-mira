@@ -1,84 +1,89 @@
+---
+status: current
+owner: runtime
+last_verified: 2026-07-30
+layer: wiki
+module: Harness
+feature: Overview
+Doc Type: overview
+canonical: true
+related:
+  - ../AGENT_CURRENT_TRUTH.md
+  - ../TOOL_CURRENT_TRUTH.md
+  - agentgraph-harness-protocol.md
+  - ../skill/README.md
+  - ../tooling-runtime/tools-protocol.md
+---
+
 # Harness 模块
 
-Status: Current
-Owner: runtime
-Last verified: 2026-07-22
-Layer: wiki
-Module: Harness
-Feature: Overview
-Doc Type: overview
-Canonical: true
-Related:
-  - agentgraph-harness-protocol.md
-  - ../tooling-runtime/tools-protocol.md
-  - harness-assessment-2026-06-28.md
-  - harness-phase-1-implementation-checklist.md
+> Harness 是 concrete tool 的控制平面，不是 Agent 的大脑，也不是 SubAgent 编排器。完整工具面先读 [[TOOL_CURRENT_TRUTH]]。
 
-## 单点真相范围
+## 推荐入口
 
-这页是 Harness 模块入口。
+- [[TOOL_CURRENT_TRUTH]]：当前公共工具面、动态能力、暴露、审批与降级；
+- [[AGENT_CURRENT_TRUTH]]：Tool 如何进入 Main / Child execution；
+- [[harness/agentgraph-harness-protocol]]：Agent concrete invocation 与 Evidence；
+- [[tooling-runtime/tools-protocol]]：definition / exposure / invocation 技术协议。
 
-Agent Runtime 的完整主线以：
+## 1. Harness 负责什么
 
-- [AgentGraph 与 Harness 当前协议](agentgraph-harness-protocol.md)
+Harness 负责：
 
-为准。
+- capability / tool registry；
+- public surface classification；
+- eligible tool surface；
+- Tool Exposure；
+- schema 与 metadata；
+- risk / approval boundary；
+- workspace boundary；
+- invocation；
+- external MCP projection；
+- event / trace / artifact / audit；
+- result 到 bounded `llmContent` 的统一投影。
 
-## 当前定位
+Harness 不负责：
 
-Harness 不是全局编排器，也不是最终回答器。
+- 用户目标分解；
+- 多步任务下一步决策；
+- Generic / Skill SubAgent task-local planning；
+- 工具参数生成；
+- 用户目标完成判断；
+- 最终自然语言回答；
+- Skill-private Runtime 的领域实现。
 
-它负责：
+## 2. 四层合同
 
-- capability / tool registry
-- 工具定义与 exposure schema
-- eligible tool surface
-- invocation 执行
-- risk / approval boundary
-- workspace boundary
-- external MCP projection
-- invocation trace / audit
-- Harness result 到 LLM content 的统一投影
+### Registry
 
-它不负责：
+保存 definition 与 implementation。注册存在不等于 Planner 可见。
 
-- 决定一个多步任务下一步做什么
-- 生成工具参数
-- 维护 Agent task completion
-- 决定何时回答用户
-- 组织最终自然语言答案
+### Public Surface / Availability
 
-这些属于 Agent Runtime / Planner / Generate。
+先排除内部 primitive 和兼容 wrapper，再应用事实 availability：
 
-## 当前三层合同
+- authenticated user；
+- connection；
+- runtime readiness；
+- external MCP Agent Access；
+- implementation 是否仍在 registry。
 
-### 1. Capability
+### Tool Exposure
 
-Harness 内部用于描述能力与治理信息，例如：
+`state.toolExposure` 是 Main Planner 当前可见 concrete tools 的运行时真相：
 
-- read
-- web search
-- terminal
-- external MCP
-- codebase understanding
+- id；
+- title / description；
+- input schema；
+- domain / source；
+- tags；
+- side effect / approval / workspace metadata。
 
-Capability 可以参与诊断、治理、可见性与排序，但不能直接进入执行。
+Tool Exposure 只提供可选面，不产生 invocation。
 
-### 2. Tool Exposure
+### Invocation
 
-Tool Exposure 是本轮 Planner 可以看见的工具面：
-
-- tool id
-- title / description
-- input schema
-- capability metadata
-- approval / side-effect metadata
-
-Tool Exposure 只提供候选，不产生执行对象。
-
-### 3. Invocation
-
-Invocation 是具体执行：
+普通 Main Planner tool 必须经过 Normalize 冻结：
 
 ```ts
 executeHarnessInvocation({
@@ -90,135 +95,181 @@ executeHarnessInvocation({
 })
 ```
 
-只有 frozen `pendingToolCall` 才能进入 Agent 的 Invocation 路径。
-
-## 与 Agent Runtime 的当前边界
-
-当前应用默认主链：
+## 3. 普通 concrete tool 路径
 
 ```text
-Planner
+Main Planner
+  -> nextAction.use_tool(concrete tool)
   -> Normalize
   -> Policy
-  -> Tool
+  -> Harness Invocation
+  -> pending tool / retrieval result
   -> Evidence
-  -> Planner
+  -> Main Planner
 ```
-
-Harness 参与其中的方式：
 
 | Agent 步骤 | Harness 角色 |
 | --- | --- |
-| Planner | 提供 exposed tool definitions；不替 Planner 选最终工具 |
-| Normalize | 提供 schema 与 metadata；不重建参数 |
-| Policy | 提供 side effect、approval、workspace boundary 信息 |
-| Tool | 执行 frozen `pendingToolCall` |
-| Evidence | 接收 Invocation 的真实结果与 `llmContent` |
-| Generate | 提供 bounded result projection，不直接生成回答 |
+| Prepare Context | 解析 registry、public surface、availability 与 exposure |
+| Planner | 提供 concrete definitions，不代替选择 |
+| Normalize | schema、path normalization、冻结 call、计算 inputHash |
+| Policy | side effect、workspace 与 approval |
+| Tool | 执行与 frozen call 一致的 invocation |
+| Evidence | 接收真实 result / `llmContent` |
+| Generate | 只消费已引用 Evidence，不调用 Harness |
 
-## 不得恢复的旧入口
+## 4. Tool Exposure 当前规则
 
-以下内容不得重新变成执行入口：
+```text
+public eligible tools <= 20
+  -> 全部暴露
+  -> 不运行 ranking
 
-- capability id
-- capability match
-- preferredToolId
-- `capabilityIntent.selectedToolIds`
-- `selectedToolId`
-- query keyword rule
-- UI 选中状态
+public eligible tools > 20
+  -> capability profile
+  -> embedding / rerank
+  -> toolId 去重
+  -> 前 20
+```
 
-`selectedToolId` 可以保留给 UI、trace、diagnostics 与兼容读取，但真实执行必须由 frozen `pendingToolCall` 驱动。
+当前事实：
 
-## 当前 Tool Exposure 真相
+- caller `topK / maxTools / minScore` 不能缩小 <=20 工具集；
+- >20 时没有 score threshold 淘汰；
+- ranking 失败按 registry 顺序回退前 20；
+- 没有 Browser-only、Terminal-needed 或 task-phase 暴露规则；
+- Main Planner 不二次改写 Harness ranking。
 
-完整合同以 [AgentGraph 与 Harness 当前协议：Tool Exposure 与真实执行入口](agentgraph-harness-protocol.md#tool-exposure-与真实执行入口) 为准。
+Recall / rerank 只服务上下文预算，不是授权或执行决定。
 
-`resolveHarnessToolCandidatesForTurn(...)` 返回的是：
+## 5. Tool Group 不改变 Exposure
 
-- `toolCandidates`
-- `toolExposure.exposedToolIds`
-- `toolExposure.exposedDefinitions`
+用户选择的工具包：
 
-当前 eligible 工具面不会因为用户措辞弱或 recall 失败就被静默缩成一个“选中工具”。
+- 给 ranking query 增加偏好；
+- 写入 available / unavailable trace；
+- 不扩大或缩小 canonical exposure；
+- 不产生 invocation。
 
-当前暴露规则：
+SkillContext 同样不扩大 Main Tool Exposure。
 
-- eligible concrete tools 不超过 `20`：全部暴露，不运行语义排名。
-- eligible concrete tools 超过 `20`：先按 capability profile 做 embedding 全量召回，再由 reranker 决定最终顺序；rerank 同分时才使用 embedding 排序。
-- capability 展开为具体 tool id、去重后取前 `20`，写入 `state.toolExposure`。
-- Planner 不计算排名、不暴露工具，只消费 `state.toolExposure` 并决定下一步。
-- reranker 失败时保留 embedding 顺序；embedding 失败或查询为空时按稳定顺序取前 `20`。
-- 当前没有核心工具固定名额，也没有 `minScore` 阈值淘汰。
+## 6. 不得恢复的旧执行入口
 
-Recall 与 rerank 只服务 Planner 上下文压缩和排序，不能建立独立于 Planner 的执行决定。
+以下对象不能变成 invocation：
 
-## Approval 与 Workspace Boundary
+- capability id / match；
+- preferredToolId；
+- `capabilityIntent.selectedToolIds`；
+- `selectedToolId`；
+- ranking score；
+- query keyword rule；
+- UI 选中状态；
+- Tool Group；
+- Skill match。
 
-Harness invocation 在执行前会验证：
+真实执行只能来自 frozen concrete invocation 或受控 Child runtime binding。
 
-- 工具是否要求审批
-- exact `toolId / inputHash` 是否已获批准
-- workspace-bound 参数是否越界
-- 外部 MCP 是否满足 eligible allowlist
+## 7. `delegate_task` 不是 Harness Tool
 
-审批通过只授权当前 exact invocation。
+`delegate_task` 属于 Agent Runtime：
 
-参数、cwd、env、timeout 或命令发生变化时，hash 变化，必须重新判断。
+- 不来自 Harness ranking；
+- 不对应外部 provider invocation；
+- 不进入 Main Agent 普通 Normalize / Policy / ToolNode；
+- 启动受控 Generic SubAgent；
+- V1 不允许 Child 再次委派。
 
-## Harness Result 与 Generate
+Child 内真实 concrete tool 仍受 binding、Policy、approval、workspace、environment 与 Evidence contract 治理。
 
-成功 Invocation 会投影为 `llmContent`：
+## 8. Skill-private Runtime 不是第二个 Harness
 
-- 真实结果正文
-- 截断标记
-- original / included char count
-- 结构化工具结果文本
+Office document / PDF / presentation / spreadsheet 等 private Runtime：
 
-Agent ToolNode 把它附加到 execution，Evidence 统一累计。
+- 不暴露给 Main Planner；
+- 不注册成普通全局 Tool；
+- 不参与 Main Tool Exposure ranking；
+- 由 Skill execution profile 与 managed adapter 解析；
+- readiness、workspace、approval 和 audit 必须真实成立；
+- pending binding 不得伪装 ready。
 
-Generate 当前有正式的大结果边界：
+## 9. Approval 当前事实
 
-- Harness Generate context 总字符预算 `48_000`
-- 只消费 completed executions
-- 明确标记 truncated
-- 超预算只截断上下文，不停止工具进程
-- 模型必须依据已展示结果回答
+### Static metadata
 
-因此，“Generate 仍无边界拼接 tool result”已经过期。
+Definition 可以声明 `requiresApproval`。当前公开 Edit、Terminal、Browser act/transfer 与 External MCP 有明确静态审批要求。
 
-## Terminal Runtime 边界
+### Dynamic requirement
 
-`terminal_session` 仍通过 Harness 注册、Exposure、Policy 与 Invocation。
+GitHub remote write、Mail force sync 等可以按具体 operation 在执行时额外要求审批。
 
-当前执行 Runtime 是：
+### Exact invocation 漂移
 
-- `host_spawn`
-- persistent PTY
-- Windows Job Object / taskkill tree fallback
-- POSIX process group
+settled 目标仍是：
 
-它不再要求旧 command sandbox。
+```text
+toolId + toolCallId + inputHash
+```
 
-`requiresApproval` 仍保留；Host Runtime 放开执行能力，不等于绕开 Policy。
+截至 2026-07-30，core `ApprovedInvocation` 实际匹配：
 
-## External MCP
+```text
+toolId + inputHash
+```
 
-External MCP 必须：
+pending request 和 frozen call 保存 `toolCallId`，批准在执行尝试后 one-shot 消费，但 `toolCallId` 尚未进入 grant match。这是已知实现漂移，不是合同改版。
 
-- 先成为 eligible capability
-- 进入显式 allowlist
-- 投影为具体 tool definition
-- 由 Planner 生成具体 `use_tool`
-- 经过 Normalize / Policy / Invocation
-- 将结果进入 Evidence
+## 10. Workspace 与 Terminal
 
-Agent 不得直接调用 provider 私有命令，也不得让 capability id 穿透成 invocation tool id。
+普通 Read / Edit file tools 使用严格 workspace path normalization。
 
-## 当前判断
+`terminal_session` 是 host shell / PTY runtime：
+
+- 支持完整命令、Node、Python、Git、包管理器和长任务；
+- `cwd` 可以是 workspace-relative、父级或绝对路径；
+- workspace 外执行仍需要 exact approval；
+- host cwd 不被偷偷改写。
+
+旧 command sandbox 已退出主链。释放执行能力不等于绕过 approval、process ownership 或 cleanup。
+
+## 11. External MCP
+
+External MCP projected tool 必须：
+
+- server enabled / connected；
+- disclaimer accepted；
+- discovery 成功；
+- transport 配置有效；
+- 用户开启 Agent Access；
+- canonical implementation 仍在 registry；
+- id 使用 `mcp:<serverId>:tool:<toolName>`；
+- concrete invocation 经过 approval；
+- result 进入 Evidence。
+
+## 12. Result、Evidence 与 Generate
+
+Completed invocation 可投影：
+
+- structured result；
+- bounded `llmContent`；
+- truncation metadata；
+- event；
+- artifact；
+- trace。
+
+ToolNode 产生 pending execution / retrieval，Evidence 统一累计。
+
+Generate：
+
+- 不调用 Harness；
+- 不选择工具；
+- 不重新判断完成；
+- 只消费 finalization packet 引用的 Evidence；
+- 阻断内部 tool protocol leak。
+
+## 13. 当前判断
 
 Harness 当前是：
 
-> **Agent 的工具控制平面，而不是 Agent 的大脑。**
+> **Registry、公共面、暴露、边界、审批、执行、结果和审计的控制平面。**
 
-Planner 决定下一步；Harness 保证候选、审批、边界、执行、结果和审计可信。
+Main Planner 决定全局下一步；SubAgent 决定被委派工作包的局部下一步；Harness 保证 concrete tool execution 可信。

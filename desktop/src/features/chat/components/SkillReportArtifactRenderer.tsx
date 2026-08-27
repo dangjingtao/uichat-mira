@@ -8,12 +8,14 @@ import {
   getSkillReportPdfBlob,
 } from "@/shared/api/skillReports";
 
-const REPORT_MARKER = /<!--mira-skill-report:([a-zA-Z0-9_-]+):(pdf|html)-->/;
+const REPORT_MARKER =
+  /<!--mira-skill-report:([a-zA-Z0-9_-]+):(pdf|html)(?::([a-zA-Z0-9_-]+))?-->/;
 const REPORT_FILENAME = "两个人的备孕全景报告.pdf";
 
 export type SkillReportArtifactMarker = {
   sessionId: string;
   pdfAvailable: boolean;
+  artifactKind: "fertility-report" | "wechat-article-layout";
 };
 
 export const readSkillReportArtifactMarker = (
@@ -28,8 +30,27 @@ export const readSkillReportArtifactMarker = (
   return {
     sessionId: match[1],
     pdfAvailable: match[2] === "pdf",
+    artifactKind:
+      match[3] === "wechat-article-layout"
+        ? "wechat-article-layout"
+        : "fertility-report",
   };
 };
+
+const resolvePresentation = (marker: SkillReportArtifactMarker) =>
+  marker.artifactKind === "wechat-article-layout"
+    ? {
+        title: "公众号排版预览",
+        subtitle: "HTML 行内预览 · 完整文件仍保留在工作区",
+        loading: "正在加载排版预览…",
+        badge: "HTML",
+      }
+    : {
+        title: "两个人的备孕全景报告",
+        subtitle: "行内预览 · PDF 与此内容一致",
+        loading: "正在加载报告…",
+        badge: marker.pdfAvailable ? null : "PDF 暂不可用",
+      };
 
 export function SkillReportArtifactRenderer({
   message,
@@ -57,7 +78,7 @@ export function SkillReportArtifactRenderer({
       .catch((loadError) => {
         if (!cancelled) {
           setError(
-            loadError instanceof Error ? loadError.message : "报告加载失败",
+            loadError instanceof Error ? loadError.message : "HTML 预览加载失败",
           );
         }
       });
@@ -68,6 +89,7 @@ export function SkillReportArtifactRenderer({
   }, [marker, message.threadId]);
 
   if (!marker) return null;
+  const presentation = resolvePresentation(marker);
 
   const downloadPdf = async () => {
     if (!marker.pdfAvailable || downloading) return;
@@ -105,10 +127,10 @@ export function SkillReportArtifactRenderer({
           </span>
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-text-primary">
-              两个人的备孕全景报告
+              {presentation.title}
             </div>
             <div className="truncate text-xs text-text-secondary">
-              行内预览 · PDF 与此内容一致
+              {presentation.subtitle}
             </div>
           </div>
         </div>
@@ -126,11 +148,11 @@ export function SkillReportArtifactRenderer({
             )}
             PDF
           </button>
-        ) : (
+        ) : presentation.badge ? (
           <span className="shrink-0 text-xs text-text-secondary">
-            PDF 暂不可用
+            {presentation.badge}
           </span>
-        )}
+        ) : null}
       </header>
 
       {error ? (
@@ -140,16 +162,16 @@ export function SkillReportArtifactRenderer({
       {!html && !error ? (
         <div className="flex h-24 items-center justify-center gap-2 text-sm text-text-secondary">
           <LoaderCircle className="h-4 w-4 animate-spin" />
-          正在加载报告…
+          {presentation.loading}
         </div>
       ) : null}
 
       {html ? (
         <iframe
-          title="两个人的备孕全景报告"
+          title={presentation.title}
           srcDoc={html}
           sandbox=""
-          className="block h-[min(32vh,300px)] min-h-[220px] w-full border-0 bg-white"
+          className="block h-[min(28vh,260px)] min-h-[190px] w-full border-0 bg-white"
         />
       ) : null}
     </section>

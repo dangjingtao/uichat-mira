@@ -4,15 +4,21 @@ vi.mock("@/shared/lib/request", () => ({
   get: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
+  patch: vi.fn(),
+  del: vi.fn(),
 }));
 
-import { get, post } from "@/shared/lib/request";
+import { del, get, patch, post } from "@/shared/lib/request";
 import { put } from "@/shared/lib/request";
 import {
   getNewsHubConfig,
   getNewsHubOverview,
   refreshNewsHub,
   saveNewsHubConfig,
+  detectNewsFeed,
+  deleteNewsFeedSubscription,
+  listNewsFeedSubscriptions,
+  updateNewsFeedSubscription,
 } from "../newsHub";
 
 describe("news hub api", () => {
@@ -91,5 +97,22 @@ describe("news hub api", () => {
     await saveNewsHubConfig(payload);
 
     expect(put).toHaveBeenCalledWith("/microapps/news-hub/config", payload);
+  });
+
+  it("uses the feed subscription routes", async () => {
+    vi.mocked(post).mockResolvedValueOnce({ candidates: [] });
+    vi.mocked(get).mockResolvedValueOnce([]);
+    vi.mocked(patch).mockResolvedValueOnce({});
+    vi.mocked(del).mockResolvedValueOnce({ deleted: true });
+
+    await detectNewsFeed("https://example.com/blog");
+    await listNewsFeedSubscriptions();
+    await updateNewsFeedSubscription("feed-1", { enabled: false });
+    await deleteNewsFeedSubscription("feed-1");
+
+    expect(post).toHaveBeenCalledWith("/microapps/news-hub/feeds/detect", { url: "https://example.com/blog" });
+    expect(get).toHaveBeenCalledWith("/microapps/news-hub/feeds");
+    expect(patch).toHaveBeenCalledWith("/microapps/news-hub/feeds/feed-1", { enabled: false });
+    expect(del).toHaveBeenCalledWith("/microapps/news-hub/feeds/feed-1");
   });
 });

@@ -1,6 +1,6 @@
 # MiraDocs 对话样例
 
-这些样例用于约束提问密度、参数推断、草案展示和施工后的证据交付。它们不是固定话术。
+这些样例用于约束提问密度、参数推断、草案展示、Workspace 使用和施工后的证据交付。它们不是固定话术。
 
 ## 1. 本地创建站点，信息完整
 
@@ -16,10 +16,10 @@ Mira：
 风格：默认简洁
 部署：暂不部署
 
-我会先检查目标目录，再创建最小站点并验证类型检查、静态构建、首页、文档入口和博客入口。
+我会先检查目标目录，再从固定 MiraDocs 脚手架创建最小站点，并验证类型检查、静态构建、首页、文档入口和博客入口。
 ```
 
-规则：不重复询问已经给出的路径、名称、内容类型、风格和部署方式。
+规则：不重复询问已经给出的路径、名称、内容类型、风格和部署方式。本地模式直接使用用户明确的目标路径，不迁入内部 staging。本地目标默认 `deployment: none`。
 
 ## 2. 新建 GitHub 站点，只缺可见性
 
@@ -33,12 +33,12 @@ Mira：
 仓库可见性：待确认
 内容：博客
 风格：个人博客
-部署：暂不部署
+部署：GitHub Pages（默认）
 
 这个新仓库要公开还是私有？
 ```
 
-规则：只补问可见性，不盘问 Logo、域名、评论或统计。
+规则：只补问可见性，不盘问 Logo、域名、评论、统计或 Mira 内部 staging 路径。GitHub `create_site` 默认部署到 GitHub Pages，不把“建站”静默降级成只生成源码。
 
 ## 3. 新仓库创建后的 installation 授权
 
@@ -50,13 +50,13 @@ Mira：
 请在 GitHub App installation 设置中把该仓库加入 Mira；完成后我会重新检查并继续建站。
 ```
 
-规则：调用 `github_repository.ensure_installation_access`。不能因为仓库已经创建，就假设后续读写一定可用。
+规则：调用 `github_repository.ensure_installation_access`。不能因为仓库已经创建，就假设后续读写一定可用。授权前不写远程站点文件，也不把仓库创建动作重复执行。
 
 ## 4. 从零创建并部署到 GitHub Pages
 
 ```text
 用户：
-新建一个公开的 tomz-lab，网站叫 Tomz Lab，建好后直接用 GitHub Pages 上线。
+新建一个公开的 tomz-lab，网站叫 Tomz Lab。
 
 Mira：
 网站名：Tomz Lab
@@ -64,14 +64,27 @@ Mira：
 可见性：公开
 内容：文档 + 博客
 风格：默认简洁
-部署：GitHub Pages（workflow）
+部署：GitHub Pages（默认）
 
-我会依次创建仓库、确认 installation 授权、写入并验证站点、配置 Pages，最后回读 Actions 和 Pages URL。
+我会依次创建仓库、确认 installation 授权，在 Mira 的受管施工目录中从固定脚手架生成站点，完成安装、类型检查和静态构建，写入 Pages workflow 与源码，检查 Actions，配置 Pages，最后回读 Pages URL。
 ```
 
-规则：仓库创建、授权检查、文件施工、Pages 配置是不同 invocation，各自遵守审批与回读合同。
+规则：仓库创建、授权检查、本地 staging、模板施工、远程写入、Actions、Pages 配置是不同阶段。内部 staging 不需要用户选择，但首次建立后必须进入 checkpoint、trace 和最终交付。
 
-## 5. 建站后连续发布博客
+## 5. GitHub 建站的受管施工现场
+
+```text
+Mira：
+installation 已确认。我将使用本次任务的受管施工目录：
+
+C:\Users\Tomz\Documents\UIChat Mira\Default Workspace\.mira\staging\miradocs\dangjingtao\tomz-lab\<taskKey>
+
+这里用于固定脚手架落盘、依赖安装、类型检查和静态构建；不会把站点文件直接铺在 Mira BASE 根目录。失败后会保留这个现场，并从第一个未完成阶段继续。
+```
+
+规则：`Mira BASE` 是数据库 Workspace 的逻辑名称，不是站点目录。不同仓库或并发任务不能共享同一个 staging；恢复时不得新建第二个现场逃避失败。
+
+## 6. 建站后连续发布博客
 
 ```text
 用户：
@@ -90,9 +103,9 @@ Mira：
 我会先检查同名内容和资源路径，再写入、构建并验证页面路由。
 ```
 
-规则：继承当前站点，不重新询问仓库；标题等字段能推断就展示草案，不先发一张 frontmatter 表格让用户填写。
+规则：继承当前站点，不重新询问仓库；标题等字段能推断就展示草案，不先发一张 frontmatter 表格让用户填写。需要本地验证时复用已记录的 staging 或为新任务建立独立 staging。
 
-## 6. 发布文档但目标站点未知
+## 7. 发布文档但目标站点未知
 
 ```text
 用户：
@@ -104,7 +117,7 @@ Mira：
 
 规则：只问真正缺失的目标站点，不重复询问已提供的正文来源和内容类型。
 
-## 7. 内容类型模糊
+## 8. 内容类型模糊
 
 ```text
 用户：
@@ -116,7 +129,7 @@ Mira：
 
 规则：一次只解决 blog / doc 的关键歧义。
 
-## 8. 修改站点名称
+## 9. 修改站点名称
 
 ```text
 用户：
@@ -134,19 +147,19 @@ site.name
 
 规则：不要求用户重新填写站点风格、部署方式和作者信息，也不借机重构主题。
 
-## 9. 已有非空仓库初始化
+## 10. 已有非空仓库初始化
 
 ```text
 用户：
 把 dangjingtao/example-site 改成 MiraDocs。
 
 Mira：
-我先读取这个仓库的默认分支、技术栈、构建脚本、现有内容和部署工作流。它是非空仓库时，我会列出需要新增、修改和可能冲突的文件，再请你确认迁移范围，不会直接覆盖。
+我先读取这个仓库的默认分支、技术栈、构建脚本、现有内容、部署工作流和 Pages 状态。它是非空仓库时，我会列出需要新增、修改和可能冲突的文件，再请你确认迁移范围，不会直接覆盖。
 ```
 
-规则：已有仓库必须先读，不能拿默认 Starter 覆盖。
+规则：已有仓库必须先读，不能拿默认 Starter 覆盖。确认后从远程当前事实初始化独立 staging，不能复用其他仓库的目录。
 
-## 10. 删除已发布博客
+## 11. 删除已发布博客
 
 ```text
 用户：
@@ -161,7 +174,7 @@ Mira：
 
 规则：模糊对象不能直接删除；必须展示文件和页面影响。
 
-## 11. 构建失败诊断
+## 12. 构建失败诊断
 
 ```text
 用户：
@@ -171,21 +184,21 @@ Mira：
 我先读取当前依赖、配置和构建日志，并从最小失败层复现。确认是依赖、TypeScript、内容解析还是 Vite 构建后，我会先说明原因和影响，再修改；修复后重跑失败层以及必要的静态产物和路由验证。
 ```
 
-规则：不能未复现就归因于 MiraDocs，也不能偷偷加 fallback。
+规则：不能未复现就归因于 MiraDocs，也不能偷偷加 fallback。GitHub 目标应在已记录的 staging 中复现；本地目标直接使用用户项目路径。
 
-## 12. 只创建草稿，不上线
+## 13. 只创建草稿，不上线
 
 ```text
 用户：
 帮我整理一篇更新说明，先别发布。
 
 Mira：
-目标站点明确后，我会按当前站点的草稿约定处理：使用草稿目录、已有 status 字段，或仅创建未合并分支。不会凭空发明站点不支持的 frontmatter。
+目标站点明确后，我会按当前站点的草稿约定处理：使用草稿目录、已有 status 字段，或仅创建未发布内容。不会凭空发明站点不支持的 frontmatter。
 ```
 
 规则：“写 / 整理 / 准备”默认草稿；“发 / 发布 / 上线”才默认 published。
 
-## 13. 用户一次给全参数
+## 14. 用户明确要求 GitHub 站点暂不部署
 
 ```text
 用户：
@@ -199,31 +212,35 @@ Mira：
 风格：默认简洁
 部署：暂不部署
 
-参数已足够。我会检查同名仓库，随后走现有审批创建仓库、检查 installation 授权并创建施工分支，完成安装、类型检查和静态构建后交付 PR 与验证结果。
+参数已足够。我会检查同名仓库，随后走现有审批创建仓库、检查 installation 授权，建立独立 staging，从固定脚手架完成安装、类型检查和静态构建，再写入远程并回读。Actions 与 GitHub Pages 将标记为 not_run。
 ```
 
-规则：参数齐全就直接展示草案，不再追问。
+规则：用户明确说“先不部署”时覆盖 GitHub Pages 默认值；不得继续生成 workflow 或配置 Pages。
 
-## 14. 施工结果有缺口
+## 15. GitHub 建站完整交付
 
 ```text
 Mira：
 目标站点：dangjingtao/tomz-lab
-已完成：创建站点文件；类型检查通过；静态构建通过
-写入：feature/init-miradocs-site
-PR：#12
-访问地址：尚无
-部署状态：未配置，按你的要求暂不部署
+已完成：创建站点文件；类型检查通过；静态构建通过；GitHub Pages 部署成功
+受管施工现场：C:\...\Default Workspace\.mira\staging\miradocs\dangjingtao\tomz-lab\<taskKey>
+远程写入：main
+远程 commit：<sha>
+Actions：Deploy GitHub Pages · success
+GitHub Pages：https://dangjingtao.github.io/tomz-lab/
 剩余事项：Logo 和自定义域名可后续补充
 ```
 
-规则：把未部署说成未部署，不用“已上线”之类模糊完成词。
+规则：允许按照用户要求或仓库策略直接写默认分支。只有 workflow、Actions、Pages 状态和 URL 均已回读，才可说“建站完成”。PR 不是默认完成条件。
 
-## 15. 仓库创建成功，但授权阻塞
+## 16. 仓库创建成功，但授权阻塞
 
 ```text
 Mira：
 目标站点：dangjingtao/tomz-lab
+
+currentStage
+inspect_target
 
 completed
 - 创建公开仓库：成功
@@ -233,36 +250,88 @@ blocked
 - installation 授权：仓库尚未授权给 Mira
 
 not_run
-- 施工分支
-- 站点文件
-- 本地构建
-- PR
+- 本地 staging
+- 固定脚手架
+- 依赖安装与构建
+- 远程文件
+- Pages workflow
+- Actions
 - GitHub Pages
 
-请把该仓库加入 Mira 的 GitHub App installation。授权完成后，我会先重新检查访问状态，再从施工分支继续；不会重复创建仓库。
+请把该仓库加入 Mira 的 GitHub App installation。授权完成后，我会先重新检查访问状态，再从 prepare_staging 继续；不会重复创建仓库。
 ```
 
 规则：部分成功必须交付真实 checkpoint。恢复时禁止再次调用 `github_repository.create`。
 
-## 16. 站点和 PR 完成，但 Pages 失败
+## 17. staging 构建失败
 
 ```text
 Mira：
 目标站点：dangjingtao/tomz-lab
+受管施工现场：C:\...\Default Workspace\.mira\staging\miradocs\dangjingtao\tomz-lab\<taskKey>
+
+currentStage
+typecheck
+
+completed
+- 仓库创建与 installation 检查
+- staging 文件从固定脚手架生成
+- npm install 成功
+
+failed
+- npm run typecheck：TypeScript 错误
+
+not_run
+- 静态构建
+- 远程文件写入
+- Pages workflow
+- Actions
+- GitHub Pages
+
+恢复入口
+- 保留当前 staging，修复 TypeScript 后只从 typecheck 继续
+```
+
+规则：失败后不删除 staging、不重新创建仓库、不换一个空目录重跑，也不重新执行已经成功的 npm install。
+
+## 18. 站点和 workflow 完成，但 Pages 失败
+
+```text
+Mira：
+目标站点：dangjingtao/tomz-lab
+受管施工现场：C:\...\Default Workspace\.mira\staging\miradocs\dangjingtao\tomz-lab\<taskKey>
 
 completed
 - 站点文件已写入并回读
 - 类型检查通过
 - 静态构建通过
-- PR #12 已创建
+- Pages workflow 已写入
+- Actions 构建与部署 job 已成功
 
 failed
-- GitHub Pages 配置：远程返回失败
+- GitHub Pages 状态回读：远程返回失败
 
 下一步
 - 先重新读取当前 Pages 状态
-- 只重试 Pages 配置
-- 不重新创建仓库、重写内容或新建重复 PR
+- 只重试 configure_pages / verify_pages
+- 不重新创建仓库、重写内容、重新安装或重新构建
 ```
 
 规则：部署失败不抹掉前面已经完成的交付，也不能把整个流程从头再跑。
+
+## 19. 审批恢复只推进一个阶段
+
+```text
+当前 checkpoint：
+completedStages = [inspect_target, prepare_staging, render_scaffold, install_dependencies, typecheck]
+currentStage = build
+
+恢复后：
+- 回读 exact staging 与 package-lock.json
+- 只执行 npm run build
+- 不重新读取 npm README
+- 不重新安装依赖
+- 不重新生成入口文件
+```
+
+规则：恢复时只执行第一个未完成阶段。重复探索依赖 API、重复安装和重复构建都属于错误执行。

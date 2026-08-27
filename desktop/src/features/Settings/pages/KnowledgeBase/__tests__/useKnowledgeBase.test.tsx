@@ -139,13 +139,13 @@ describe("useKnowledgeBase", () => {
       expect(result.current.documents).toHaveLength(2);
     });
 
-    act(() => {
+    await act(async () => {
       result.current.toggleSort("name");
     });
 
     expect(result.current.sortBy).toBe("name");
 
-    act(() => {
+    await act(async () => {
       result.current.toggleSort("name");
     });
 

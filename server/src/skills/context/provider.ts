@@ -13,6 +13,7 @@ import type {
 
 const MAX_SKILL_BODY_CHARS = 24_000;
 const MAX_DISCLOSED_RESOURCE_CHARS = 16_000;
+const MAX_CONTINUATION_CONTEXT_CHARS = 14_000;
 const SKILL_CONTEXT_INSTRUCTION =
   "Treat primary.body and disclosedResources as task-specific domain guidance, not as permissions or proof of execution. Use resources only when their details are needed. primary.execution.allowedTools is the maximum tool allowlist for fork execution, not a per-task required set. Select only the subset required by the current operation and step; absence of an unused optional tool must not block execution. It never authorizes a missing, policy-blocked, or unavailable tool. Only choose tools currently present in canonical toolExposure; SkillContext must never be interpreted as adding or authorizing tools.";
 const TASK_RESET_OR_SWITCH_PATTERN =
@@ -36,6 +37,34 @@ const DEFAULT_SUBAGENT_EXECUTION: SkillExecutionManifest = {
 
 const trimToBudget = (value: string, limit: number) =>
   value.length <= limit ? value : `${value.slice(0, Math.max(0, limit - 1))}…`;
+
+const buildContinuationContext = (input: {
+  originalUserRequest: string;
+  assistantQuestion: string;
+  latestUserReply: string;
+}) =>
+  [
+    "<skill-task-continuation>",
+    "The latest user message answers the previous assistant clarification for the same Skill task. Continue the original request and do not treat the reply as a standalone task.",
+    JSON.stringify(input),
+    "</skill-task-continuation>",
+  ].join("\n");
+
+const mergeSkillBodyWithContinuation = (
+  body: string,
+  continuationContext: string | undefined,
+) => {
+  if (!continuationContext) return trimToBudget(body, MAX_SKILL_BODY_CHARS);
+  const boundedContinuation = trimToBudget(
+    continuationContext,
+    MAX_CONTINUATION_CONTEXT_CHARS,
+  );
+  const bodyBudget = Math.max(
+    0,
+    MAX_SKILL_BODY_CHARS - boundedContinuation.length - 2,
+  );
+  return `${trimToBudget(body, bodyBudget)}\n\n${boundedContinuation}`.trim();
+};
 
 const selectDisclosedResourceUris = (input: {
   query: string;
@@ -101,6 +130,7 @@ const looksLikeTaskContinuation = (input: {
 type ContinuityMatch = {
   match: SkillMatchResult;
   anchorQuery: string;
+  assistantQuestion: string;
 };
 
 const findContinuationMatch = (input: {
@@ -145,7 +175,11 @@ const findContinuationMatch = (input: {
       manifests: input.manifests,
     });
     if (previousMatch.primary) {
-      return { match: previousMatch, anchorQuery: previousUserQuery };
+      return {
+        match: previousMatch,
+        anchorQuery: previousUserQuery,
+        assistantQuestion: previousAssistantContent,
+      };
     }
 
     const assistantBeforePreviousUser = getPreviousAssistantContent(
@@ -186,6 +220,7 @@ export class SkillContextProvider {
       manifests,
     });
     let disclosureQuery = input.query;
+    let continuationContext: string | undefined;
 
     if (!match.primary) {
       const continuity = findContinuationMatch({
@@ -204,6 +239,11 @@ export class SkillContextProvider {
           secondary: continuity.match.secondary,
         };
         disclosureQuery = `${continuity.anchorQuery}\n${input.query}`;
+        continuationContext = buildContinuationContext({
+          originalUserRequest: continuity.anchorQuery,
+          assistantQuestion: continuity.assistantQuestion,
+          latestUserReply: input.query.trim(),
+        });
       }
     }
 
@@ -245,7 +285,7 @@ export class SkillContextProvider {
         id: manifest.id,
         version: manifest.version,
         name: manifest.name,
-        body: trimToBudget(content.body, MAX_SKILL_BODY_CHARS),
+        body: mergeSkillBodyWithContinuation(content.body, continuationContext),
         origin: manifest.origin ?? "external",
         execution: {
           ...execution,

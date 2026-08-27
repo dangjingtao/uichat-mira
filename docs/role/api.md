@@ -1,18 +1,23 @@
-# Role API
+---
+status: superseded
+owner: role / backend
+last_verified: 2026-08-01
+layer: wiki
+module: Role
+feature: ApiCompatibilityEntry
+doc_type: compatibility-entry
+canonical: false
+superseded_by: role-api.md
+---
 
-Layer: wiki
-Module: Role
-Feature: RoleAPI
-Doc Type: historical
+# Role API（兼容入口）
 
-`api.md` 现在只保留为兼容入口。
+当前 API 合同：
 
-当前生效版本请查看：
+- [[role/role-api]]
 
-- [role-api.md](/D:/workspace/rag-demo/docs/role/role-api.md)
+当前总真相：
 
-这份拆分的原因是：
+- [[ROLE_CURRENT_TRUTH]]
 
-- `role-api.md` 已补齐 `llmProfile`
-- 已按真实后端路由和 schema 对齐
-- 后续只维护这一份，避免出现双份真相
+本路径仅用于兼容旧链接。

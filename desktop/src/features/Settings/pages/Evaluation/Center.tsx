@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Download, Ellipsis, Eye, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import SettingsPageLayout from "../../components/SettingsPageLayout";
 import { Button } from "@/shared/ui/Button";
+import DropdownMenu from "@/shared/ui/DropdownMenu";
 import Table from "@/shared/ui/Table";
 import type { ColumnMeta } from "@/shared/ui/Table";
 import { Modal } from "@/shared/ui/Modal";
@@ -296,39 +297,61 @@ export default function EvaluationCenter() {
       {
         header: t("settings.evaluation.center.table.actions"),
         id: "actions",
-        size: 220,
-        minSize: 220,
+        size: 56,
+        minSize: 56,
+        meta: {
+          align: "right",
+        } satisfies ColumnMeta<EvaluationRunRecord>,
         cell: ({ row }) => (
-          <div className="flex items-center justify-start gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedRun(row.original)}
-            >
-              {t("common.actions.view")}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void handleDownloadRun(row.original)}
-            >
-              <Download className="h-3.5 w-3.5" />
-              {t("common.actions.download")}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-danger hover:bg-danger/5 hover:text-danger"
-              disabled={
-                deletingRunId === row.original.id ||
-                row.original.status === "queued" ||
-                row.original.status === "running"
+          <div className="flex items-center justify-end">
+            <DropdownMenu
+              align="end"
+              sideOffset={4}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-sm border border-transparent bg-transparent p-0 text-text-secondary transition-all duration-150 hover:bg-surface-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary"
+                  aria-label={`${t("common.actions.more")}: ${row.original.name}`}
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </button>
               }
-              onClick={() => confirmDeleteRun(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              {t("common.actions.delete")}
-            </Button>
+              items={[
+                {
+                  id: "view",
+                  label: t("common.actions.view"),
+                  leadingIcon: <Eye className="h-4 w-4" />,
+                },
+                {
+                  id: "download",
+                  label: t("common.actions.download"),
+                  leadingIcon: <Download className="h-4 w-4" />,
+                },
+                {
+                  id: "delete",
+                  label: t("common.actions.delete"),
+                  leadingIcon: <Trash2 className="h-4 w-4" />,
+                  tone: "danger",
+                  disabled:
+                    deletingRunId === row.original.id ||
+                    row.original.status === "queued" ||
+                    row.original.status === "running",
+                },
+              ]}
+              onSelect={(item) => {
+                if (item.id === "view") {
+                  setSelectedRun(row.original);
+                  return;
+                }
+                if (item.id === "download") {
+                  void handleDownloadRun(row.original);
+                  return;
+                }
+                if (item.id === "delete") {
+                  confirmDeleteRun(row.original);
+                }
+              }}
+            />
           </div>
         ),
       },
@@ -341,7 +364,6 @@ export default function EvaluationCenter() {
       miniTitle={t("settings.evaluation.center.page.miniTitle")}
       title={t("settings.evaluation.center.page.title")}
       description={t("settings.evaluation.center.page.description")}
-      containerClassName="max-w-none"
       contentClassName="flex h-full min-h-0 flex-col gap-4 pt-6"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3">

@@ -350,6 +350,46 @@ test("provider settings can bind a manually typed model id that is not in synced
   assert.equal(updated.providerTemplateCode, "openai-compatible-custom");
 });
 
+test("model settings backup restores provider secrets, assignments, and params", () => {
+  const custom = providerSettingsService.createProviderConnection({
+    templateCode: "openai-compatible-custom",
+    displayName: "Backup Provider",
+    baseUrl: "https://backup.example.com/v1",
+    apiKey: "backup-secret",
+  });
+  providerSettingsService.selectRoleModel(custom.id, "llm", "backup-model");
+  modelConfigRepository.updateDefault("llm", {
+    params: JSON.stringify({ temperature: 0.25, maxTokens: 8192 }),
+  });
+
+  const backup = providerSettingsService.exportModelSettings();
+  const exportedConnection = backup.connections.find(
+    (connection) => connection.id === custom.id,
+  );
+  assert.equal(exportedConnection?.apiKey, "backup-secret");
+
+  providerSettingsService.saveProviderConnection(custom.id, {
+    displayName: "Changed Provider",
+    baseUrl: "https://changed.example.com/v1",
+    apiKey: "changed-secret",
+  });
+  providerSettingsService.resetRoleModel("llm");
+
+  const result = providerSettingsService.importModelSettings(backup);
+  const restoredDetail = providerSettingsService.getProviderDetail(custom.id);
+  const restoredConfig = modelConfigRepository.findDefaultByType("llm");
+
+  assert.equal(result.connectionCount, backup.connections.length);
+  assert.equal(restoredDetail.provider.displayName, "Backup Provider");
+  assert.equal(restoredDetail.provider.apiKey, "backup-secret");
+  assert.equal(restoredConfig?.providerConnectionId, custom.id);
+  assert.equal(restoredConfig?.remoteModelId, "backup-model");
+  assert.deepEqual(restoredConfig ? JSON.parse(restoredConfig.params) : null, {
+    temperature: 0.25,
+    maxTokens: 8192,
+  });
+});
+
 test("provider settings can create two custom OpenAI-compatible connections and bind a role to one of them", () => {
   const first = providerSettingsService.createProviderConnection({
     templateCode: "openai-compatible-custom",

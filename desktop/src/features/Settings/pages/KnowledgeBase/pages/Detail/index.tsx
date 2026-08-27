@@ -73,7 +73,7 @@ export default function KnowledgeBaseDetail() {
         <section className="shrink-0 space-y-2.5">
           <Skeleton height={32} width={112} />
 
-          <Card className="p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.025)]">
+          <div className="space-y-3">
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <Skeleton height={22} width={72} className="rounded-full" />
@@ -85,19 +85,18 @@ export default function KnowledgeBaseDetail() {
                 <Skeleton height={32} width={98} />
               </div>
             </div>
-          </Card>
+          </div>
         </section>
 
         <section className="min-h-0 flex-1">
           <div className="grid gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(300px,0.94fr)_minmax(0,1.36fr)]">
-            <Card className="p-3.5 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+            <div className="xl:h-full xl:min-h-0 xl:overflow-y-auto">
               <Skeleton height={20} width={92} />
               <div className="mt-4 grid gap-2.5">
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <Card
+                  <div
                     key={index}
-                    variant="subtle"
-                    className="bg-surface-secondary/70 p-3.5"
+                    className="border-b border-border/70 py-3.5 last:border-b-0"
                   >
                     <Skeleton height={12} width={88} />
                     <Skeleton
@@ -105,35 +104,37 @@ export default function KnowledgeBaseDetail() {
                       width={`${56 + index * 8}%`}
                       className="mt-3"
                     />
-                  </Card>
+                  </div>
                 ))}
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   {Array.from({ length: 4 }).map((_, index) => (
-                    <Skeleton.Card
+                    <div
                       key={index}
-                      lines={2}
-                      showMeta={false}
-                      className="shadow-none"
-                    />
+                      className="border-b border-border/70 py-3.5 last:border-b-0"
+                    >
+                      <Skeleton height={16} width="42%" />
+                      <Skeleton.Text lines={2} className="mt-3" lastLineWidth="68%" />
+                    </div>
                   ))}
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <Card className="p-3.5 xl:h-full xl:min-h-0 xl:overflow-y-auto">
+            <div className="xl:h-full xl:min-h-0 xl:overflow-y-auto">
               <Skeleton height={20} width={120} />
               <Skeleton.Text lines={2} className="mt-3" lastLineWidth="72%" />
               <div className="mt-4 space-y-2.5">
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <Skeleton.Card
+                  <div
                     key={index}
-                    lines={3}
-                    showMeta={false}
-                    className="shadow-none"
-                  />
+                    className="border-b border-border/70 py-3.5 last:border-b-0"
+                  >
+                    <Skeleton height={16} width="42%" />
+                    <Skeleton.Text lines={3} className="mt-3" lastLineWidth="68%" />
+                  </div>
                 ))}
               </div>
-            </Card>
+            </div>
           </div>
         </section>
       </div>

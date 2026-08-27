@@ -25,10 +25,11 @@ export default function RoleCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full rounded-ui-panel border p-3 text-left transition-colors ${
+      aria-pressed={active}
+      className={`w-full border-b border-border px-3.5 py-3 text-left transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/20 ${
         active
-          ? "border-primary/25 bg-primary/5"
-          : "border-border bg-surface-primary hover:bg-surface-secondary"
+          ? "bg-primary/5"
+          : "bg-transparent hover:bg-surface-secondary"
       }`}
     >
       <div className="flex items-start gap-3">

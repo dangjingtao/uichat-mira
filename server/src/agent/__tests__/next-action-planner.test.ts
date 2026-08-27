@@ -8,6 +8,10 @@ import {
 } from "../node-runtime";
 import { createInvocationInputHash } from "../approval-fingerprint";
 import { DEFAULT_AGENT_MAX_RECOVERY_ATTEMPTS } from "../recovery";
+import {
+  GENERIC_TASK_DELEGATE_TOOL_ID,
+  withGenericTaskDelegationTool,
+} from "../delegation/contract";
 import { buildNextActionPlannerMessages } from "../planner/prompt";
 import {
   nextActionPlannerNode,
@@ -1150,6 +1154,161 @@ test("nextActionPlannerNode returns use_tool action when toolId is exposed", asy
   }
 });
 
+test.each([
+  {
+    name: "composite read and compare smoke request",
+    question:
+      "读取根目录 package.json 和 server/package.json，比较两边的 Node、包管理器和测试脚本配置，给出差异和证据。",
+    goal:
+      "读取根目录 package.json 和 server/package.json，比较两边的 Node、包管理器和测试脚本配置，给出差异和证据。",
+    acceptanceCriteria: [
+      "根目录 package.json 已读取",
+      "server/package.json 已读取",
+      "Node、包管理器和测试脚本差异已比较并有 Evidence",
+    ],
+  },
+  {
+    name: "create and verify artifact smoke request",
+    question:
+      "在当前工作区的 .test-artifact/ 下创建 subagent-smoke.txt，写入 subagent smoke passed，重新读取确认内容，最后汇报路径和验证结果。",
+    goal:
+      "在 .test-artifact/ 下创建 subagent-smoke.txt，写入 subagent smoke passed，重新读取确认内容，最后汇报路径和验证结果。",
+    acceptanceCriteria: [
+      "已在 .test-artifact/ 下创建并写入 subagent-smoke.txt",
+      "已重新读取文件并确认内容为 subagent smoke passed",
+      "已返回文件路径和验证 Evidence",
+    ],
+  },
+])("Planner contract accepts one bounded delegation decision: $name", async ({
+  question,
+  goal,
+  acceptanceCriteria,
+}) => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield JSON.stringify({
+        type: "use_tool",
+        toolId: GENERIC_TASK_DELEGATE_TOOL_ID,
+        args: { goal, acceptanceCriteria },
+        reason: "Delegate the bounded package so the child can execute and verify it locally.",
+      });
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question,
+        messages: [
+          {
+            role: "user",
+            content: question,
+            parts: [{ type: "text", text: question }],
+          },
+        ],
+        toolExposure: withGenericTaskDelegationTool(baseToolExposure),
+      }),
+    );
+
+    assert.deepEqual(patch.nextAction, {
+      type: "use_tool",
+      toolId: GENERIC_TASK_DELEGATE_TOOL_ID,
+      args: { goal, acceptanceCriteria },
+      reason: "Delegate the bounded package so the child can execute and verify it locally.",
+    });
+    assert.equal(streamSpy.mock.calls.length, 1);
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("Planner prompt gives delegate_task semantic priority without classifying by business keywords", () => {
+  const question =
+    "读取根目录 package.json 和 server/package.json，比较两边的 Node、包管理器和测试脚本配置，给出差异和证据。";
+  const messages = buildNextActionPlannerMessages({
+    question,
+    observationContext: buildPlannerObservationContext(createState()),
+    toolExposure: withGenericTaskDelegationTool(baseToolExposure),
+    iteration: 0,
+    maxIterations: 3,
+  });
+  const prompt = messages.map((message) => message.content).join("\n");
+
+  assert.match(prompt, /clear boundary|independent acceptance boundary/i);
+  assert.match(prompt, /multiple sequential tools|multiple sequential tool calls/i);
+  assert.match(prompt, /delegate_task/);
+  assert.match(prompt, /single concrete tool call|trivial one-step/i);
+  assert.doesNotMatch(prompt, /code task|file task|business keyword/i);
+});
+
+test("simple one-step read remains a direct Planner tool action", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"use_tool","toolId":"read_open","args":{"path":"package.json"},"reason":"Read the requested file."}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "读取 package.json。",
+        messages: [
+          {
+            role: "user",
+            content: "读取 package.json。",
+            parts: [{ type: "text", text: "读取 package.json。" }],
+          },
+        ],
+        toolExposure: withGenericTaskDelegationTool(baseToolExposure),
+      }),
+    );
+
+    assert.equal(patch.nextAction?.type, "use_tool");
+    assert.equal(
+      patch.nextAction?.type === "use_tool"
+        ? patch.nextAction.toolId
+        : undefined,
+      "read_open",
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
+test("pure response remains a direct answer without delegation", async () => {
+  const streamSpy = vi
+    .spyOn(providerProxyService, "streamTaskChatText")
+    .mockImplementation(async function* () {
+      yield '{"type":"answer","reason":"Return the requested token.","completionProof":[{"criterion":"reply SMOKE_OK","evidenceRefs":[]}],"unresolvedGaps":[]}';
+    });
+
+  try {
+    const patch = await nextActionPlannerNode(
+      createState({
+        question: "只回复 SMOKE_OK。",
+        messages: [
+          {
+            role: "user",
+            content: "只回复 SMOKE_OK。",
+            parts: [{ type: "text", text: "只回复 SMOKE_OK。" }],
+          },
+        ],
+        toolExposure: withGenericTaskDelegationTool(baseToolExposure),
+      }),
+    );
+
+    assert.equal(patch.nextAction?.type, "answer");
+    assert.equal(
+      patch.nextAction?.type === "use_tool"
+        ? patch.nextAction.toolId
+        : undefined,
+      undefined,
+    );
+  } finally {
+    streamSpy.mockRestore();
+  }
+});
+
 test("nextActionPlannerNode uses bounded replan prompt when schema diagnostics exist", async () => {
   const streamSpy = vi
     .spyOn(providerProxyService, "streamTaskChatText")
@@ -1444,6 +1603,7 @@ test("nextActionPlannerNode accepts ask_user output for missing information", as
       },
       currentTaskFrame: {
         currentGoal: "What should we do next?",
+        globalGoal: "answer the user",
         currentSubtask: "Ask the user for the missing information needed to continue.",
         currentBlocker: undefined,
         confirmedObjects: [],
@@ -2277,6 +2437,7 @@ test("nextActionPlannerNode is the primary writer for runtime currentTaskFrame u
       },
       currentTaskFrame: {
         currentGoal: "Open README.md",
+        globalGoal: "answer the user",
         currentSubtask: "Run read_open with reviewed parameters.",
         currentBlocker: "Existing blocker",
         confirmedObjects: [

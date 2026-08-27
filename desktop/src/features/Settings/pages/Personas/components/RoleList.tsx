@@ -1,5 +1,4 @@
 import { CircleUserRound, Plus } from "lucide-react";
-import Card from "@/shared/ui/Card";
 import { IconButton } from "@/shared/ui/Button";
 import type { RoleRecord } from "../types";
 import RoleCard from "./RoleCard";
@@ -26,9 +25,9 @@ export default function RoleList({
   const t = useRoleTranslation();
 
   return (
-    <Card className="flex min-h-0 flex-col overflow-hidden p-0">
+    <div className="flex min-h-0 flex-col overflow-hidden border-r border-border">
       <div className="border-b border-border px-3.5 py-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex min-h-9 items-center justify-between gap-3">
           <RoleSectionTitle icon={CircleUserRound} title={t("list.title")} />
           <div className="flex shrink-0 items-center gap-1">
             <IconButton
@@ -44,9 +43,9 @@ export default function RoleList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto py-1.5">
         {!isLoading && roles.length === 0 ? (
-          <div className="rounded-ui-panel border border-dashed border-border bg-surface-secondary px-3 py-6 text-center text-sm text-text-secondary">
+          <div className="mx-3 my-1.5 rounded-ui-panel border border-dashed border-border bg-surface-secondary px-3 py-6 text-center text-sm text-text-secondary">
             {t("list.empty")}
           </div>
         ) : null}
@@ -60,6 +59,6 @@ export default function RoleList({
           />
         ))}
       </div>
-    </Card>
+    </div>
   );
 }

@@ -23,6 +23,7 @@ const chatPending = {
       workspaceDeleteTitle: "删除工作空间",
       workspaceDeleteDescription: "删除后，该工作空间下的所有线程都会一起删除，此操作不可恢复。",
       workspaceDeleteConfirm: "删除工作空间",
+      workspaceDefault: "默认",
       threadDeleteTitle: "删除对话",
       threadDeleteDescription: "删除后，该对话中的所有消息都会被永久移除，此操作不可恢复。",
       threadDeleteConfirm: "删除对话",

@@ -7,6 +7,7 @@ import {
   type AgentToolResult,
 } from "@earendil-works/pi-agent-core";
 import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
+import { createProviderVisibleInputSchema } from "@/mcp/core/provider-visible-schema.js";
 import { getProviderDefinition } from "@/providers/catalog.js";
 import { resolveAgentTaskProvider } from "@/services/provider-proxy.service/resolution.js";
 import type {
@@ -40,7 +41,15 @@ const asNonEmptyString = (value: unknown) =>
 type PiModel = NonNullable<NonNullable<AgentOptions["initialState"]>["model"]>;
 type BindingExecution = Awaited<ReturnType<SkillAgentToolBinding["execute"]>>;
 
-const resolvePiModel = (): { model: PiModel; apiKey: string } => {
+const isArkPlanProvider = (providerTemplateCode: string) =>
+  providerTemplateCode === "volcengine-code-plan" ||
+  providerTemplateCode === "volcengine-agent-plan";
+
+const resolvePiModel = (): {
+  model: PiModel;
+  apiKey: string;
+  projectComplexToolSchemas: boolean;
+} => {
   const resolved = resolveAgentTaskProvider("default");
   const provider = getProviderDefinition(resolved.providerCode);
   const configuredBaseUrl = resolved.baseUrl.replace(/\/+$/, "");
@@ -58,6 +67,7 @@ const resolvePiModel = (): { model: PiModel; apiKey: string } => {
     8_192,
   );
 
+  const projectComplexToolSchemas = isArkPlanProvider(resolved.providerTemplateCode);
   const model = {
     id: resolved.model,
     name: resolved.model,
@@ -74,9 +84,21 @@ const resolvePiModel = (): { model: PiModel; apiKey: string } => {
     },
     contextWindow,
     maxTokens,
+    ...(projectComplexToolSchemas
+      ? {
+          // Ark Plan rejects the JSON Schema composition used by governed
+          // domain tools. Runtime validation remains on the Harness binding.
+          compat: {
+            supportsStore: false,
+            supportsUsageInStreaming: false,
+            maxTokensField: "max_tokens",
+            supportsStrictMode: false,
+          },
+        }
+      : {}),
   } as PiModel;
 
-  return { model, apiKey: resolved.apiKey };
+  return { model, apiKey: resolved.apiKey, projectComplexToolSchemas };
 };
 
 const extractAssistantText = (messages: unknown[]) => {
@@ -131,8 +153,8 @@ const parseCompletionEnvelope = (raw: string) => {
 
 const normalizeCompletionRequirements = (
   value: unknown,
-): SkillAgentRequirement[] => {
-  if (!Array.isArray(value)) return [];
+): SkillAgentRequirement[] | null => {
+  if (!Array.isArray(value) || value.length === 0) return null;
 
   const allowedKinds = new Set<SkillAgentRequirement["kind"]>([
     "user_input",
@@ -141,46 +163,44 @@ const normalizeCompletionRequirements = (
     "capability",
   ]);
 
-  return value.flatMap((item, index) => {
-    if (typeof item === "string" && item.trim()) {
-      return [
-        {
-          id: `completion:user_input:${index}`,
-          kind: "user_input" as const,
-          description: item.trim(),
-          requiredFor: "delegated_goal",
-        },
-      ];
-    }
-
+  const requirements: SkillAgentRequirement[] = [];
+  for (const [index, item] of value.entries()) {
     const record = asRecord(item);
     const description =
       typeof record?.description === "string" ? record.description.trim() : "";
-    if (!record || !description) return [];
+    const requiredFor =
+      typeof record?.requiredFor === "string" ? record.requiredFor.trim() : "";
+    if (!record || !description || !requiredFor) return null;
 
     const requestedKind = record.kind;
-    const kind =
-      typeof requestedKind === "string" &&
-      allowedKinds.has(requestedKind as SkillAgentRequirement["kind"])
-        ? (requestedKind as Exclude<SkillAgentRequirement["kind"], "approval">)
-        : "user_input";
+    if (
+      typeof requestedKind !== "string" ||
+      !allowedKinds.has(requestedKind as SkillAgentRequirement["kind"])
+    ) {
+      return null;
+    }
 
-    return [
-      {
-        id:
-          typeof record.id === "string" && record.id.trim()
-            ? record.id.trim()
-            : `completion:${kind}:${index}`,
-        kind,
-        description,
-        requiredFor:
-          typeof record.requiredFor === "string" && record.requiredFor.trim()
-            ? record.requiredFor.trim()
-            : "delegated_goal",
-      },
-    ];
-  });
+    const kind = requestedKind as Exclude<SkillAgentRequirement["kind"], "approval">;
+    requirements.push({
+      id:
+        typeof record.id === "string" && record.id.trim()
+          ? record.id.trim()
+          : `completion:${kind}:${index}`,
+      kind,
+      description,
+      requiredFor,
+    });
+  }
+  return requirements;
 };
+
+export const projectProviderVisibleToolSchema = (input: {
+  schema: Record<string, unknown>;
+  projectComplexToolSchemas: boolean;
+}): Record<string, unknown> =>
+  input.projectComplexToolSchemas
+    ? createProviderVisibleInputSchema(input.schema)
+    : input.schema;
 
 const buildSystemPrompt = (input: SkillAgentExecutionInput) => {
   const primary = input.skillContext.primary;
@@ -419,11 +439,15 @@ const toPiTool = (input: {
   requirements: SkillAgentRequirement[];
   toolCalls: string[];
   ledger: Ledger;
+  projectComplexToolSchemas: boolean;
 }): AgentTool<any> => ({
   name: input.binding.id,
   label: input.binding.label,
   description: input.binding.description,
-  parameters: input.binding.inputSchema as any,
+  parameters: projectProviderVisibleToolSchema({
+    schema: input.binding.inputSchema,
+    projectComplexToolSchemas: input.projectComplexToolSchemas,
+  }) as any,
   executionMode: "sequential",
   execute: async (toolCallId, params, signal) => {
     const { toolResult } = await executeBinding({
@@ -639,11 +663,19 @@ export const runPiSkillAgent = async (input: {
   const requirements: SkillAgentRequirement[] = [];
   const toolCalls: string[] = checkpoint ? [...checkpoint.toolCalls] : [];
   const ledger = createLedger({ execution: input.execution, skillId: primary.id });
-  const { model, apiKey } = resolvePiModel();
+  const { model, apiKey, projectComplexToolSchemas } = resolvePiModel();
   const tools: AgentTool<any>[] = [createStateReportingTool({ ledger })];
   tools.push(
     ...input.tools.map((binding) =>
-      toPiTool({ binding, evidence, artifacts, requirements, toolCalls, ledger }),
+      toPiTool({
+        binding,
+        evidence,
+        artifacts,
+        requirements,
+        toolCalls,
+        ledger,
+        projectComplexToolSchemas,
+      }),
     ),
   );
 
@@ -904,6 +936,25 @@ export const runPiSkillAgent = async (input: {
       ? normalizeCompletionRequirements(completion.requirements)
       : [];
 
+  if (status === "needs_input" && !completionRequirements) {
+    await ledger.updateWorkingState({
+      phase: "failed",
+      currentAction: "拒绝无效的 subAgent 补充信息请求",
+      blockingReason: "needs_input requires at least one valid requirement",
+    });
+    await ledger.emitTrace("subagent.failed", "subAgent needs_input 协议无效");
+    return failResult({
+      skillId: primary.id,
+      error: "subAgent returned needs_input without valid requirements",
+      recoverable: true,
+      evidence,
+      artifacts,
+      toolCalls,
+      ledger,
+    });
+  }
+  const validatedCompletionRequirements = completionRequirements ?? [];
+
   if (status === "completed") {
     await ledger.updateWorkingState({
       phase: "completed",
@@ -918,7 +969,8 @@ export const runPiSkillAgent = async (input: {
       currentJudgement: summary,
       currentAction: "等待补充继续执行所需的信息",
       nextAction: "收到缺失信息后继续原任务",
-      blockingReason: completionRequirements.map((item) => item.description).join("；") || undefined,
+      blockingReason:
+        validatedCompletionRequirements.map((item) => item.description).join("；") || undefined,
     });
     await ledger.emitTrace("input.required", "subAgent 等待用户补充信息");
   } else if (status === "insufficient_evidence") {
@@ -958,7 +1010,7 @@ export const runPiSkillAgent = async (input: {
         }
       : {}),
     ...(status === "needs_input"
-      ? { requirements: completionRequirements }
+      ? { requirements: validatedCompletionRequirements }
       : {}),
     ...(status === "failed"
       ? {

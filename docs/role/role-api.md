@@ -1,53 +1,31 @@
+---
+status: current
+owner: role / backend
+last_verified: 2026-08-01
+layer: wiki
+module: Role
+feature: RoleAPI
+doc_type: reference
+canonical: true
+related:
+  - ../ROLE_CURRENT_TRUTH.md
+  - README.md
+  - page.md
+  - runtime.md
+---
+
 # Role API
 
-Layer: raw-source
-Module: Role
-Feature: RoleAPI
-Doc Type: reference
+## 文档范围
 
-Status: Current  
-Owner: role  
-Last verified: 2026-06-25
+Role API 管理当前用户自己的 Role 数据。它不管理 Thread 绑定、请求上下文顺序、Provider Connection 或媒体任务。
 
-## 概述
-
-Role API 负责“角色原型”的真实 CRUD。
-
-它管理的是可持久化的角色素材：
-
-- `name`
-- `summary`
-- `avatarId`
-- `status`
-- `tags`
-- `prompt`
-- `llmProfile`
-
-它不负责：
-
-- 聊天线程上的 `roleId` 绑定
-- request-only prompt 注入顺序
-- provider-specific 请求体转换
-- RAG 编排
-
-## 路由位置
-
-后端真实实现：
-
-- [server/src/routes/role/roles.routes.ts](/D:/workspace/rag-demo/server/src/routes/role/roles.routes.ts)
-- [server/src/routes/role/schemas.ts](/D:/workspace/rag-demo/server/src/routes/role/schemas.ts)
-- [server/src/services/role.service.ts](/D:/workspace/rag-demo/server/src/services/role.service.ts)
-
-前端调用封装：
-
-- [desktop/src/shared/api/roles.ts](/D:/workspace/rag-demo/desktop/src/shared/api/roles.ts)
-
-## 数据模型
+## 数据结构
 
 ```ts
 type RoleStatus = "active" | "draft";
 
-interface RolePrompt {
+type RolePrompt = {
   description: string;
   worldview: string;
   persona: string;
@@ -55,18 +33,18 @@ interface RolePrompt {
   exampleDialogues: string;
   style: string;
   constraints: string;
-}
+};
 
-interface RoleLlmProfile {
+type RoleLlmProfile = {
   temperature?: number;
   topP?: number;
   topK?: number;
   maxTokens?: number;
   frequencyPenalty?: number;
   presencePenalty?: number;
-}
+};
 
-interface Role {
+type Role = {
   id: string;
   name: string;
   summary: string;
@@ -77,62 +55,22 @@ interface Role {
   llmProfile: RoleLlmProfile;
   createdAt: string;
   updatedAt: string;
-}
+};
 ```
 
-## 字段约束
+## 路由
 
-- `name`
-  - 创建时可省略
-  - 空白值会回落为 `Untitled Role`
-- `summary`
-  - 可为空字符串
-- `avatarId`
-  - 可为 `null`
-- `status`
-  - 仅允许 `active | draft`
-- `tags`
-  - 最多保留前 `3` 个
-  - 服务端会 `trim` 并过滤空值
-- `prompt`
-  - 缺失字段自动补空字符串
-  - 更新时按字段 merge，不会把未传字段清空
-- `llmProfile`
-  - 仅保留 number 类型字段
-  - 未传字段沿用原值
+| 方法 | 路径 | 作用 |
+| --- | --- | --- |
+| GET | `/roles` | 列出当前用户 Role |
+| GET | `/roles/:id` | 读取详情 |
+| POST | `/roles` | 创建 |
+| PATCH | `/roles/:id` | 增量更新 |
+| DELETE | `/roles/:id` | 删除 |
 
-## 鉴权
+所有路由要求登录。
 
-所有 Role API 都要求已登录用户。
-
-- 使用 Bearer Token
-- 只能访问当前用户自己的角色
-
-对于不存在或不属于当前用户的角色：
-
-- `GET /roles/:id`
-- `PATCH /roles/:id`
-- `DELETE /roles/:id`
-
-返回 `404 Role not found`
-
-## 初始化行为
-
-角色表冷启动时会补少量示例角色，便于前端直接可见：
-
-- `Formal Reviewer`
-- `Pilot Helper`
-- `Archive Guide`
-
-该行为只在角色表为空时触发，不覆盖已有数据。
-
-## 接口列表
-
-### 1. 列表
-
-`GET /roles`
-
-Query:
+## 列表参数
 
 ```ts
 {
@@ -142,33 +80,11 @@ Query:
 }
 ```
 
-Response:
+默认排序字段是 `updatedAt`，默认方向是 desc。
 
-```ts
-{
-  success: true;
-  data: Role[];
-}
-```
+## 创建
 
-### 2. 详情
-
-`GET /roles/:id`
-
-Response:
-
-```ts
-{
-  success: true;
-  data: Role;
-}
-```
-
-### 3. 创建
-
-`POST /roles`
-
-Body:
+Body 全部可选：
 
 ```ts
 {
@@ -182,76 +98,137 @@ Body:
 }
 ```
 
-Response:
+Service 默认：
 
-```ts
-{
-  success: true;
-  message: "Role created";
-  data: Role;
-}
+- name 空或缺失：`Untitled Role`；
+- summary：空字符串；
+- avatarId：null；
+- status：draft；
+- tags：空数组；
+- Prompt：七个空字符串；
+- LLM Profile：空对象。
+
+桌面 Workbench 的 New 不使用完全空对象，而是立即提交一份预填 draft。
+
+## 更新
+
+PATCH 按字段 merge：
+
+- 未传字段保持原值；
+- prompt 按七个子字段 merge；
+- llmProfile 按参数 merge；
+- 不能通过传 null 清除单个 LLM Profile 参数，因为 schema 只接受 number；
+- 桌面端清除参数时会省略该 key，但 Service merge 会保留旧值。
+
+### 当前参数清除缺口
+
+桌面 `normalizeLlmProfile` 会把空输入从 payload 中移除；Backend `updateRole` 又把 payload 与 existing profile 合并。
+
+结果：
+
+```text
+用户清空某个已保存参数
+→ PATCH 中缺少该 key
+→ existing value 被保留
 ```
 
-### 4. 更新
+因此当前 LLM Profile Drawer 的“清空单项”不能可靠删除已保存参数；Reset 也只是恢复本地值。
 
-`PATCH /roles/:id`
+这是 Medium 配置缺陷。本轮只记录，不修改 API。
 
-Body:
+## 字段规范化
 
-与创建结构一致，全部字段都是可选增量字段。
+### Tags
 
-Response:
+- API schema 最多 3 个；
+- Service trim；
+- 过滤空字符串；
+- 只保留前三个；
+- 当前不去重。
 
-```ts
-{
-  success: true;
-  message: "Role updated";
-  data: Role;
-}
+### Prompt
+
+- 创建时缺失字段补空；
+- 更新时 merge；
+- 所有字段 trim；
+- 没有长度上限。
+
+### LLM Profile
+
+- 只保留 number；
+- 没有范围约束；
+- 没有 provider capability 校验；
+- topK / maxTokens 没有整数与正数约束。
+
+## 权限
+
+Role 查询按 userId 隔离。
+
+更新和删除流程：
+
+```text
+findById(id, currentUserId)
+→ not found 则拒绝
+→ 再执行 update / delete
 ```
 
-### 5. 删除
+虽然 Repository update/delete 只按 id，但 Service 已先做用户归属校验。
 
-`DELETE /roles/:id`
+## 删除语义
 
-Response:
+删除 Role row 后，Thread 外键使用 `ON DELETE SET NULL`：
 
-```ts
-{
-  success: true;
-  message: "Role deleted";
-  data: {
-    deleted: true;
-  };
-}
+```text
+Delete Role
+→ bound Thread.roleId = null
+→ Thread / Messages remain
 ```
 
-## 当前前端使用方
+API 当前只返回：
 
-- 设置页角色工作台：
-  - [desktop/src/features/Settings/pages/Personas/index.tsx](/D:/workspace/rag-demo/desktop/src/features/Settings/pages/Personas/index.tsx)
-- Chat 角色选择：
-  - [desktop/src/features/chat/components/UChatThread.tsx](/D:/workspace/rag-demo/desktop/src/features/chat/components/UChatThread.tsx)
+```ts
+{ deleted: true }
+```
 
-## Swagger / OpenAPI
+不会返回受影响 Thread 数量。
 
-Role API 已接入 Swagger。
+## Starter seed
 
-- Tag: `Role`
-- Routes:
-  - `/roles`
-  - `/roles/:id`
+Role 数据库初始化时：
 
-## 验证参考
+1. 创建 roles 表；
+2. 确保 `llm_profile_json` 列；
+3. 检查整张表 COUNT；
+4. 只有全表为空时，给当时所有 active users 写三个英文 starter roles。
 
-真实路由测试：
+它不是每用户首次登录初始化。
 
-- [server/src/routes/role/roles.routes.test.ts](/D:/workspace/rag-demo/server/src/routes/role/roles.routes.test.ts)
+## 当前没有的 API
 
-已覆盖：
+- Copy；
+- Import / Export；
+- Bulk update；
+- Publish / Unpublish；
+- Version / Snapshot；
+- Compile / Preview request；
+- Validate against Provider；
+- 查询绑定 Thread；
+- 删除前影响预览。
 
-- create
-- list
-- update
-- delete
-- `llmProfile` 合并更新
+## 测试覆盖
+
+现有 Role route test 覆盖：
+
+- create；
+- list；
+- incremental update；
+- llmProfile merge；
+- delete。
+
+当前没有专项覆盖：
+
+- 删除后 Thread 保留；
+- active / draft 与 Runtime 一致性；
+- LLM Profile 单项清除；
+- 参数范围；
+- 新用户 starter seed。

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FlaskConical } from "lucide-react";
 import { CoverageReportPanel } from "@/shared/ui";
 import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
+import DevelopmentPageSkeleton from "./DevelopmentPageSkeleton";
 
 export interface CoverageReportViewProps {
   type: "client" | "server";
@@ -42,6 +43,7 @@ export default function CoverageReportView({ type }: CoverageReportViewProps) {
           ? "settings.development.clientTests.reportNotAvailable"
           : "settings.development.serverTests.reportNotAvailable",
       )}
+      loadingFallback={<DevelopmentPageSkeleton />}
     />
   );
 }

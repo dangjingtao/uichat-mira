@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { success } from "@/utils/index.js";
-import { routeHandler } from "@/utils/route-errors.js";
+import { badRequest, routeHandler } from "@/utils/route-errors.js";
 import { successEnvelope } from "@/routes/schema-helpers.js";
 import type { createNewsHubService } from "@/microapps/news-hub/index.js";
 
@@ -259,6 +259,132 @@ const newsHubRoutes: FastifyPluginAsync<{
     routeHandler("Failed to refresh news hub", async () => {
       const result = await newsHubService.refresh();
       return success(result, "News hub refreshed");
+    }),
+  );
+
+  app.post<{ Body: { url: string } }>(
+    "/microapps/news-hub/feeds/detect",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Detect RSS or Atom feeds from a page or feed URL",
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["url"],
+          properties: { url: { type: "string", minLength: 1, maxLength: 2048 } },
+        },
+        response: { 200: successEnvelope({ type: "object", additionalProperties: true }) },
+      },
+    },
+    routeHandler("Failed to detect news feed", async (request) => {
+      try {
+        return success(await newsHubService.detectFeed(request.body.url));
+      } catch (error) {
+        throw badRequest(error instanceof Error ? error.message : "无法检测订阅源");
+      }
+    }),
+  );
+
+  app.get(
+    "/microapps/news-hub/feeds",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "List RSS and Atom subscriptions",
+        security: [{ bearerAuth: [] }],
+        response: { 200: successEnvelope({ type: "array", items: { type: "object", additionalProperties: true } }) },
+      },
+    },
+    routeHandler("Failed to list news feeds", async () => success(newsHubService.listFeedSubscriptions())),
+  );
+
+  app.post<{ Body: { feedUrl: string; name?: string; lang?: string; topic?: string } }>(
+    "/microapps/news-hub/feeds",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Create an RSS or Atom subscription",
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["feedUrl"],
+          properties: {
+            feedUrl: { type: "string", minLength: 1, maxLength: 2048 },
+            name: { type: "string", maxLength: 160 },
+            lang: { type: "string", maxLength: 16 },
+            topic: { type: "string", maxLength: 64 },
+          },
+        },
+        response: { 200: successEnvelope({ type: "object", additionalProperties: true }) },
+      },
+    },
+    routeHandler("Failed to create news feed", async (request) => {
+      try { return success(await newsHubService.createFeedSubscription(request.body), "Feed subscribed"); }
+      catch (error) { throw badRequest(error instanceof Error ? error.message : "添加订阅失败"); }
+    }),
+  );
+
+  app.patch<{ Params: { id: string }; Body: { name?: string; enabled?: boolean; lang?: string; topic?: string } }>(
+    "/microapps/news-hub/feeds/:id",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Update an RSS or Atom subscription",
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            name: { type: "string", maxLength: 160 },
+            enabled: { type: "boolean" },
+            lang: { type: "string", maxLength: 16 },
+            topic: { type: "string", maxLength: 64 },
+          },
+        },
+        response: { 200: successEnvelope({ type: "object", additionalProperties: true }) },
+      },
+    },
+    routeHandler("Failed to update news feed", async (request) => {
+      try { return success(newsHubService.updateFeedSubscription(request.params.id, request.body)); }
+      catch (error) { throw badRequest(error instanceof Error ? error.message : "更新订阅失败"); }
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/microapps/news-hub/feeds/:id/refresh",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Force refresh one RSS or Atom subscription",
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: { 200: successEnvelope({ type: "object", additionalProperties: true }) },
+      },
+    },
+    routeHandler("Failed to refresh news feed", async (request) => {
+      try { return success(await newsHubService.refreshFeedSubscription(request.params.id)); }
+      catch (error) { throw badRequest(error instanceof Error ? error.message : "刷新订阅失败"); }
+    }),
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/microapps/news-hub/feeds/:id",
+    {
+      schema: {
+        tags: ["Tools"],
+        summary: "Delete an RSS or Atom subscription and its cached items",
+        security: [{ bearerAuth: [] }],
+        params: { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+        response: { 200: successEnvelope({ type: "object", additionalProperties: true }) },
+      },
+    },
+    routeHandler("Failed to delete news feed", async (request) => {
+      try { return success(newsHubService.deleteFeedSubscription(request.params.id), "Feed deleted"); }
+      catch (error) { throw badRequest(error instanceof Error ? error.message : "删除订阅失败"); }
     }),
   );
 

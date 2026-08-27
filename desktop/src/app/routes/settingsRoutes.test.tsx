@@ -26,6 +26,12 @@ vi.mock("@/features/Settings/pages/About/index", () => ({
 vi.mock("@/features/Settings/pages/General/index", () => ({
   default: () => null,
 }));
+vi.mock("@/features/Settings/pages/Personalization/index", () => ({
+  default: () => <div data-testid="personalization-page">personalization-page</div>,
+}));
+vi.mock("@/features/Settings/pages/TailscaleRemoteAccess/index", () => ({
+  default: () => <div data-testid="tailscale-remote-access-page">tailscale-remote-access-page</div>,
+}));
 vi.mock("@/features/Settings/pages/Account/index", () => ({
   default: () => null,
 }));
@@ -41,11 +47,11 @@ vi.mock("@/features/Settings/pages/KnowledgeBase/pages/Detail", () => ({
 vi.mock("@/features/Settings/pages/ModelSetting", () => ({
   default: () => null,
 }));
-vi.mock("@/features/Settings/pages/Evaluation/pages/New", () => ({
-  default: () => null,
+vi.mock("@/features/Settings/pages/Evaluation/New", () => ({
+  default: () => <div data-testid="evaluation-new-page">evaluation-new-page</div>,
 }));
-vi.mock("@/features/Settings/pages/Evaluation/pages/Center", () => ({
-  default: () => null,
+vi.mock("@/features/Settings/pages/Evaluation/Center", () => ({
+  default: () => <div data-testid="evaluation-center-page">evaluation-center-page</div>,
 }));
 vi.mock("@/features/Settings/pages/Development/index", () => ({
   default: () => <Outlet />,
@@ -141,6 +147,57 @@ describe("settings routes", () => {
     ).toBeInTheDocument();
   });
 
+  it("includes personalization below general and mounts its page", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(
+        "settings.navigation.personalization:/settings/personalization:general:20:exact:false",
+      ),
+    ).toBeInTheDocument();
+
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/settings",
+          children: settingsRoutes,
+        },
+      ],
+      { initialEntries: ["/settings/personalization"] },
+    );
+
+    render(<RouterProvider router={router} />);
+    expect(screen.getByTestId("personalization-page")).toBeInTheDocument();
+  });
+
+  it("includes Tailscale remote access in the general group and mounts its page", () => {
+    render(
+      <MemoryRouter>
+        <NavigationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText(
+        "settings.navigation.tailscaleRemoteAccess:/settings/tailscale-remote-access:general:30:exact:false",
+      ),
+    ).toBeInTheDocument();
+
+    const router = createMemoryRouter(
+      [{ path: "/settings", children: settingsRoutes }],
+      { initialEntries: ["/settings/tailscale-remote-access"] },
+    );
+
+    render(<RouterProvider router={router} />);
+    expect(
+      screen.getByTestId("tailscale-remote-access-page"),
+    ).toBeInTheDocument();
+  });
+
   it("keeps the development route as the only development sidebar navigation item", () => {
     render(
       <MemoryRouter>
@@ -194,7 +251,7 @@ describe("settings routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("includes the image generation studio route under the micro apps path", () => {
+  it("includes the news hub route under the micro apps path", () => {
     const microAppsRoute = settingsRoutes.find((route) => route.path === "micro-apps");
     expect(
       microAppsRoute?.children?.some(
@@ -219,6 +276,25 @@ describe("settings routes", () => {
     render(<RouterProvider router={router} />);
 
     expect(screen.getByTestId("news-hub-page")).toBeInTheDocument();
+  });
+
+  it("mounts the current evaluation center and workbench entry points", () => {
+    const centerRouter = createMemoryRouter(
+      [{ path: "/settings", children: settingsRoutes }],
+      { initialEntries: ["/settings/evaluation/center"] },
+    );
+    const center = render(<RouterProvider router={centerRouter} />);
+
+    expect(screen.getByTestId("evaluation-center-page")).toBeInTheDocument();
+    center.unmount();
+
+    const workbenchRouter = createMemoryRouter(
+      [{ path: "/settings", children: settingsRoutes }],
+      { initialEntries: ["/settings/evaluation/center/new"] },
+    );
+    render(<RouterProvider router={workbenchRouter} />);
+
+    expect(screen.getByTestId("evaluation-new-page")).toBeInTheDocument();
   });
 
   it("redirects the former development base information page to About", async () => {

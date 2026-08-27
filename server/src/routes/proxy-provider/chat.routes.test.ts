@@ -40,8 +40,14 @@ const testDbPath = createTimestampedTestArtifactPath(
   "rag-demo-proxy-provider",
   ".sqlite",
 );
+const defaultWorkspaceRoot = createTimestampedTestArtifactPath(
+  "workspace",
+  "rag-demo-proxy-provider-default",
+);
+fs.mkdirSync(defaultWorkspaceRoot, { recursive: true });
 
 process.env.DATABASE_URL = `file:${testDbPath}`;
+process.env.UI_CHAT_WORKSPACE_ROOT = defaultWorkspaceRoot;
 
 initializeAuthDatabase();
 initializeModelConfigDatabase();
@@ -52,6 +58,7 @@ initializeThreadDatabase();
 afterAll(() => {
   try {
     fs.rmSync(testDbPath, { force: true });
+    fs.rmSync(defaultWorkspaceRoot, { recursive: true, force: true });
   } catch {
     // ignore cleanup failure on Windows file locking
   }

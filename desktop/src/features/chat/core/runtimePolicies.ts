@@ -81,11 +81,16 @@ export const desktopSendLifecyclePolicy: ChatSendLifecyclePolicy = {};
 
 const windowsAbsolutePathPattern = /^[a-zA-Z]:[\\/](?:.*)?$/;
 const windowsUncPathPattern = /^\\\\[^\\\/]+[\\\/][^\\\/]+/;
+const posixAbsolutePathPattern = /^\//;
 
-export const isValidWorkspaceRootPath = (value: string) => {
+export const isValidWorkspaceRootPath = (value: string, platform: string) => {
   const rootPath = value.trim();
   if (!rootPath) {
     return false;
+  }
+
+  if (platform === "darwin") {
+    return posixAbsolutePathPattern.test(rootPath);
   }
 
   return (

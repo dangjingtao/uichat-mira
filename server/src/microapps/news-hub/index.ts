@@ -1,18 +1,23 @@
 import {
   newsHubSettingsRepository,
   newsItemsRepository,
+  newsFeedSubscriptionsRepository,
+  type NewsFeedSubscriptionRecord,
   type NewsItemUpsertInput,
 } from "@/db/repositories/index.js";
 import { DEFAULT_FETCH_TIMEOUT_MS } from "@/utils/http.js";
 import { nowIso } from "@/utils/time.js";
 import { indexNewsHubCache } from "./news-search.adapter.js";
+import { discoverFeedUrls, parseFeedDocument, type ParsedFeed } from "./feed-parser.js";
+import { fetchSafeFeedText } from "./safe-feed-fetch.js";
 
 export type NewsHubSourceKey =
   | "hn-frontpage"
   | "github-changelog"
   | "newsdata"
   | "currents"
-  | "reddit";
+  | "reddit"
+  | `rss:${string}`;
 
 export type NewsHubSourceDefinition = {
   key: NewsHubSourceKey;
@@ -71,6 +76,21 @@ export type NewsHubRefreshResult = {
 };
 
 export type NewsHubConfig = ReturnType<typeof newsHubSettingsRepository.get>;
+
+export type NewsFeedCandidate = {
+  feedUrl: string;
+  siteUrl: string;
+  name: string;
+  format: "rss" | "atom";
+  previewItems: Array<{ title: string; url: string; publishedAt: string | null }>;
+};
+
+export type NewsFeedSubscriptionView = NewsFeedSubscriptionRecord & {
+  itemCount: number;
+  lastFetchedAt: string | null;
+  lastFetchStatus: "idle" | "succeeded" | "failed";
+  lastFetchError: string | null;
+};
 
 type NewsHubOverviewFilters = {
   limit?: number;
@@ -161,15 +181,6 @@ const stripHtml = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const readTag = (xml: string, tagName: string) => {
-  const pattern = new RegExp(
-    `<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tagName}>`,
-    "i",
-  );
-  const matched = xml.match(pattern);
-  return matched ? stripHtml(matched[1]) : "";
-};
-
 const fetchTextWithTimeout = async (
   url: string,
   init?: RequestInit,
@@ -221,7 +232,7 @@ const fetchTextWithTimeout = async (
   }
 };
 
-const createSourceDefinitions = (): NewsHubSourceDefinition[] => [
+export const createSourceDefinitions = (): NewsHubSourceDefinition[] => [
   {
     key: "hn-frontpage",
     name: "Hacker News Front Page",
@@ -251,7 +262,7 @@ const createSourceDefinitions = (): NewsHubSourceDefinition[] => [
     name: "NewsData.io",
     sourceType: "api",
     fetchUrl:
-      "https://newsdata.io/api/1/latest?language=en&category=technology&size=25",
+      "https://newsdata.io/api/1/latest?language=en&category=technology&size=10",
     siteUrl: "https://newsdata.io/",
     topic: "technology",
     lang: "en",
@@ -328,49 +339,19 @@ const fetchHackerNewsItems = async (
 const fetchRssItems = async (
   source: NewsHubSourceDefinition,
 ): Promise<NewsItemUpsertInput[]> => {
-  const text = await fetchTextWithTimeout(source.fetchUrl);
-  const items = text.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
-
-  return items
-    .map((itemXml) => {
-      const title = readTag(itemXml, "title");
-      const summary = readTag(itemXml, "description");
-      const contentText = readTag(itemXml, "content:encoded") || summary;
-      const url = readTag(itemXml, "link");
-      const externalId = readTag(itemXml, "guid") || url || title;
-      const author =
-        readTag(itemXml, "dc:creator") || readTag(itemXml, "author") || null;
-      const publishedAt = readTag(itemXml, "pubDate") || null;
-
-      if (!title || !url || !externalId) {
-        return null;
-      }
-
-      return {
-        sourceType: source.sourceType,
-        sourceName: source.name,
-        sourceKey: source.key,
-        externalId,
-        title,
-        summary,
-        contentText,
-        url,
-        author,
-        publishedAt,
-        lang: source.lang,
-        topic: source.topic,
-        tags: source.tags,
-        rawPayload: {
-          guid: externalId,
-          title,
-          summary,
-          url,
-          author,
-          publishedAt,
-        },
-      } satisfies NewsItemUpsertInput;
-    })
-    .filter(isNonNullable);
+  const response = source.key.startsWith("rss:")
+    ? await fetchSafeFeedText(source.fetchUrl)
+    : { text: await fetchTextWithTimeout(source.fetchUrl), finalUrl: source.fetchUrl };
+  const parsed = parseFeedDocument(response.text, response.finalUrl);
+  return parsed.items.map((item) => ({
+    ...item,
+    sourceType: "rss",
+    sourceName: source.name,
+    sourceKey: source.key,
+    lang: source.lang,
+    topic: source.topic,
+    tags: source.tags,
+  }));
 };
 
 const fetchNewsDataItems = async (
@@ -560,24 +541,30 @@ const fetchRedditItems = async (
     .filter(isNonNullable);
 };
 
+export const resolveSourceFetchKind = (source: NewsHubSourceDefinition) => {
+  if (source.sourceType === "rss" || source.key.startsWith("rss:")) return "rss" as const;
+  if (source.key === "newsdata") return "newsdata" as const;
+  if (source.key === "currents") return "currents" as const;
+  if (source.key === "reddit") return "reddit" as const;
+  return "hacker-news" as const;
+};
+
 const fetchSourceItems = async (
   source: NewsHubSourceDefinition,
   settings: NewsHubConfig,
 ) => {
-  if (source.key === "github-changelog") {
-    return fetchRssItems(source);
+  switch (resolveSourceFetchKind(source)) {
+    case "rss":
+      return fetchRssItems(source);
+    case "newsdata":
+      return fetchNewsDataItems(source, settings);
+    case "currents":
+      return fetchCurrentsItems(source, settings);
+    case "reddit":
+      return fetchRedditItems(source, settings);
+    default:
+      return fetchHackerNewsItems(source);
   }
-  if (source.key === "newsdata") {
-    return fetchNewsDataItems(source, settings);
-  }
-  if (source.key === "currents") {
-    return fetchCurrentsItems(source, settings);
-  }
-  if (source.key === "reddit") {
-    return fetchRedditItems(source, settings);
-  }
-
-  return fetchHackerNewsItems(source);
 };
 
 const shouldUseCache = (lastFetchedAt: string | null, ttlMinutes: number) => {
@@ -593,14 +580,72 @@ const shouldUseCache = (lastFetchedAt: string | null, ttlMinutes: number) => {
   return Date.now() - lastFetched < ttlMinutes * 60 * 1000;
 };
 
+const subscriptionToSource = (subscription: NewsFeedSubscriptionRecord): NewsHubSourceDefinition => ({
+  key: subscription.sourceKey as `rss:${string}`,
+  name: subscription.name,
+  sourceType: "rss",
+  fetchUrl: subscription.feedUrl,
+  siteUrl: subscription.siteUrl,
+  topic: subscription.topic,
+  lang: subscription.lang,
+  tags: ["subscription", subscription.format],
+  isEnabled: () => subscription.enabled,
+});
+
+const candidateFromParsed = (parsed: ParsedFeed, feedUrl: string): NewsFeedCandidate => ({
+  feedUrl,
+  siteUrl: parsed.siteUrl,
+  name: parsed.title,
+  format: parsed.format,
+  previewItems: parsed.items.slice(0, 3).map((item) => ({
+    title: item.title,
+    url: item.url,
+    publishedAt: item.publishedAt ?? null,
+  })),
+});
+
+const detectFeedCandidates = async (inputUrl: string): Promise<NewsFeedCandidate[]> => {
+  const response = await fetchSafeFeedText(inputUrl);
+  try {
+    const parsed = parseFeedDocument(response.text, response.finalUrl);
+    return [candidateFromParsed(parsed, response.finalUrl)];
+  } catch (directError) {
+    if (!response.contentType.includes("html") && !/<html\b/i.test(response.text)) throw directError;
+  }
+
+  const discovered = discoverFeedUrls(response.text, response.finalUrl);
+  if (discovered.length === 0) throw new Error("该网页没有声明 RSS 或 Atom 订阅源");
+  const candidates: NewsFeedCandidate[] = [];
+  for (const feedUrl of discovered) {
+    try {
+      const feedResponse = await fetchSafeFeedText(feedUrl);
+      candidates.push(candidateFromParsed(parseFeedDocument(feedResponse.text, feedResponse.finalUrl), feedResponse.finalUrl));
+      if (new URL(feedUrl).hostname === new URL(response.finalUrl).hostname) return candidates;
+    } catch {
+      // One invalid candidate must not hide other valid feeds declared by the page.
+    }
+  }
+  if (candidates.length === 0) throw new Error("网页声明的订阅源暂时无法读取");
+  return candidates;
+};
+
 export const createNewsHubService = (input?: {
   sources?: NewsHubSourceDefinition[];
+  onContentChanged?: () => void;
 }) => {
-  const sources = input?.sources ?? createSourceDefinitions();
-  const allowedSourceKeys = sources.map((source) => source.key);
+  const fixedSources = input?.sources ?? createSourceDefinitions();
+  const resolveSources = () => input?.sources
+    ? fixedSources
+    : [...fixedSources, ...newsFeedSubscriptionsRepository.list().map(subscriptionToSource)];
 
-  const refreshInternal = async (force = false): Promise<NewsHubRefreshResult> => {
+  const refreshInternal = async (force = false, onlySourceKey?: string): Promise<NewsHubRefreshResult> => {
     const settings = newsHubSettingsRepository.get();
+    const sources = resolveSources();
+    const allowedSourceKeys = sources.map((source) => source.key);
+    const selectedSources = onlySourceKey
+      ? sources.filter((source) => source.key === onlySourceKey)
+      : sources;
+    if (onlySourceKey && selectedSources.length === 0) throw new Error("订阅源不存在");
     const startedAt = nowIso();
     const results: NewsHubRefreshSourceResult[] = [];
     let fetchedCount = 0;
@@ -610,7 +655,7 @@ export const createNewsHubService = (input?: {
 
     newsItemsRepository.deleteBySourceKeysExcluding(allowedSourceKeys);
 
-    for (const source of sources) {
+    for (const source of selectedSources) {
       if (!source.isEnabled(settings) && !source.enabledByDefault) {
         continue;
       }
@@ -684,6 +729,10 @@ export const createNewsHubService = (input?: {
 
     await indexNewsHubCache();
 
+    if (insertedCount > 0 || updatedCount > 0) {
+      input?.onContentChanged?.();
+    }
+
     return {
       startedAt,
       finishedAt: nowIso(),
@@ -711,6 +760,8 @@ export const createNewsHubService = (input?: {
     },
 
     async getCachedOverview(filters: NewsHubOverviewFilters = {}): Promise<NewsHubOverview> {
+      const sources = resolveSources();
+      const allowedSourceKeys = sources.map((source) => source.key);
       const list = newsItemsRepository.listRecent({
         limit: filters.limit,
         query: filters.query ?? undefined,
@@ -753,6 +804,67 @@ export const createNewsHubService = (input?: {
 
     async refresh(): Promise<NewsHubRefreshResult> {
       return refreshInternal(false);
+    },
+
+    async detectFeed(inputUrl: string) {
+      return { candidates: await detectFeedCandidates(inputUrl) };
+    },
+
+    listFeedSubscriptions(): NewsFeedSubscriptionView[] {
+      const states = new Map(newsHubSettingsRepository.listSourceStates().map((item) => [item.sourceKey, item]));
+      const stats = new Map(newsItemsRepository.listSourceStats().map((item) => [item.sourceKey, item]));
+      return newsFeedSubscriptionsRepository.list().map((subscription) => {
+        const state = states.get(subscription.sourceKey);
+        const stat = stats.get(subscription.sourceKey);
+        return {
+          ...subscription,
+          itemCount: stat?.itemCount ?? 0,
+          lastFetchedAt: state?.lastFetchedAt ?? null,
+          lastFetchStatus: state?.lastStatus ?? "idle",
+          lastFetchError: state?.lastError ?? null,
+        };
+      });
+    },
+
+    async createFeedSubscription(input: { feedUrl: string; name?: string; lang?: string; topic?: string }) {
+      if (newsFeedSubscriptionsRepository.list().length >= 50) throw new Error("最多只能添加 50 个订阅源");
+      const candidates = await detectFeedCandidates(input.feedUrl);
+      const candidate = candidates.find((item) => item.feedUrl === input.feedUrl) ?? candidates[0];
+      if (!candidate) throw new Error("没有找到可用的订阅源");
+      if (newsFeedSubscriptionsRepository.getByFeedUrl(candidate.feedUrl)) throw new Error("该订阅源已经存在");
+      const subscription = newsFeedSubscriptionsRepository.create({
+        name: input.name?.trim() || candidate.name,
+        feedUrl: candidate.feedUrl,
+        siteUrl: candidate.siteUrl,
+        format: candidate.format,
+        enabled: true,
+        lang: input.lang?.trim() || "zh",
+        topic: input.topic?.trim() || "technology",
+      });
+      await refreshInternal(true, subscription.sourceKey);
+      return this.listFeedSubscriptions().find((item) => item.id === subscription.id)!;
+    },
+
+    updateFeedSubscription(id: string, input: { name?: string; enabled?: boolean; lang?: string; topic?: string }) {
+      const updated = newsFeedSubscriptionsRepository.update(id, input);
+      if (!updated) throw new Error("订阅源不存在");
+      return this.listFeedSubscriptions().find((item) => item.id === id)!;
+    },
+
+    async refreshFeedSubscription(id: string) {
+      const subscription = newsFeedSubscriptionsRepository.getById(id);
+      if (!subscription) throw new Error("订阅源不存在");
+      if (!subscription.enabled) throw new Error("请先启用该订阅源");
+      return refreshInternal(true, subscription.sourceKey);
+    },
+
+    deleteFeedSubscription(id: string) {
+      const subscription = newsFeedSubscriptionsRepository.delete(id);
+      if (!subscription) throw new Error("订阅源不存在");
+      const deleted = newsItemsRepository.deleteBySourceKey(subscription.sourceKey);
+      newsHubSettingsRepository.deleteSourceState(subscription.sourceKey);
+      input?.onContentChanged?.();
+      return { id, sourceKey: subscription.sourceKey, deletedItemCount: deleted.deletedCount };
     },
   };
 };

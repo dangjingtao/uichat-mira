@@ -1,4 +1,4 @@
-import { get, post, put } from "../lib/request";
+import { del, get, patch, post, put } from "../lib/request";
 
 export type NewsHubSource = {
   key: string;
@@ -79,6 +79,36 @@ export type NewsHubConfig = {
   refreshTtlMinutes: number;
 };
 
+export type NewsFeedCandidate = {
+  feedUrl: string;
+  siteUrl: string;
+  name: string;
+  format: "rss" | "atom";
+  previewItems: Array<{
+    title: string;
+    url: string;
+    publishedAt: string | null;
+  }>;
+};
+
+export type NewsFeedSubscription = {
+  id: string;
+  sourceKey: string;
+  name: string;
+  feedUrl: string;
+  siteUrl: string;
+  format: "rss" | "atom";
+  enabled: boolean;
+  lang: string;
+  topic: string;
+  itemCount: number;
+  lastFetchedAt: string | null;
+  lastFetchStatus: "idle" | "succeeded" | "failed";
+  lastFetchError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export async function getNewsHubOverview(params?: {
   limit?: number;
   sourceKey?: string;
@@ -109,4 +139,42 @@ export async function getNewsHubConfig() {
 
 export async function saveNewsHubConfig(payload: NewsHubConfig) {
   return put<NewsHubConfig>("/microapps/news-hub/config", payload);
+}
+
+export async function detectNewsFeed(url: string) {
+  const result = await post<{ candidates: NewsFeedCandidate[] }>(
+    "/microapps/news-hub/feeds/detect",
+    { url },
+  );
+  return result.candidates;
+}
+
+export async function listNewsFeedSubscriptions() {
+  return get<NewsFeedSubscription[]>("/microapps/news-hub/feeds");
+}
+
+export async function createNewsFeedSubscription(payload: {
+  feedUrl: string;
+  name?: string;
+  lang?: string;
+  topic?: string;
+}) {
+  return post<NewsFeedSubscription>("/microapps/news-hub/feeds", payload);
+}
+
+export async function updateNewsFeedSubscription(
+  id: string,
+  payload: { name?: string; enabled?: boolean; lang?: string; topic?: string },
+) {
+  return patch<NewsFeedSubscription>(`/microapps/news-hub/feeds/${id}`, payload);
+}
+
+export async function refreshNewsFeedSubscription(id: string) {
+  return post<NewsHubRefreshResult>(`/microapps/news-hub/feeds/${id}/refresh`);
+}
+
+export async function deleteNewsFeedSubscription(id: string) {
+  return del<{ id: string; sourceKey: string; deletedItemCount: number }>(
+    `/microapps/news-hub/feeds/${id}`,
+  );
 }

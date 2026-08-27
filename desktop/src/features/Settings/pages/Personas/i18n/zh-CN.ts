@@ -16,7 +16,6 @@ const roleTranslations = {
   },
   editor: {
     title: "编辑角色",
-    hint: "调整角色定义与提示词结构。",
   },
   list: {
     title: "角色列表",

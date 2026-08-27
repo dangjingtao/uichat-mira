@@ -38,6 +38,12 @@ const DOMAIN_METADATA: Record<string, WorkbenchPresentation> = {
     groupOrder: 50,
     icon: "github",
   },
+  external_expert: {
+    groupLabel: "问策",
+    groupDescription: "向已连接的外部专家请求第二意见。",
+    groupOrder: 70,
+    icon: "external-expert",
+  },
 };
 
 const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {

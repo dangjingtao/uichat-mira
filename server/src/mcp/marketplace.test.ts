@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  fetchMcpMarketplaceServers,
+  fetchMcpMarketplaceRegistryPage,
   normalizeMarketplaceServersPayload,
 } from "./marketplace.js";
 
-describe("mcp marketplace", () => {
-  it("normalizes official registry servers into app-owned DTOs", () => {
+describe("mcp marketplace registry adapter", () => {
+  it("normalizes official Registry metadata and supported transports", () => {
     const result = normalizeMarketplaceServersPayload(
       {
         servers: [
@@ -16,10 +16,7 @@ describe("mcp marketplace", () => {
               description: "Search remote data",
               version: "1.0.0",
               websiteUrl: "https://docs.example.com/mcp",
-              repository: {
-                url: "https://github.com/example/search-mcp",
-                source: "github",
-              },
+              repository: { url: "https://github.com/example/search-mcp" },
               remotes: [
                 {
                   type: "streamable-http",
@@ -28,12 +25,9 @@ describe("mcp marketplace", () => {
               ],
               packages: [
                 {
-                  registry_type: "npm",
+                  registryType: "npm",
                   identifier: "@example/mcp-server",
-                  version: "1.0.0",
-                  transport: {
-                    type: "stdio",
-                  },
+                  transport: { type: "stdio" },
                 },
               ],
             },
@@ -47,100 +41,43 @@ describe("mcp marketplace", () => {
             },
           },
         ],
-        metadata: {
-          nextCursor: "example.com/search:1.0.0",
-          count: 1,
-        },
+        metadata: { nextCursor: "cursor-2", count: 1 },
       },
-      "https://registry.modelcontextprotocol.io/v0/servers",
+      "https://registry.example/servers",
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       servers: [
         {
           id: "example.com/search",
-          name: "example.com/search",
           title: "Example Search",
-          description: "Search remote data",
-          version: "1.0.0",
           status: "active",
-          isLatest: true,
-          publishedAt: "2026-04-13T17:32:20.852269Z",
-          updatedAt: "2026-04-14T17:32:20.852269Z",
-          websiteUrl: "https://docs.example.com/mcp",
           repositoryUrl: "https://github.com/example/search-mcp",
           transports: [
             {
               kind: "streamable-http",
-              packageType: "remote",
-              installable: true,
-              label: "Remote HTTP",
               url: "https://example.com/mcp",
+              installable: true,
             },
             {
               kind: "stdio",
-              packageType: "npm",
-              installable: true,
-              label: "npm package",
+              packageIdentifier: "@example/mcp-server",
               command: "npx",
               args: ["-y", "@example/mcp-server"],
-              packageIdentifier: "@example/mcp-server",
+              installable: true,
             },
           ],
         },
       ],
-      metadata: {
-        cache: {
-          hit: false,
-          stale: false,
-          cachedAt: null,
-        },
-        count: 1,
-        nextCursor: "example.com/search:1.0.0",
-        sourceUrl: "https://registry.modelcontextprotocol.io/v0/servers",
-      },
+      metadata: { count: 1, nextCursor: "cursor-2" },
     });
   });
 
-  it("accepts registryType from the official registry package shape", () => {
-    const result = normalizeMarketplaceServersPayload(
-      {
-        servers: [
-          {
-            server: {
-              name: "io.github.Dave-London/npm",
-              title: "Pare npm",
-              packages: [
-                {
-                  registryType: "npm",
-                  identifier: "@paretools/npm",
-                  version: "0.8.0",
-                  transport: {
-                    type: "stdio",
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-      "https://registry.modelcontextprotocol.io/v0.1/servers",
-    );
+  it("rejects invalid payloads and filters normalized results locally", () => {
+    expect(() =>
+      normalizeMarketplaceServersPayload({}, "https://registry.example/servers"),
+    ).toThrow("MCP registry response is missing servers[]");
 
-    expect(result.servers[0]?.transports).toEqual([
-      {
-        kind: "stdio",
-        packageType: "npm",
-        installable: true,
-        label: "npm package",
-        command: "npx",
-        args: ["-y", "@paretools/npm"],
-        packageIdentifier: "@paretools/npm",
-      },
-    ]);
-  });
-
-  it("filters normalized results by query without trusting unknown entries", () => {
     const result = normalizeMarketplaceServersPayload(
       {
         servers: [
@@ -152,68 +89,33 @@ describe("mcp marketplace", () => {
       "https://registry.example/servers",
       "calendar",
     );
-
     expect(result.servers.map((server) => server.id)).toEqual(["beta"]);
   });
 
-  it("fetches registry pages with limit and cursor", async () => {
+  it("requests a Registry sync page with incremental parameters", async () => {
     const seenUrls: string[] = [];
-    const result = await fetchMcpMarketplaceServers({
+    const page = await fetchMcpMarketplaceRegistryPage({
       sourceUrl: "https://registry.example/servers",
-      limit: 5,
+      limit: 100,
       cursor: "cursor-1",
+      version: "latest",
+      updatedSince: "2026-07-31T00:00:00.000Z",
+      includeDeleted: true,
       fetchImpl: async (url) => {
         seenUrls.push(String(url));
         return new Response(
           JSON.stringify({
             servers: [{ server: { name: "alpha", title: "Alpha" } }],
-            metadata: { count: 1 },
+            metadata: { nextCursor: null },
           }),
           { status: 200 },
         );
       },
     });
 
-    expect(seenUrls).toEqual(["https://registry.example/servers?limit=5&cursor=cursor-1"]);
-    expect(result.servers[0]?.id).toBe("alpha");
-    expect(result.metadata.cache).toEqual({
-      hit: false,
-      stale: false,
-      cachedAt: null,
-    });
-  });
-
-  it("returns cached marketplace results when the upstream registry times out", async () => {
-    const sourceUrl = "https://registry.example/servers";
-    const query = "docs";
-
-    const first = await fetchMcpMarketplaceServers({
-      sourceUrl,
-      query,
-      fetchImpl: async () =>
-        new Response(
-          JSON.stringify({
-            servers: [{ server: { name: "alpha-docs", title: "Alpha Docs" } }],
-            metadata: { count: 1 },
-          }),
-          { status: 200 },
-        ),
-    });
-
-    const second = await fetchMcpMarketplaceServers({
-      sourceUrl,
-      query,
-      fetchImpl: async () => {
-        const timeout = new Error("timed out");
-        timeout.name = "TimeoutError";
-        throw timeout;
-      },
-    });
-
-    expect(first.servers[0]?.id).toBe("alpha-docs");
-    expect(second.servers[0]?.id).toBe("alpha-docs");
-    expect(second.metadata.cache.hit).toBe(true);
-    expect(second.metadata.cache.stale).toBe(true);
-    expect(typeof second.metadata.cache.cachedAt).toBe("string");
+    expect(seenUrls).toEqual([
+      "https://registry.example/servers?limit=100&cursor=cursor-1&version=latest&updated_since=2026-07-31T00%3A00%3A00.000Z&include_deleted=true",
+    ]);
+    expect(page.entries[0]?.server.id).toBe("alpha");
   });
 });

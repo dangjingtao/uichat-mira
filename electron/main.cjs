@@ -58,6 +58,24 @@ function ensureSecretFile(secretPath, secretName) {
   return secret;
 }
 
+function ensureDirectory(directoryPath, label) {
+  try {
+    fs.mkdirSync(directoryPath, { recursive: true });
+  } catch (error) {
+    throw new Error(
+      `Failed to create ${label} at ${directoryPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  if (!fs.statSync(directoryPath).isDirectory()) {
+    throw new Error(`${label} must be a directory: ${directoryPath}`);
+  }
+
+  return directoryPath;
+}
+
 async function sleep(ms) {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -353,8 +371,14 @@ async function startBackend() {
   const dataDir = path.join(userDataDir, "data");
   const logDir = path.join(userDataDir, "logs");
   const secretsDir = path.join(userDataDir, "secrets");
-  fs.mkdirSync(dataDir, { recursive: true });
-  fs.mkdirSync(logDir, { recursive: true });
+  const defaultWorkspaceRoot = path.join(
+    app.getPath("documents"),
+    "UIChat Mira",
+    "Default Workspace",
+  );
+  ensureDirectory(dataDir, "data directory");
+  ensureDirectory(logDir, "log directory");
+  ensureDirectory(defaultWorkspaceRoot, "default workspace");
 
   const jwtSecret = ensureSecretFile(
     path.join(secretsDir, "jwt-secret.txt"),
@@ -380,6 +404,7 @@ async function startBackend() {
       UI_CHAT_DESKTOP_RESOURCES_ROOT: process.resourcesPath,
       UI_CHAT_DATABASE_DIR: dataDir,
       UI_CHAT_LOG_DIR: logDir,
+      UI_CHAT_WORKSPACE_ROOT: defaultWorkspaceRoot,
       LOCAL_MODEL_RESOURCE_ROOT: localModelResourceRoot,
       LOCAL_MODEL_USER_DATA_DIR: userDataDir,
       LOCAL_ONNX_WASM_ROOT: localOnnxWasmRoot,

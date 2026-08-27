@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ImageGenerationStudioPage from "../index";
 import type {
@@ -143,14 +143,17 @@ describe("ImageGenerationStudioPage", () => {
     useImageGenerationStudioStateMock.mockReset();
   });
 
-  it("shows provider placeholder by default and renders the ComfyUI workbench when workflow mode is active", () => {
+  it("shows provider placeholder by default and renders the ComfyUI workbench when workflow mode is active", async () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "prompt",
       }),
     );
 
-    const { unmount } = render(<ImageGenerationStudioPage />);
+    let unmount = () => {};
+    await act(async () => {
+      ({ unmount } = render(<ImageGenerationStudioPage />));
+    });
 
     expect(screen.getByText("当前生图模型")).toBeInTheDocument();
     expect(screen.getByText("还没有配置默认生图模型")).toBeInTheDocument();
@@ -161,8 +164,10 @@ describe("ImageGenerationStudioPage", () => {
         provider: "comfyui-local",
       }),
     );
-    unmount();
-    render(<ImageGenerationStudioPage />);
+    await act(async () => {
+      unmount();
+      render(<ImageGenerationStudioPage />);
+    });
 
     expect(
       screen.getByText("settings.microApps.imageGenerationStudio.cards.connection.title"),
@@ -177,7 +182,7 @@ describe("ImageGenerationStudioPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders invalid ComfyUI API format state in the flow editor", () => {
+  it("renders invalid ComfyUI API format state in the flow editor", async () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "workflow",
@@ -185,7 +190,7 @@ describe("ImageGenerationStudioPage", () => {
       }),
     );
 
-    render(<ImageGenerationStudioPage />);
+    await act(async () => { render(<ImageGenerationStudioPage />); });
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -200,7 +205,7 @@ describe("ImageGenerationStudioPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("locks the page when a generation is running", () => {
+  it("locks the page when a generation is running", async () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "workflow",
@@ -217,7 +222,7 @@ describe("ImageGenerationStudioPage", () => {
       }),
     );
 
-    render(<ImageGenerationStudioPage />);
+    await act(async () => { render(<ImageGenerationStudioPage />); });
 
     expect(
       screen.getByRole("button", {
@@ -246,7 +251,7 @@ describe("ImageGenerationStudioPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders a blocked failure state on the page", () => {
+  it("renders a blocked failure state on the page", async () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "workflow",
@@ -269,7 +274,7 @@ describe("ImageGenerationStudioPage", () => {
       }),
     );
 
-    render(<ImageGenerationStudioPage />);
+    await act(async () => { render(<ImageGenerationStudioPage />); });
 
     expect(
       screen.getByText(
@@ -281,7 +286,7 @@ describe("ImageGenerationStudioPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders preview images from local-file artifacts", () => {
+  it("renders preview images from local-file artifacts", async () => {
     useImageGenerationStudioStateMock.mockReturnValue(
       createState({
         mode: "workflow",
@@ -303,7 +308,7 @@ describe("ImageGenerationStudioPage", () => {
       }),
     );
 
-    render(<ImageGenerationStudioPage />);
+    await act(async () => { render(<ImageGenerationStudioPage />); });
 
     expect(
       screen.getByRole("img", {

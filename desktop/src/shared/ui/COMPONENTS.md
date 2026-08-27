@@ -14,6 +14,7 @@
 - `Card`
 - `SectionCard`
 - `CodeBlock`
+- `CoverageReportPanel`
 - `CompactAudioPlayer`
 - `CollapsiblePanel`
 - `Drawer`
@@ -538,6 +539,7 @@
 - 下拉面板通过 portal 渲染到顶层，避免在弹窗、抽屉和滚动容器中被裁切
 - 下拉浮层默认使用更高层级，避免被弹窗、抽屉和聊天悬浮区遮挡
 - 为兼容业务层空字符串值，组件内部会对 option value 做编码映射；外部仍保持原始字符串 API
+- 即使当前 value 尚未出现在异步加载的 options 中，Radix 根节点也保持受控，避免加载完成时产生 uncontrolled/controlled 切换警告
 - 触发器对长文本保持单行截断；下拉面板至少与触发器等宽，并可按选项内容扩展到当前可用视口宽度，避免窄触发器裁切完整选项
 
 ### 色彩约束
@@ -587,6 +589,12 @@ message.destroy();
 ## Markdown / Long-form Content
 
 用于聊天长回复、知识说明、评测结果摘要、工具调用结果说明等文档型内容。
+
+### MarkdownText
+
+- `features="full"`（默认）启用代码、Mermaid 与 KaTeX；LaTeX 支持 `$...$` 行内公式和 `$$...$$` 块级公式。
+- `features="basic"` 不加载上述可选解析插件，适合只需要基础 Markdown 的内容。
+- KaTeX 样式由组件统一引入，业务组件不要重复加载或自行拼装公式 HTML。
 
 ## StreamingTextRenderer
 
@@ -848,6 +856,23 @@ message.destroy();
 - 不承担带文案的主操作，通常与 Tooltip 或标签搭配
 - 打开态使用 `primary`，关闭态使用 `surface-secondary + border`，保证浅色模式下滑轨仍然可辨识
 
+## CoverageReportPanel
+
+用于展示客户端或服务端的测试结果和覆盖率文件摘要。
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `src` | `string` | - | 覆盖率报告地址 |
+| `resultSrc` | `string` | - | 测试结果报告地址 |
+| `loadingFallback` | `React.ReactNode` | - | 调用页可传入单一页面级骨架屏，替代组件默认加载卡片 |
+
+### 使用约束
+
+- 业务页面需要统一页面级加载态时，优先通过 `loadingFallback` 注入，不在组件外再叠加第二个骨架屏
+- 文件摘要必须复用共享 `Table`，保留统一的粘性表头、横向滚动和列样式
+
 ## Table
 
 轻量表格容器，适合简单数据行展示。
@@ -865,18 +890,20 @@ message.destroy();
 ### 设计约束
 
 - 用边框和留白建立结构
+- 默认采用开发报告表格的紧凑基线：表头和数据行使用 `px-3 py-2`、`text-xs`
 - 表头弱化，不做厚重报表风格
-- 行 hover 仅做轻提示
+- 行使用轻量底部分隔，hover 仅做轻提示
 - 当列总宽度超过容器时，允许整表横向滚动，不强行压缩列内容
 - 多个左侧固定列并存时，必须按列宽累积计算 `left` 偏移，避免 selection 列和首列相互覆盖
 
 ### 色彩建议
 
 - 表格主体优先 `bg-surface-primary`
-- 行 hover 优先 `bg-surface-secondary/80`
+- 默认容器使用 `rounded-ui-control + border-border/70`，保持轻边框和小圆角
+- 行 hover 优先 `bg-surface-secondary/40`
 - Sticky 列继续使用 `surface-*`，不要额外换一套灰色体系
 - 表头分隔线应落在 `th` 的底边，避免 sticky 表头时边线丢失
-- 表体首行不额外加上边线，分隔线从第二行开始统一出现
+- 表体行使用 `border-b border-border/70`，最后一行不保留底边
 
 ### 列级配置
 

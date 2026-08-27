@@ -24,6 +24,41 @@ vi.mock("@/shared/api/officeSuiteSkills", () => ({
         name: "PDF 处理",
         description: "合并、拆分和审阅 PDF",
       },
+      {
+        id: "docx",
+        name: "Word 文档处理",
+        description: "创建和审阅 Word 文档",
+      },
+      {
+        id: "pptx",
+        name: "PowerPoint 处理",
+        description: "创建和编辑演示文稿",
+      },
+      {
+        id: "slides",
+        name: "幻灯片翻译",
+        description: "翻译演示文稿文本",
+      },
+      {
+        id: "mail",
+        name: "邮件处理",
+        description: "整理和发送邮件",
+      },
+      {
+        id: "calendar",
+        name: "日历安排",
+        description: "查看日程和安排会议",
+      },
+      {
+        id: "canva",
+        name: "Canva 设计",
+        description: "创建品牌演示文稿",
+      },
+      {
+        id: "git",
+        name: "GitHub 协作",
+        description: "管理仓库和 Pull Request",
+      },
     ],
   }),
 }));
@@ -83,7 +118,8 @@ test("uses arrow keys to highlight suggestions and Enter to select", async () =>
     </>,
   );
 
-  await waitFor(() => assert.equal(screen.getAllByRole("option").length, 2));
+  await waitFor(() => assert.equal(screen.getAllByRole("option").length, 9));
+  assert.ok(screen.getByRole("option", { name: "使用技能 GitHub 协作" }));
   const editor = screen.getByRole("textbox", { name: "composer" });
   fireEvent.keyDown(editor, { key: "ArrowDown" });
   assert.equal(

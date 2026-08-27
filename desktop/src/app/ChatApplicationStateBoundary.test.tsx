@@ -99,7 +99,7 @@ test("passes the authenticated user id to the UChat application state host", () 
   expect(container.querySelector("[data-session-key='7']")).toBeInTheDocument();
 });
 
-test("production routes place home, chat, and settings below one application state boundary", () => {
+test("production routes place home, chat, dashboard, and settings below one application state boundary", () => {
   const rootRoute = appRouter.routes[0];
   const authenticatedRoute = rootRoute?.children?.find(
     (route) =>
@@ -113,5 +113,5 @@ test("production routes place home, chat, and settings below one application sta
 
   expect(applicationStateRoute).toBeDefined();
   expect(applicationStateRoute?.children?.map((route) => route.path ?? "index"))
-    .toEqual(["index", "chat", "settings"]);
+    .toEqual(["index", "chat", "dashboard", "settings"]);
 });

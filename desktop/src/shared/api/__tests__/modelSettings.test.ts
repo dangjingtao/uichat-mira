@@ -20,6 +20,9 @@ import {
   syncProviderModels,
   selectProviderRoleModel,
   resetProviderRoleModel,
+  exportModelSettings,
+  importModelSettings,
+  type ModelSettingsBackup,
   type ProviderTemplateSummary,
   type RoleModelConfig,
   type ProviderSummary,
@@ -115,6 +118,23 @@ const sampleSyncResponse: SyncModelsResponse = {
   models: [{ id: "gpt-4o", name: "GPT-4o" }],
 };
 
+const sampleBackup: ModelSettingsBackup = {
+  format: "uichat-mira-model-settings",
+  version: 1,
+  exportedAt: "2026-07-27T00:00:00.000Z",
+  connections: [
+    {
+      id: "openai",
+      templateCode: "openai",
+      providerCode: "openai",
+      displayName: "OpenAI",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk-secret",
+    },
+  ],
+  assignments: [],
+};
+
 describe("model settings api", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -147,6 +167,28 @@ describe("model settings api", () => {
 
     expect(get).toHaveBeenCalledWith("/providers");
     expect(result).toEqual([sampleProvider]);
+  });
+
+  it("exports model settings backup", async () => {
+    vi.mocked(get).mockResolvedValueOnce(sampleBackup);
+
+    const result = await exportModelSettings();
+
+    expect(get).toHaveBeenCalledWith("/providers/model-settings/export");
+    expect(result).toBe(sampleBackup);
+  });
+
+  it("imports model settings backup", async () => {
+    const importResult = { connectionCount: 1, assignmentCount: 0 };
+    vi.mocked(put).mockResolvedValueOnce(importResult);
+
+    const result = await importModelSettings(sampleBackup);
+
+    expect(put).toHaveBeenCalledWith(
+      "/providers/model-settings/import",
+      sampleBackup,
+    );
+    expect(result).toBe(importResult);
   });
 
   it("getProviderTemplates 获取提供商模板列表", async () => {

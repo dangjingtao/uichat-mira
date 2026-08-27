@@ -103,6 +103,22 @@ GET /providers
 - `capabilities.imageAdapter`：生图协议，`none` 表示不支持
 - `capabilities.supportsRoles`：后端 catalog 认定该 provider 可承接的角色列表
 
+### 导出模型设置
+
+```http
+GET /providers/model-settings/export
+```
+
+返回带固定 `format` 与 `version` 的 JSON 备份，包含服务商连接、明文 API Key、默认模型绑定及模型参数。同步得到的模型缓存、连接状态和错误记录不属于备份内容。客户端必须在下载前提示用户妥善保管该文件。
+
+### 导入模型设置
+
+```http
+PUT /providers/model-settings/import
+```
+
+请求体使用导出接口生成的完整 JSON。backend 会先校验格式版本、连接引用和角色能力，再在单个 SQLite 事务中恢复配置；校验或写入失败时不会保留部分导入结果。同 ID 连接会更新，不在备份中的现有连接会保留。
+
 ### 读取服务商详情
 
 ```http

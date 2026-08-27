@@ -1,3 +1,6 @@
+import { prepareAgentHtmlPreview } from "@/agent/html-preview.js";
+import { memoryService } from "@/memory/runtime.js";
+import { shouldCommitTurnToMemory } from "@/memory/turn-commit-policy.js";
 import { threadService } from "@/services/thread.service.js";
 import type { NormalizedChatMessage } from "@/services/provider-proxy.service/index.js";
 import {
@@ -186,14 +189,26 @@ export const persistAssistantMessage = ({
     content,
     metadata,
   );
-  const normalizedContent = clearApprovalPlaceholder ? "" : content;
+  const baseContent = clearApprovalPlaceholder ? "" : content;
+  const normalizedContent = prepareAgentHtmlPreview({
+    content: baseContent,
+    metadata,
+  });
+  const previewMarkerAdded = normalizedContent !== baseContent;
   const cleanedParts = clearApprovalPlaceholder
     ? parts?.filter(
         (part) => part.type !== "text" || part.text.trim() !== "等待审批",
       )
     : parts;
-  const normalizedParts =
-    cleanedParts && cleanedParts.length > 0
+  const normalizedParts = previewMarkerAdded
+    ? [
+        {
+          type: "text" as const,
+          text: normalizedContent,
+        },
+        ...(cleanedParts ?? []).filter((part) => part.type !== "text"),
+      ]
+    : cleanedParts && cleanedParts.length > 0
       ? cleanedParts
       : normalizedContent.trim()
         ? [
@@ -208,7 +223,7 @@ export const persistAssistantMessage = ({
     return;
   }
 
-  threadService.createMessage(threadId, userId, {
+  const persisted = threadService.createMessage(threadId, userId, {
     id: assistantMessageId,
     parentId,
     role: "assistant",
@@ -216,6 +231,34 @@ export const persistAssistantMessage = ({
     parts: normalizedParts,
     metadata,
   });
+
+  if (shouldCommitTurnToMemory(metadata) && parentId) {
+    const userMessage = threadService.getMessageById(parentId, userId);
+    if (userMessage?.role === "user" && userMessage.content.trim()) {
+      void memoryService
+        .commitTurn({
+          userId,
+          source: {
+            type: "conversation",
+            threadId,
+            userMessageId: userMessage.id,
+            assistantMessageId: persisted.id,
+          },
+          userText: userMessage.content,
+          assistantText: persisted.content,
+        })
+        .catch((error: unknown) => {
+          console.warn("[memory] failed to consolidate committed turn", {
+            threadId,
+            userMessageId: userMessage.id,
+            assistantMessageId: persisted.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+    }
+  }
+
+  return persisted;
 };
 
 export const generateThreadTitleFromMessages = async ({

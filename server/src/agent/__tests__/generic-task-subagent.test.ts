@@ -124,12 +124,12 @@ test("planner-only delegation surface preserves dynamic Harness tools", () => {
 
   assert.deepEqual(base.exposedTools, ["read_open", "terminal_session"]);
   assert.deepEqual(exposed.exposedTools, [
+    GENERIC_TASK_DELEGATE_TOOL_ID,
     "read_open",
     "terminal_session",
-    GENERIC_TASK_DELEGATE_TOOL_ID,
   ]);
   assert.equal(
-    exposed.toolMeta.at(-1)?.toolId,
+    exposed.toolMeta[0]?.toolId,
     GENERIC_TASK_DELEGATE_TOOL_ID,
   );
 

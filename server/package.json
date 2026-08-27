@@ -1,6 +1,6 @@
 {
   "name": "@ui-chat-mira/server",
-  "version": "0.99.4",
+  "version": "0.99.9",
   "private": true,
   "type": "module",
   "author": "Tomz Dang <dangjing@gmail.com>",
@@ -10,10 +10,12 @@
     "build": "node build.js",
     "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "test:memory": "vitest run src/memory/file-memory.repository.test.ts src/memory/memory-policy.test.ts src/memory/memory.service.test.ts src/memory/turn-commit-policy.test.ts src/routes/memory.test.ts src/services/shared-nodes/thread-request-context-memory.resolver.test.ts src/services/shared-nodes/thread-request-context.node.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:protocol": "tsx --tsconfig tsconfig.test.json --test src/**/*.test.ts",
     "smoke:pi-skill-agent": "tsx scripts/smoke-pi-skill-agent.ts",
     "smoke:subagent-skill": "tsx scripts/smoke-subagent-skill.ts",
+    "smoke:planner-delegation": "node --env-file-if-exists=../.env ./node_modules/tsx/dist/cli.mjs scripts/smoke-planner-delegation-selection.ts 5",
     "bench:sandbox:direct": "tsx src/harness/sandbox/bench/runner.ts",
     "bench:context:read": "tsx src/harness/context/bench/runner.ts"
   },
@@ -47,6 +49,7 @@
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "fast-glob": "^3.3.3",
+    "fast-xml-parser": "^5.10.1",
     "fastify": "^4.28.1",
     "iconv-lite": "^0.7.2",
     "imapflow": "^1.4.6",

@@ -1,372 +1,367 @@
 ---
 status: current
 owner: project-owner
-last_verified: 2026-07-22
+last_verified: 2026-07-30
 layer: wiki
 module: Project
 feature: EngineeringMemory
-doc_type: current-snapshot
+Doc Type: current-snapshot
 canonical: true
 related:
+  - CURRENT_PRODUCT_TRUTH.md
+  - AGENT_CURRENT_TRUTH.md
+  - TOOL_CURRENT_TRUTH.md
   - harness/agentgraph-harness-protocol.md
   - harness/README.md
-  - development/agent-observability.md
+  - skill/README.md
   - tooling-runtime/tools-protocol.md
   - project-control/project-control-ledger.md
 ---
 
-# UIChat Mira 工程记忆
+# UIChat Mira 工程共同记忆
 
-> 这页记录当前工程共同记忆：已经成立的主线、不可破坏的合同、当前阶段边界和仍需观察的问题。
->
-> 它不是任务台账，也不复制每个模块的全部实现细节。发生冲突时，以链接到的 current-contract、代码和真实验证证据为准。
+> 这页记录当前工程必须共同遵守的主线、合同和阶段边界。具体实现细节以代码、真实验证和链接到的 current-contract 为准。
 
 ## 1. 当前阶段
 
-UIChat Mira 当前处于 **Agent V1.5 稳定化阶段**。
+UIChat Mira 从 2026 年 8 月开始进入 **功能稳定迭代阶段**。
 
-优先级是：
+当前优先：
 
-- 主线稳定
-- 真实前端可用
-- 回归预防
-- 工具执行可信
-- Evidence 驱动回答
-- 执行过程与状态可见
+- 已有功能真实可用；
+- 失败可诊断、可恢复、可停止；
+- 回归测试覆盖关键合同；
+- 前端状态与后台真实状态一致；
+- 工具执行和 Evidence 可信；
+- 文档与实现保持同一份真相；
+- 新增能力小步、可验证、可回退。
 
-当前不主动扩展为：
+当前不主动重开：
 
-- Agent V2
-- DAG scheduler
-- 多 Agent 编排
-- 并发工具执行
-- 长期记忆系统
-- 大规模 Harness 重写
-- 大型前端重设计
+- Agent V2；
+- DAG scheduler；
+- 开放式多 Agent 编排；
+- 并发工具执行主链；
+- 长期记忆大系统；
+- Harness 全面重写；
+- 大型前端重设计。
 
 ## 2. 产品与工程定位
 
-UIChat Mira 是本地优先、桌面优先的个人 AI 工作台。
+UIChat Mira 是本地优先、桌面优先、多 Provider 的个人 AI 工作台。
 
-长期方向包括：
+Chat、RAG、Agent、MCP、Skill、SubAgent 与微应用可以共存，但每项能力必须分别证明：
 
-- 多 Provider，而不是 OpenAI-only
-- Chat、RAG、Agent、MCP、微应用共存
-- Harness 作为工具控制平面
-- Agent 负责多步决策与任务完成
-- 用户始终保留审批、停止、观察与最终合并控制
-
-项目原则：
-
-> 解决真实问题优先于让测试形式上变绿；测试是验证功能的手段，不是工程目标本身。
+- 产品入口存在；
+- 边界清楚；
+- 失败语义明确；
+- 有真实验证；
+- 有回归保护；
+- 文档没有把计划包装成现状。
 
 ## 3. Agent Runtime 当前真相
 
-`AgentGraph` 当前代表稳定运行时门面，不等于 LangGraph 本身。
+完整总真相见 [[AGENT_CURRENT_TRUTH]]。
 
-应用默认运行时是 `pi_loop`：
+`AgentGraph` 是稳定运行时门面，不等于底层图框架。
 
 ```text
 AgentRun
-  -> AgentGraph 稳定门面
+  -> AgentGraph stable facade
   -> Pi Loop（应用默认）
-  -> Planner
-  -> Normalize
-  -> Policy
-  -> Tool / Retrieve
+  -> Main Planner
+  -> direct action / governed delegation
   -> Evidence
-  -> Planner
+  -> Planner or frozen delivery
   -> Generate
   -> Finalize
-  -> AgentRun
 ```
 
-LangGraph 仍保留为：
+LangGraph 保留为显式兼容、历史测试和回归对照路径，不是应用默认主链。
 
-- 显式兼容运行时
-- 测试对照
-- 回归比较
+## 4. 当前三类执行路径
 
-它不是应用默认主链。
+### Main Agent direct
 
-完整合同见：
+纯回答、检索或一个 concrete tool call 即可完成的简单动作由 Main Planner 直接处理。
 
-- [AgentGraph 与 Harness 当前协议](harness/agentgraph-harness-protocol.md)
+### Generic delegation
 
-## 4. Agent 主线不变量
+边界明确、可独立验收的多步工作包可以通过 `delegate_task` 交给 Generic SubAgent。
+
+- Child 拥有 task-local tool loop；
+- Main Planner 保留 global goal 与最终验收；
+- Child 不可再次委派；
+- completed 后回 Main Planner。
+
+### Skill-owned execution
+
+任务型 primary Skill 可以把领域施工交给 Skill-owned SubAgent 或 deterministic Skill Flow。
+
+- Parent 保留对话、审批、恢复、Evidence、终止与最终交付；
+- Child 负责领域局部规划、工具循环、Runtime、Evidence 与 Artifact；
+- completed 后冻结交付并直接 Generate，不让 Main Planner 重做施工；
+- needs_input 由 Parent 提问；
+- recoverable 返回受限恢复面；
+- terminal failure 不进入 Generate。
+
+当前 SubAgent 是受控、单层、任务局部的执行所有权转移，不是多 Agent 自治平台。
+
+## 5. Agent 主线不变量
 
 必须保护：
 
-1. Planner 只输出 `nextAction`。
-2. Normalize 只校验并冻结 `nextAction.use_tool`，生成 frozen `pendingToolCall`。
-3. Policy 只审批 frozen `pendingToolCall`。
-4. Tool 只执行与 Policy 决策一致的 frozen `pendingToolCall`。
-5. Tool / Retrieve 不直接写累计 Evidence。
-6. Evidence 是累计证据的单一写入者。
-7. Tool / Retrieve 完成后必须先进入 Evidence，再回 Planner。
-8. `capabilityIntent.selectedToolIds` 不得进入执行链。
-9. `selectedToolId` 只保留 UI、trace、diagnostics 与兼容语义。
-10. Approval waiting、terminal error、recovery exhausted 状态不得继续执行工具。
-11. Generate 必须基于已经进入 Evidence 的真实结果回答。
+1. Main Planner 维护完整用户目标和全局完成判断；
+2. 普通 concrete tool 由 Normalize 冻结 `pendingToolCall`；
+3. Policy 只审批冻结后的 exact invocation；
+4. Tool 只执行与 Policy 一致的调用；
+5. Tool / Retrieve / Child result 不直接改写累计 Evidence；
+6. Evidence 是累计证据的单一写入者；
+7. 工具、检索或 Child observation 必须先进入 Evidence；
+8. capability match、ranking 与 `selectedToolId` 不得成为 invocation；
+9. waiting approval、terminal error、recovery exhausted 不得继续执行工具；
+10. Generate 只依据 frozen finalization packet 引用的真实 Evidence；
+11. Evidence answerable 不等于用户 global goal completed；
+12. Generic Child completed 不等于 global completed；
+13. Skill-owned Child completed 不得被 Main Planner 无意义重做；
+14. observability 不得成为第二控制平面。
 
-核心闭环：
+## 6. Planner 与完成判断
 
-```text
-Planner
-  -> Normalize
-  -> Policy
-  -> Tool
-  -> Evidence
-  -> Planner
-```
+Planner 是 task-model 驱动的下一步决策器，不是静态步骤播放器。
 
-检索闭环：
+它持续区分：
 
-```text
-Planner
-  -> Retrieve
-  -> Evidence
-  -> Planner
-```
+- 当前证据能否解释局部问题；
+- 用户请求是否整体完成；
+- 剩余工作是否适合 direct tool；
+- 是否应委派一个完整工作包；
+- 是否需要用户输入、审批或恢复。
 
-## 5. Planner 与任务完成
+`planList` 是轻量方向，不是事实仓库。工具结果、Evidence、推理和回答不能塞进计划项代替状态。
 
-Planner 是 task model 驱动的下一步决策器，不是静态计划表推进器。
+Pi Loop 没有全局 iteration cap；局部 schema replan 与 recoverable failure 有预算。
 
-它要区分：
+## 7. Approval 与恢复
 
-- 当前证据是否可以解释某个局部问题
-- 当前用户任务是否已经完成
+### Settled exact invocation
 
-`currentTaskFrame` 用于维护：
+目标合同绑定：
 
-- 用户目标
-- 已覆盖目标
-- 未完成目标
-- 当前下一步
+- `toolId`；
+- `toolCallId`；
+- `inputHash`。
 
-Evidence answerable 不等于 task completable。
+命令、参数、cwd、env、timeout 或目标资源变化后必须重新判断。
 
-Planner 维护的 `planList` 是 Pi-style 轻量 todo，只保存 `{id, text, done}`，用于表达语义方向和完成状态。Planner 只能通过 `planPatch.addItems` 追加新项、通过 `planPatch.completeIds` 完成既有项；runtime 保留既有项的身份和顺序，Planner 不得重写、删除或重排计划，也不能把工具结果、事实、Evidence 或推理塞进计划。
+恢复必须使用 checkpoint 和 frozen invocation，不重新根据用户文字猜参数。
 
-动作和结果由 runtime-owned 的连续 Agent Loop Context 提供。Planner 每轮同时看到有界的最近 canonical Evidence，以及从全量累计 observations 重建的语义动作账本；重复语义目标会合并，避免长循环只因最近窗口压缩而重复已完成工作。只有已经进入 Evidence 的 Harness `llmContent` 和检索结果才能进入 Planner 上下文。不存在通过读取 `ENGINEERING_MEMORY.md`、`MEMORY.md` 等文件恢复 Agent 状态的隐式流程。
+SubAgent approval 还必须保存 transcript checkpoint。旧批准不能变成可复用权限。
 
-原生结构化 Planner 输出可以流式提供公开 `reason`，但只有完整、通过 schema 校验和 Normalize 的决策才可执行；部分 JSON 只能更新公开工作说明，不能驱动工具。
+### 当前 core 实现漂移
 
-Pi Loop 没有全局 iteration cap。`maxIterations = 0` 只保留兼容与诊断语义。
+截至 2026-07-30，core `ApprovedInvocation` 实际匹配 `toolId + inputHash`；pending request 和 frozen call 虽然保存 `toolCallId`，但它尚未参与 grant match。批准在执行尝试后 one-shot 消费。
 
-仍然存在局部预算：
+这是 exact-invocation identity 漂移，不是合同改版。完整说明见 [[TOOL_CURRENT_TRUTH]]。
 
-- schema replan
-- recoverable tool failure
+### Settled C contract
 
-## 6. Approval 与恢复
+- recoverable 失败进入 Evidence 并可以恢复；
+- 恢复耗尽后进入 guarded answer；
+- Graph completed，Chat finish reason stop；
+- terminal failure Graph failed，finish reason error；
+- terminal failure 不进入 Generate。
 
-审批授权绑定 exact invocation：
+### 当前 dev 已知漂移
 
-- `toolId`
-- `toolCallId`
-- `inputHash`
+截至 2026-07-30，Planner 在 recovery exhausted 时直接返回 `error`，导致 Graph failed 且跳过 Generate。
 
-命令、参数、cwd、env、timeout 变化后，必须重新判断。
+这是高优先级实现漂移，不是 C contract 改版。不得用当前错误行为覆盖 settled contract。
 
-审批等待时保存 runtime checkpoint，包括：
+## 8. Harness 当前定位
 
-- `currentTaskFrame`
-- observations
-- Evidence
-- retrieved chunks
-- last tool execution
-- iteration count
-- frozen `pendingToolCall`
+完整工具事实见 [[TOOL_CURRENT_TRUTH]]。
 
-Approve 路由快速返回 `running`，后续执行异步恢复；恢复入口先校验并重新执行 Policy，再继续消费原 frozen 调用。工具结果进入 Evidence 后回到 Planner，不重新根据自然语言猜参数。
-
-## 7. Harness 当前定位
-
-Harness 是：
-
-> Agent 的工具控制平面，不是 Agent 的大脑。
+Harness 是 concrete tool 的控制平面，不是 Agent 的大脑。
 
 Harness 负责：
 
-- capability / tool registry
-- tool exposure
-- schema 与 metadata
-- risk / approval boundary
-- workspace boundary
-- invocation
-- external MCP projection
-- trace / audit
-- 结果到 `llmContent` 的统一投影
+- registry 与 public surface；
+- availability 与 Tool Exposure；
+- schema 与 metadata；
+- risk / approval；
+- workspace boundary；
+- invocation；
+- external MCP projection；
+- event / trace / artifact / audit；
+- result 到 bounded `llmContent` 的投影。
 
 Harness 不负责：
 
-- 多步任务下一步决策
-- 工具参数生成
-- 任务完成判断
-- 最终自然语言回答
+- Main global planning；
+- Generic / Skill Child local planning；
+- 用户目标完成判断；
+- 最终回答。
 
-真实执行入口只有 frozen `pendingToolCall`。
+`delegate_task` 属于 Agent Runtime，不是 Harness Tool；Child 的 concrete tools 仍必须受治理。
 
-## 8. Generate 与 Evidence
+Skill-private Runtime 不暴露给 Main Planner，也不能绕过 Parent 治理。
 
-Harness 成功结果会投影为模型可消费的 `llmContent`。
+## 9. Tool 公共面
 
-Generate 当前：
-
-- 只消费 completed executions
-- 优先使用真实 `llmContent`
-- 有总字符预算 `48_000`
-- 明确标记 truncated
-- 超预算只截断上下文，不终止工具进程
-- 要求回答只依据已展示事实
-
-因此不能再传播“Generate 只看摘要”或“无边界拼接全部工具结果”的旧说法。
-
-## 9. CodeGraph 当前受控合同
-
-CodeGraph 的产品入口保持单一：
-
-- Planner 只看见 `codebase_explore`
-- 原生 `query / explore / affected` 留在 wrapper 内部
-- CodeGraph 返回的是候选，不是最终 Evidence
-- 候选默认要求原文验证
-- 进入 Evidence 前必须经过 `read_file_slice` 或等价原文读取
-
-降级链：
+### Read
 
 ```text
-CodeGraph
-  -> scoped search_text
-  -> workspace_inventory
-  -> read_file_slice
+read_discover
+grep
+read_open
+codebase_explore
 ```
 
-需要保护：
+旧 `read / read_list / read_locate / read_extract / read_slice` 是内部 primitive 或兼容面，不进入当前 Agent exposure。
 
-- CodeGraph 失败不能直接回答“没有”
-- broad explore 结果不能裸传 Planner
-- telemetry 默认关闭
-- 索引不能默认污染用户仓库
-- capability id 不能穿透为真实 invocation tool id
+### Edit
+
+```text
+write_file
+replace_block
+delete_path
+move_path
+```
+
+四个公开 Edit 工具都要求审批。旧 `edit_file / workspace_mutation` 只保留兼容。
+
+### Search
+
+- `web_search`：公共互联网，Tavily / SearXNG；
+- `news_search`：本地 News Hub 缓存。
+
+### Terminal
+
+`terminal_session` 是完整 host shell / PTY runtime：
+
+- 支持 Node、Python、Git、包管理器、脚本和长任务；
+- workspace 外 `cwd` 可以在 exact approval 后执行；
+- 当前不是强隔离 sandbox；
+- 不能退化成通用业务集成容器。
+
+### 扩展能力
+
+Managed Browser、Attached Browser、Mail、GitHub、External Expert 与 External MCP 可以按真实 availability 进入 public surface。
+
+## 10. Tool Exposure 不变量
+
+```text
+public eligible tools <= 20
+  -> expose all
+  -> skip ranking
+
+public eligible tools > 20
+  -> embedding / rerank
+  -> expose top 20
+```
+
+必须保护：
+
+- caller `topK / maxTools / minScore` 不能缩小 <=20 工具集；
+- >20 没有 score threshold 淘汰；
+- ranking 失败确定性回退前 20；
+- Tool Group 只提供偏好，不改变 exposure；
+- SkillContext 不扩大 Tool Exposure；
+- capability match、ranking、selectedToolId 与 UI 选中状态都不是 invocation；
+- risk 由 execution-time Policy / Approval 处理，不能靠假装工具不存在处理。
+
+## 11. Tool 执行不变量
+
+1. Planner 只选择本轮 exposed concrete tool；
+2. Normalize 校验 plain args 与 schema；
+3. workspace file args 机械归一化；
+4. frozen `pendingToolCall` 保存 tool id、args、toolCallId 与 inputHash；
+5. Policy 只读取 frozen call；
+6. Harness 再次验证 schema；
+7. ToolNode 只执行 Policy allow 且 hash 一致的 invocation；
+8. execution attempt 后 one-shot 消费批准；
+9. result / artifact / trace 进入统一 invocation；
+10. Evidence 是累计写入者；
+11. Generate 不调用 Tool。
+
+## 12. External MCP
+
+External MCP projected id：
+
+```text
+mcp:<serverId>:tool:<toolName>
+```
+
+进入 Agent 必须：
+
+- enabled；
+- connected；
+- disclaimer accepted；
+- discovery 成功；
+- transport 配置有效；
+- 用户显式 Agent Access；
+- concrete invocation 经过 approval。
+
+安装或连接不等于自动获得 Agent 权限。
+
+## 13. CodeGraph
+
+Planner 只看见 `codebase_explore`。
+
+当前事实：
+
+- 工具稳定注册；
+- CodeGraph Studio 提供 provider/runtime config；
+- 当前 Agent workspace 拥有实际 runtime context；
+- 原生 query / explore / affected 留在 wrapper；
+- candidate 必须回 workspace source verification；
+- verified excerpts 才进入 retrieval Evidence；
+- provider 不可用时返回 structured degraded / fallback signal。
+
+当前 fallback 认知动作是：
+
+```text
+codebase_explore
+  -> grep / read_discover
+  -> read_open
+```
 
 CodeGraph 是代码理解加速器，不是第二个 Planner。
 
-## 10. Terminal Runtime 当前真相
+## 14. Skill 与 SubAgent
 
-`terminal_session` 是稳定能力合同，不拆成 Python、Node、Git、PowerShell 等多个工具。
+Skill 本体是渐进式披露的领域能力包，不等于 Tool、权限或 Runtime。
 
-当前默认 Runtime：
+必须分开：
 
-- `host_spawn`
-- 完整 Shell
-- Python / Node / Git / package manager
-- pipeline 与 shell-native syntax
-- persistent PTY
-- `attachSessionId`
-- watcher / dev server / REPL / 长进程
-- Windows Job Object
-- Job Object 不可用时 `taskkill /t /f`
-- POSIX process group
+- SkillContext；
+- ExecutionProfile；
+- ToolExposure；
+- Runtime readiness；
+- Policy / Approval。
 
-工作目录原则：
+Context-only Skill 可以只增强 Main Planner。
 
-- 默认 `cwd = workspace`
-- workspace 是施工现场，不是监狱
-- 越界优先记录与审批
-- 不靠路径拦截破坏 Runtime 能力
+Task Skill 可以使用 forked SubAgent。Stateful Skill Flow 是可选确定性 controller，不是所有 Skill 的默认状态机。
 
-旧 command sandbox 已退出 `terminal_session` 主执行链。
+V1 禁止 nested SubAgent 与 recursive `delegate_task`。
 
-`sandbox_runtime` 只保留为未来可选 Provider，用于环境隔离、快照、回滚和依赖隔离；当前未实现，也不会偷偷退回旧 sandbox executor。
+## 15. 文档真相合同
 
-## 11. 前端执行轨迹与可见 OS
+文档站必须区分：
 
-前端显示的“内心 OS”来自 Planner JSON 中公开的 `reason` 字段。
+- 当前真相；
+- 施工与验证；
+- 方案与实验；
+- 历史归档；
+- 待核验。
 
-它不是：
+当代码与 settled contract 冲突时，必须同时记录：
 
-- 隐藏 chain of thought
-- 原始完整模型输出
-- 未脱敏 prompt
+- 目标合同；
+- 当前行为；
+- 影响；
+- 修复状态。
 
-产品行为合同：
-
-- Planner 决策期间展示公开 reason
-- 回答组织完成后，OS 区域消失
-- 执行链按真实语义顺序展示
-- 重复语义节点必须依靠 `attemptKey` 保留每次执行
-- approval / resume 使用 `toolCallId` 对齐
-- 页面最终状态应服从 AgentRun 的 running / waiting / completed / failed 状态，不能被历史审批节点反向覆盖
-
-完整排查方法见：
-
-- [Agent Observability](development/agent-observability.md)
-
-## 12. 失败合同
-
-Recoverable failure：
-
-- Tool execution 记录 failed
-- 失败事实进入 Evidence
-- 回 Planner 尝试恢复
-- 恢复耗尽后 Generate guarded answer
-- Graph status 为 completed
-- Chat finish reason 为 stop
-
-Terminal failure：
-
-- Graph status 为 failed
-- finish reason 为 error
-- Generate 不执行
-
-工具自身拒绝输入，例如 URL scheme 不支持，属于工具层能力边界；是否恢复由 Evidence 和 Planner 决定，不应被误判成审批仍在等待。
-
-## 13. 当前工程控制原则
-
-Codex 可以并行施工。
-
-评审可以按任务拆开。
-
-但必须保持：
-
-- merge control 集中
-- task scope 独立
-- 不顺手优化宇宙
-- 不让单个施工线程改写主线合同
-- 不用旧任务卡覆盖 current-contract
-- 不用 AI 线程记忆替代仓库真相
-
-阅读优先级：
-
-```text
-current-contract
-  > current overview / runbook
-  > implementation plan / task card
-  > historical design
-```
-
-## 14. 当前仍需观察
-
-以下不是架构重做理由，只是继续稳定化时要盯住：
-
-- 前端最终 lifecycle 状态是否还会被历史 approval trace 污染
-- Planner reason 流式展示是否在长 JSON / 大上下文下被截断
-- HTML 等高噪声输入是否导致工具反复切换
-- recoverable tool failure 是否总能回 Planner，而不是过早 terminal stop
-- Windows 实机 PTY / Job Object / 长进程 smoke
-- CodeGraph 真实 provider 的原文验证与 fallback 质量
-- 文档站 generated index 是否随最新 docs 重新生成
-
-## 15. 当前单点真相入口
-
-先读：
-
-1. [AgentGraph 与 Harness 当前协议](harness/agentgraph-harness-protocol.md)
-2. [Harness 模块](harness/README.md)
-3. [Agent Observability](development/agent-observability.md)
-4. [Tools Protocol](tooling-runtime/tools-protocol.md)
-5. [Project Control Ledger](project-control/project-control-ledger.md)
-
-历史设计、旧 Workboard 和旧任务卡只能解释演进，不能覆盖以上当前合同。
+不能只选一边，让另一边消失。

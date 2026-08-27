@@ -21,6 +21,8 @@ vi.mock("react-i18next", () => ({
       "settings.microApps.jianXing.connection.extensionConnected": "扩展已连接",
       "settings.microApps.jianXing.connection.waitingExtension": "等待扩展",
       "settings.microApps.jianXing.connection.disconnected": "未连接",
+      "settings.microApps.jianXing.connection.authorize": "浏览器扩展授权",
+      "settings.microApps.jianXing.auth.title": "浏览器扩展授权",
       "settings.microApps.jianXing.fields.operation": "操作方式",
       "settings.microApps.jianXing.fields.observe": "观察页面",
       "settings.microApps.jianXing.result.clear": "清空",
@@ -28,6 +30,8 @@ vi.mock("react-i18next", () => ({
       "settings.microApps.jianXing.guide.close": "关闭使用指南",
       "settings.microApps.jianXing.guide.footerClose": "关闭",
       "settings.microApps.jianXing.auth.close": "关闭",
+      "settings.microApps.jianXing.auth.generate": "生成授权码",
+      "settings.microApps.jianXing.auth.copy": "复制",
       "settings.microApps.jianXing.guide.intro": "完成扩展、Native 和授权配置后，连接状态会自动同步到这里。",
       "settings.microApps.jianXing.guide.nativeTitle": "注册 Native Messaging",
       "settings.microApps.jianXing.guide.nativeBody": "在本页点击“安装 Native”或“修复 Native”。",
@@ -82,6 +86,11 @@ vi.mock("@/shared/api/webbridge", () => ({
       });
     }
   },
+}));
+
+vi.mock("@/shared/lib/request", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/lib/request")>()),
+  post: vi.fn(),
 }));
 
 vi.mock("@/shared/platform/desktopRuntime", async (importOriginal) => ({
@@ -153,5 +162,22 @@ describe("JianXingPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "编辑 JavBus 影片库 规则" }));
     expect(screen.getByText("编辑 URL 剪藏规则")).toBeInTheDocument();
     expect(screen.getByLabelText("网站别名（可选）")).toHaveValue("JavBus 影片库");
+  });
+
+  it("keeps copying the authorization code inline without opening an authorization page", async () => {
+    const { post } = await import("@/shared/lib/request");
+    vi.mocked(post).mockResolvedValueOnce({ code: "one-time-code" } as never);
+    const postMessage = vi.spyOn(window, "postMessage");
+
+    render(<JianXingPage />);
+    await userEvent.click(screen.getByRole("button", { name: "浏览器扩展授权" }));
+    await userEvent.click(screen.getByRole("button", { name: "生成授权码" }));
+
+    const code = await screen.findByText("one-time-code");
+    expect(code.parentElement).toContainElement(
+      screen.getByRole("button", { name: "复制" }),
+    );
+    expect(screen.queryByRole("button", { name: "打开授权页" })).not.toBeInTheDocument();
+    expect(postMessage).not.toHaveBeenCalled();
   });
 });

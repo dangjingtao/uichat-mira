@@ -16,6 +16,7 @@ import {
   listChatWorkspaces,
   type ChatWorkspace,
 } from "@/shared/api/thread";
+import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import { UChatSidebarToolsModal } from "./UChatSidebarToolsModal";
 import { isValidWorkspaceRootPath } from "../core/runtimePolicies";
 
@@ -23,6 +24,7 @@ type WorkspaceGroup = {
   id: string;
   name: string;
   rootPath?: string | null;
+  isDefault?: boolean;
   threads: ChatThreadSummary[];
 };
 
@@ -77,6 +79,7 @@ export function UChatThreadListSidebar() {
       id: workspace.id,
       name: workspace.name,
       rootPath: workspace.rootPath,
+      isDefault: workspace.isDefault,
       threads: [...threads]
         .filter((thread) => thread.workspaceId === workspace.id)
         .sort(sortByUpdatedAtDesc),
@@ -154,7 +157,7 @@ export function UChatThreadListSidebar() {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
       return;
     }
-    if (!isValidWorkspaceRootPath(rootPath)) {
+    if (!isValidWorkspaceRootPath(rootPath, getDesktopRuntime().platform)) {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }

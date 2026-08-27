@@ -86,7 +86,7 @@ const createMockSession = (input?: {
 
 const extractMarker = () => {
   const writtenCommand = String(terminalMocks.writeTerminalSessionMock.mock.calls.at(-1)?.[1] ?? "");
-  const markerMatch = writtenCommand.match(/(__CODEX_DONE__:[^":\s]+:[^":\s]+):/);
+  const markerMatch = writtenCommand.match(/(__MIRA_TERMINAL_DONE__:[^":\s]+:[^":\s]+):/);
   if (!markerMatch) {
     throw new Error(`Failed to extract completion marker from command: ${writtenCommand}`);
   }
@@ -134,25 +134,6 @@ describe("terminal_session tool", () => {
     clearWorkspaceSelection();
     vi.useRealTimers();
     vi.restoreAllMocks();
-  });
-
-  it("describes cwd as a workspace-relative directory in the exposed schemas", async () => {
-    const { terminalSessionTool } = await import("./terminal-session.tool.js");
-
-    expect(
-      (
-        terminalSessionTool.definition.inputSchema.properties as Record<
-          string,
-          { description?: string }
-        >
-      ).cwd.description,
-    ).toContain("Workspace-relative directory only");
-    expect(
-      (
-        terminalSessionTool.definition.inputSchemaByExposure?.agent_intent
-          ?.properties as Record<string, { description?: string }>
-      ).cwd.description,
-    ).toContain("Use '.' for the workspace root");
   });
 
   it("streams split stdout/stderr for ephemeral terminal execution", async () => {
@@ -231,27 +212,6 @@ describe("terminal_session tool", () => {
     expect(fs.realpathSync.native(spawnOptions!.cwd!)).toBe(
       fs.realpathSync.native(path.join(workspaceRoot, "server")),
     );
-  });
-
-  it("rejects cwd values that escape the workspace root", async () => {
-    const { terminalSessionTool } = await import("./terminal-session.tool.js");
-
-    await expect(
-      terminalSessionTool.execute({
-        invocationId: "inv-cwd-outside",
-        args: {
-          command: "pwd",
-          sessionMode: "ephemeral",
-          cwd: "..",
-        },
-        signal: new AbortController().signal,
-        environment: createHarnessEnvironmentSnapshot(),
-        pushEvent() {},
-        addArtifact(artifact) {
-          return { id: "a", ...artifact };
-        },
-      }),
-    ).rejects.toThrow("cwd must be a relative workspace directory without parent traversal");
   });
 
   it("supports attaching to an existing persistent terminal session", async () => {

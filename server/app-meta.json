@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.99.4",
+  "version": "0.99.7",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
@@ -36,13 +36,33 @@
       "branch": "dev",
       "versions": [
         {
+          "version": "0.99.7",
+          "commit": {
+            "hash": "584cef5640df640e164d5886877461a030b40e60",
+            "shortHash": "584cef5",
+            "message": "feat(macos): add isolated Electron development support",
+            "author": "Tomz Dang",
+            "date": "2026-08-22T13:52:30+08:00"
+          }
+        },
+        {
+          "version": "0.99.6",
+          "commit": {
+            "hash": "ba2c36634f7cd502e000ebec813207c13e92bb78",
+            "shortHash": "ba2c366",
+            "message": "fix(chat): preserve ordinary assistant message parts",
+            "author": "DangJingtao",
+            "date": "2026-08-03T06:30:23+08:00"
+          }
+        },
+        {
           "version": "0.99.4",
           "commit": {
-            "hash": "b8b252bdaf3704cd080f11e5147fb71279c1a3e5",
-            "shortHash": "b8b252b",
-            "message": "fix: correct tauri command names in desktopRuntime",
+            "hash": "f33a581e06ab0765d9df1a0292bf16e077a008b3",
+            "shortHash": "f33a581",
+            "message": "Merge branch 'dev' of https://github.com/dangjingtao/uichat-mira into dev",
             "author": "Tomz",
-            "date": "2026-07-26T13:37:20+08:00"
+            "date": "2026-07-28T16:33:47+08:00"
           }
         },
         {

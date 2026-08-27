@@ -1,496 +1,324 @@
-# Pi-like Forked Skill Agent 执行架构
-
-Status: Candidate / Pilot
-Protocol: Skill V2 Candidate
-Owner: chat / agent / skill runtime
-Last verified: 2026-07-24
-Layer: raw-source
-Module: SKILL / Agent Runtime
-Feature: PiSkillAgentExecution
-Doc Type: architecture-design
-Canonical: candidate
-Supersedes for `forked-agent` mode:
-- `docs/skill/skill-runtime-design.md` 中“不得存在第二 Agent Loop / Parent Planner 逐步控制 Skill 施工”的约束
-
-> 本文只新增一种 **forked-agent Skill execution mode**。现有 `inline` SkillContext 模式继续保留，直到迁移完成。
-
+---
+status: current
+owner: agent-runtime / skill-runtime
+last_verified: 2026-07-30
+layer: raw-source
+module: Agent
+feature: SubAgentExecution
+doc_type: reference
+canonical: true
+related:
+  - ../AGENT_CURRENT_TRUTH.md
+  - README.md
+  - ../harness/agentgraph-harness-protocol.md
+  - ../../server/src/agent/nodes/forked-skill-agent.ts
+  - ../../server/src/agent/nodes/generic-task-subagent.ts
 ---
 
-## 0. 核心结论
+# SubAgent 与 Skill 执行当前参考
 
-Mira 的 Skill 不再只能是“给主 Agent 注入说明书”。
+> 本页记录当前已经落地的 task-local SubAgent execution。它不再是 Candidate / Pilot，也不代表 Mira 已经成为开放式多 Agent 系统。
 
-对于需要真实施工、持续补证据、运行专业 Runtime、生成 Artifact 的任务型 Skill，新增：
+## 1. 当前存在两类 SubAgent
+
+### Generic Task SubAgent
+
+由 Main Planner 选择 `delegate_task`：
+
+```text
+Main Planner
+  -> delegate_task(goal, acceptanceCriteria)
+  -> mira.generic-task SubAgent
+  -> local tool loop
+  -> structured Evidence
+  -> Main Planner acceptance
+```
+
+用于：
+
+- 一个边界明确的多步工作包；
+- 需要连续工具调用；
+- 需要执行后验证；
+- 需要局部 repair / retry；
+- 可以独立写出验收条件。
+
+不用于：
+
+- 纯回答；
+- 一个普通工具调用即可完成的动作；
+- 模糊且无法定义 acceptance criteria 的任务；
+- 再委派给另一个 SubAgent。
+
+### Skill-owned SubAgent
+
+由命中的 primary Skill execution profile 触发：
+
+```text
+SkillContext + ExecutionProfile
+  -> forked SubAgent
+  -> Skill-scoped tools / private runtime
+  -> Evidence / Artifact / Requirement
+  -> Parent delivery
+```
+
+适合：
+
+- DOCX / PDF / PPTX / XLSX 等专业文档任务；
+- 有明确领域规则与 completion contract 的任务；
+- 需要 Skill-private Runtime；
+- Main Planner 不应自己拼解释器、脚本路径和运行参数的任务。
+
+## 2. 单层执行合同
+
+当前最多一层 Child execution：
 
 ```text
 Main Agent
-  -> match primary Skill
-  -> delegate(goal, skill)
-  -> fork Pi-like Skill Agent
-       -> Skill instructions / references
-       -> Skill-scoped tools
-       -> Skill runtime
-       -> workspace-bound execution
-       -> plan / act / observe / recover
-  -> SkillExecutionResult
-  -> Main Agent / recovery semantics
-  -> Generate
-  -> user
+  -> one SubAgent
 ```
 
-一句话：
+Child 不获得：
 
-> **Skill 是专业执行 Agent 的编译模板；Pi Agent Core 是执行内核；Main Agent 保留对话与最终交付权。**
+- `delegate_task`；
+- nested SubAgent；
+- 任意全局工具；
+- 未声明的 MCP；
+- 自动权限；
+- 自由扩展用户 global goal 的权力。
 
----
-
-## 1. 为什么升级
-
-当前 `inline` 路径是：
+当前不是：
 
 ```text
-Skill match
--> SKILL.md / references 注入 Main Agent
--> Main Planner 理解 Skill
--> Main Planner 选择工具并施工
+Agent A <-> Agent B <-> Agent C
 ```
 
-它把通用主 Agent 同时变成：
-
-- 对话 Agent；
-- Planner；
-- Skill 解释器；
-- 专业施工 Agent；
-- Runtime 调用者；
-- Completion 判断者。
-
-文枢已经暴露出该模式的脆弱性：Skill 写的是“调用 bundled runtime”，主 Agent 可能把它错误翻译成任意 shell / Python 调用。
-
-forked-agent 模式的目标不是增加一个随意的“模型步骤”，而是明确转移专业任务的执行所有权。
-
----
-
-## 2. 两种 Skill execution mode
-
-### 2.1 inline
-
-保持现状：
+而是：
 
 ```text
-SkillContext
--> Main Planner
+Parent governance
+  -> bounded task-local ownership
+  -> structured return
 ```
 
-适合：
+## 3. 执行所有权
 
-- 简单规则；
-- 写作规范；
-- 搜索策略；
-- 少量上下文增强；
-- 不需要独立工具循环的任务。
+Main Agent owns：
 
-### 2.2 forked-agent
+- global goal；
+- task decomposition；
+- dependency and acceptance；
+- Skill routing；
+- Policy / Approval；
+- terminal contract；
+- user interaction；
+- final answer and delivery。
 
-```text
-SkillContext + Goal + ExecutionProfile
--> isolated Pi-like Agent instance
--> bounded result
--> Parent resumes
-```
+SubAgent owns：
 
-适合：
+- delegated local goal；
+- local plan；
+- concrete tool loop；
+- observation；
+- task-local repair；
+- evidence coverage；
+- artifact construction；
+- task-local terminal judgment。
 
-- DOCX / PDF / PPTX / XLSX 等文档生产；
-- 多步工具施工；
-- 需要持续补证据；
-- 需要专业 Runtime；
-- 需要 Artifact；
-- Main Agent 不应亲自掌握细节的专业任务。
+Main Planner 不应在 Child completed 后重新施工同一工作包。
 
-V2 Pilot 同一时刻最多一个 active forked Skill Agent，不做 nested Skill Agent。
+## 4. ExecutionProfile
 
----
-
-## 3. 执行权边界
-
-一旦 Main Agent 委托 forked Skill：
-
-```text
-Main Agent owns:
-- user conversation
-- Skill routing / delegation
-- approval / global policy boundary
-- final Generate
-- final delivery
-
-Skill Pi Agent owns:
-- task-local planning
-- tool loop
-- observation
-- evidence coverage
-- repair / retry
-- artifact construction
-- task-local completion judgment
-```
-
-禁止双重控制：
-
-```text
-Pi Agent 做一步
--> Main Planner 决定下一步
--> Pi Agent 再做一步
-```
-
-正确方式：
-
-```text
-Main Agent delegate
--> Pi Agent owns execution until terminal/upthrow state
--> Parent resumes
-```
-
----
-
-## 4. Skill 是 Pi Agent 的 Execution Profile
-
-forked Skill 编译成：
+每个 discovered Skill 可以解析为一个 SubAgent execution profile：
 
 ```ts
-type SkillAgentExecutionContext = {
-  skillId: string
-  skillVersion: string
-  goal: string
-
-  instructions: string       // SKILL.md
-  resources: SkillResource[] // references/templates/examples/scripts metadata
-
-  toolExposure: SkillToolExposure
-  runtime: SkillRuntimeBinding
-  workspace: SkillWorkspaceBinding
-
-  modelPolicy: SkillModelPolicy
-  completion: SkillCompletionContract
+{
+  skillId,
+  mode: "forked-agent",
+  engine: "pi-agent-core",
+  allowedHarnessToolIds,
+  runtimeBindings,
+  workspaceBound
 }
 ```
 
-### 4.1 SKILL.md
+Profile 是 requirement envelope，不是 permission grant。
 
-是执行宪法 / procedural plan source，不是固定 JSON step list。
+真实可用能力还取决于：
 
-它定义：
+- Harness registry；
+- current exposure / binding；
+- runtime adapter readiness；
+- workspace；
+- Policy；
+- approval。
 
-- 什么必须完成；
-- 哪些步骤/方法优先；
-- 哪些做法禁止；
-- 何时读取 references；
-- 什么算完成。
+## 5. Child 工具面
 
-Pi Agent 根据 `Goal + SKILL.md + Evidence` 动态形成实际 plan。
-
-### 4.2 references
-
-references 是 Pi Agent 的私有专业上下文，可按需读取。
-
-它们不是 Main Agent 的全量上下文，也不是静态工作流 DSL。
-
----
-
-## 5. ToolExposure：Skill 默认 deny
-
-forked Pi Agent **不得继承 Main Agent 全量 ToolExposure**。
-
-定义：
+Generic Child：
 
 ```text
-PiSkillAgent.tools
-=
-Skill declared/allowed tools
-∩ environment available capabilities
-∩ policy allowed capabilities
+actual Main exposed concrete tools
+- delegate_task
 ```
 
-默认 deny：Skill 未声明/未允许的能力，Pi Agent 看不见。
-
-例如 PPTX Skill 不应自动获得：
-
-- Gmail；
-- 企业微信；
-- GitHub；
-- 任意 MCP；
-- 通用系统控制能力。
-
-工具可分两类：
+Skill-owned Child：
 
 ```text
-1. Harness-facing capability
-   - read / search / workspace operations 等
-
-2. Skill-private runtime capability
-   - pptx renderer
-   - pdf runtime
-   - xlsx runtime
-   - docx runtime
+Skill allowed Harness tools
++ managed Skill-private runtime bindings
 ```
 
-第二类不注册成全局 Harness Tool，不出现在用户工具列表。
+两者都不能凭 prompt 发明工具。
 
----
+## 6. Skill-private Runtime
 
-## 6. Runtime inheritance
+当前已登记的 managed bindings 包括：
 
-Skill Agent 可以决定：
+- `office_document`：ready；
+- `office_pdf`：ready；
+- `office_presentation`：ready；
+- `office_spreadsheet`：ready；
+- `wenshu_xlsx_xml_runtime`：pending。
+
+Private Runtime 的正确调用是：
 
 ```text
-“我要调用哪个 Skill runtime action”
+SubAgent semantic runtime action
+  -> RuntimeBinding
+  -> Mira-managed launcher / adapter
+  -> deterministic result
 ```
 
-但不能决定：
+禁止由模型决定：
 
-```text
-- 用哪个 Python executable
-- 自己拼 PYTHONPATH
-- python -m xxx
-- pip / conda install
-- 绕过 Runtime Pack
-```
+- Python executable；
+- `python -m`；
+- `PYTHONPATH`；
+- pip / conda；
+- 任意脚本拼接；
+- 通过 `terminal_session` 伪造文枢 Runtime。
 
-执行链：
+## 7. Result contract
 
-```text
-Pi Skill Agent
--> semantic runtime action
--> SkillRuntimeBinding
--> Mira-managed launcher
--> Skill Runtime / Runtime Pack
--> deterministic result
-```
-
-文枢 Python Runtime 必须继续由统一 WenShu launcher 管理解释器和 Runtime Pack 环境。
-
-确定性代码执行结果不得由 LLM 兜底解释成成功。
-
----
-
-## 7. Workspace binding
-
-Skill runtime 与 Workspace 是两个独立真相源：
-
-```text
-skillRoot
-= Skill package / references / scripts 来源
-
-runtimeRoot
-= managed runtime / dependencies
-
-workspaceRoot
-= 当前用户任务的真实文件世界
-```
-
-Pi Skill Agent 的实际文件操作与 Artifact 输出必须绑定当前 Workspace。
-
-推荐运行上下文：
-
-```text
-skillRoot      read-only package resources
-runtimeRoot    managed runtime resources
-tempRoot       current Skill execution temp
-workspaceRoot  current selected workspace
-```
-
-禁止把用户产物默认写入 SkillRoot 或 RuntimeRoot。
-
----
-
-## 8. Evidence 不足与上抛
-
-Pi Skill Agent 是 executor，不是最终 spokesperson。
-
-统一结果：
+Child 统一返回：
 
 ```ts
-type SkillAgentExecutionResult =
-  | {
-      status: "completed"
-      evidence: SkillEvidence[]
-      artifacts: SkillArtifactRef[]
-      summary?: string
-    }
-  | {
-      status: "insufficient_evidence"
-      evidence: SkillEvidence[]
-      missingEvidence: SkillEvidenceGap[]
-      artifacts?: SkillArtifactRef[]
-    }
-  | {
-      status: "needs_input"
-      requirements: SkillRequirement[]
-      partialEvidence?: SkillEvidence[]
-      artifacts?: SkillArtifactRef[]
-    }
-  | {
-      status: "failed"
-      recoverable: boolean
-      error: string
-      evidence?: SkillEvidence[]
-      artifacts?: SkillArtifactRef[]
-    }
+status:
+  | "completed"
+  | "insufficient_evidence"
+  | "needs_input"
+  | "failed"
+
+evidence
+artifacts
+requirements
+missingEvidence
+recoverable
+trace
+checkpoint
 ```
 
-原则：
+### Generic Child
+
+- completed：提交 Evidence，回 Main Planner；
+- needs_input：Parent ask_user；
+- recoverable / insufficient：回 Main Planner；
+- terminal failure：Main Agent error。
+
+### Skill-owned Child
+
+- completed：提交 Evidence，冻结 Parent finalization packet，直接 Generate；
+- needs_input：Parent 确定性交付结构化问题；
+- recoverable / insufficient：回 Parent，恢复工具面收窄到 active Skill profile；
+- terminal failure：Main Agent failed，Generate 不运行。
+
+## 8. Stateful Skill Flow
+
+Stateful Skill 不再被描述为“Main Planner逐步推进的可选表格”。
+
+当前模型：
 
 ```text
-证据不足
--> Pi Agent 先在自己允许的能力面内继续补证据
--> 无法补齐则结构化上抛
--> Parent/C contract 决定 recover / ask / guarded Generate
--> Generate 负责最终对用户表达
+Skill Flow / Reducer
+= deterministic SubAgent controller
 ```
 
-Pi Skill Agent 不得因为证据不足自行编造完成结果。
+它可以维护：
 
----
+- session；
+- phase；
+- round；
+- structured requirements；
+- interruption；
+- deliveryReady；
+- flowCompleted。
 
-## 9. Model ownership
+Flow completed 后由 Parent 冻结交付；Flow interrupted 后由 Parent 收集用户输入并继续同一会话。
 
-Pi Agent Core 负责：
+不要在 Flow 上再叠第二个自由 Pi Child loop。
 
-- agent loop；
-- tool calling；
-- state；
-- event lifecycle。
+## 9. Approval checkpoint
 
-Mira 负责：
+SubAgent approval 必须有：
 
-- Model Gateway / Provider resolution；
-- model policy；
-- tool allowlist；
-- runtime binding；
-- workspace binding；
-- approval / policy；
-- evidence/result projection；
-- Generate。
+- toolId；
+- toolCallId；
+- inputHash；
+- input；
+- serialized transcript checkpoint。
 
-Skill 不硬编码 Provider，也不直接保存 API Key。
+Parent 恢复前验证：
 
----
+- checkpoint Skill id；
+- pending invocation；
+- frozen call；
+- approved invocation。
 
-## 10. Pi Core 版本策略
+任何不一致都会阻断恢复，不会从最初目标重新启动。
 
-Pilot 使用：
+## 10. Evidence 与 Artifact
 
-```text
-@earendil-works/pi-agent-core@0.74.1
-```
+Child 的结果首先转换成 Parent observation，再由 Evidence 统一提交。
 
-原因：
+Artifact record、tool calls、requirements、missing evidence 和 bounded trace 都进入结构化 observation。
 
-- 使用当前官方 `@earendil-works/*` scope；
-- `0.74.1` 支持 Node >=20；
-- Mira 当前 root engine 仍是 Node >=20；
-- Pi `0.75+` 已提升最低 Node 到 22.19，升级前必须先统一 Mira Runtime Node 基线。
+completed 不允许只凭自然语言 summary；必须由 Child runtime result 与 Evidence / Artifact 支持。
 
-不使用已 deprecated 的 `@mariozechner/*` scope。
+## 11. Trace
 
----
+Parent execution trace 当前可以包含：
 
-## 11. 文枢首批 Pilot
+- `agent-generic-task-subagent`；
+- `agent-forked-skill-agent`；
+- `subagent-trace:*`；
+- `subagent-working-state:*`；
+- Child tool events；
+- approval required；
+- resumed from approval；
+- artifacts / requirements / missing evidence；
+- terminal status。
 
-首批绑定：
+持久化 `origin: skill_agent` 是兼容字段，不应继续作为产品术语。
 
-```text
-docx
-pdf
-pptx
-xlsx
-```
+## 12. Code anchors
 
-目标链：
+- `server/src/agent/delegation/contract.ts`
+- `server/src/agent/nodes/generic-task-subagent.ts`
+- `server/src/agent/nodes/forked-skill-agent.ts`
+- `server/src/agent/nodes/prepare-context-with-delegation.ts`
+- `server/src/agent/nodes/prepare-context-with-forked-skill.ts`
+- `server/src/skills/agent/profiles.ts`
+- `server/src/skills/agent/subagent-runtime.ts`
+- `server/src/agent/pi-loop/index.ts`
+- `server/src/agent/graph/build-graph.ts`
 
-```text
-Main Agent
--> primary Skill match
--> resolve WenShu SkillAgentExecutionProfile
--> fork Pi Agent
--> load SKILL.md / selected references
--> expose only Skill-scoped tools + private runtime
--> bind current workspace
--> execute until completed / upthrow
--> result/evidence/artifacts
--> Parent
--> Generate
-```
+## 13. 当前边界
 
-### DOCX
-
-```text
-runtime = WenShu DOCX domain runtime
-workspace = current workspace
-```
-
-### PDF
-
-```text
-runtime = WenShu PDF runtime via managed WenShu launcher
-workspace = current workspace
-```
-
-### PPTX
-
-```text
-runtime = WenShu launcher
--> pptx_runtime.py
--> bundled kimi_ppt_dsl
--> checker
--> Converter
-```
-
-禁止 Pi Agent 自行 `python -m kimi_ppt_dsl`。
-
-### XLSX
-
-```text
-runtime = XLSX Skill package/runtime binding
-workspace = current workspace
-```
-
-保持 XML-first / deterministic validation 的现有 Skill 合同；不恢复 `office_spreadsheet` 为全局工具。
-
----
-
-## 12. 与现有 Tool Registry 的关系
-
-继续保持：
-
-```text
-DOCX / PDF / PPTX / XLSX
-= 四个 Skill
-```
-
-以下旧 wrapper 不再作为全局 Tool 暴露：
-
-```text
-office_document
-office_pdf
-office_presentation
-office_spreadsheet
-```
-
-它们的实现若仍有复用价值，可以作为 **Skill-private runtime adapter** 使用，但不能因此重新进入全局 Harness Tool Registry。
-
----
-
-## 13. Pilot 实施顺序
-
-```text
-P0 文档冻结边界
-P1 安装 Pi Agent Core
-P2 建立 SkillAgentExecutionProfile
-P3 建立 PiSkillAgentExecutor
-P4 文枢四 Skill 绑定 profile/runtime/workspace
-P5 单独 smoke，不默认接管主 Agent
-P6 接通 Parent delegation + result projection
-P7 验证 evidence upthrow / Generate
-P8 再决定是否迁移其他任务型 Skill
-```
-
-第一阶段不删除 inline SkillContext，不推翻现有 C contract，不允许 nested Skill Agent。
+- 一个 Parent run 同一层只控制一个 active Child execution；
+- V1 不允许 recursive delegation；
+- Child 不决定用户 global completion；
+- Child 不扩大工具权限；
+- Private Runtime 不暴露给 Main Planner；
+- observability 不反向控制 Child；
+- completed Skill Artifact 不由 Main Planner 重做；
+- 这套能力属于 Agent V1.5 稳定化，不是 Agent V2。

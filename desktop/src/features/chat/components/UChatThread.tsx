@@ -28,6 +28,7 @@ import {
   type ChatWorkspace,
 } from "@/shared/api/thread";
 import { getBuiltinAvatarPack16Options } from "@/shared/avatars";
+import { getDesktopRuntime } from "@/shared/platform/desktopRuntime";
 import {
   UChatThreadView,
   type UChatThreadSlots,
@@ -144,12 +145,19 @@ export default function UChatThread() {
     ? activeThreadWorkspaceId
     : draftWorkspaceId;
   const hasWorkspaceBound = Boolean(effectiveWorkspaceId);
+  const defaultWorkspace = workspaces.find(
+    (workspace) =>
+      workspace.isDefault ||
+      workspace.name === "Default Workspace" ||
+      workspace.name === "Mira BASE",
+  );
+  const workspaceAvailable = hasWorkspaceBound || Boolean(defaultWorkspace);
   const isThreadAgentEnabled =
     typeof activeThread?.metadata?.agentEnabled === "boolean"
       ? activeThread.metadata.agentEnabled
       : false;
   const isAgentEnabled = activeThreadId ? isThreadAgentEnabled : draftAgentEnabled;
-  const canRunAgent = hasWorkspaceBound && isAgentEnabled;
+  const canRunAgent = workspaceAvailable && isAgentEnabled;
   const isAgentRunning =
     isRunning &&
     Boolean(
@@ -442,7 +450,7 @@ export default function UChatThread() {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathRequired"));
       return;
     }
-    if (!isValidWorkspaceRootPath(rootPath)) {
+    if (!isValidWorkspaceRootPath(rootPath, getDesktopRuntime().platform)) {
       setWorkspaceRootPathError(t("chat.sidebar.workspaceRootPathInvalid"));
       return;
     }
@@ -480,13 +488,22 @@ export default function UChatThread() {
   };
 
   const handleAgentSend = async () => {
-    if (!hasWorkspaceBound) {
+    if (!hasWorkspaceBound && !defaultWorkspace) {
       message.error(t("chat.thread.agent.workspaceRequired"));
       return;
     }
     if (!isAgentEnabled) {
       message.error(t("chat.thread.agent.enableFirst"));
       return;
+    }
+
+    if (!hasWorkspaceBound && defaultWorkspace) {
+      if (activeThreadId) {
+        await updateThread(activeThreadId, { workspaceId: defaultWorkspace.id });
+        await runtime.refreshThread(activeThreadId);
+      } else {
+        setDraftWorkspaceId(defaultWorkspace.id);
+      }
     }
 
     const requestedToolGroupIds = getExplicitToolkitIds(composer.text);
@@ -502,7 +519,7 @@ export default function UChatThread() {
 
   const handleToggleAgentEnabled = async () => {
     const nextEnabled = !isAgentEnabled;
-    if (nextEnabled && !hasWorkspaceBound) {
+    if (nextEnabled && !workspaceAvailable) {
       message.error(t("chat.thread.agent.workspaceRequired"));
       return;
     }
@@ -521,6 +538,10 @@ export default function UChatThread() {
       });
       await runtime.refreshThread(activeThreadId);
       return;
+    }
+
+    if (nextEnabled && !hasWorkspaceBound && defaultWorkspace) {
+      setDraftWorkspaceId(defaultWorkspace.id);
     }
 
     setDraftAgentEnabled(nextEnabled);
@@ -645,14 +666,14 @@ export default function UChatThread() {
             enabled: isAgentEnabled,
             running: isAgentRunning,
             toggleAvailability: {
-              enabled: hasWorkspaceBound,
-              disabledReason: !hasWorkspaceBound
+              enabled: workspaceAvailable,
+              disabledReason: !workspaceAvailable
                 ? t("chat.thread.agent.workspaceRequired")
                 : undefined,
             },
             submissionAvailability: {
               enabled: canRunAgent,
-              disabledReason: !hasWorkspaceBound
+              disabledReason: !workspaceAvailable
                 ? t("chat.thread.agent.workspaceRequired")
                 : !isAgentEnabled
                   ? t("chat.thread.agent.enableFirst")
@@ -762,7 +783,9 @@ export default function UChatThread() {
           items.map((item) => ({
             id: item.id,
             label: item.name,
-            meta: item.status,
+            meta: item.isDefault
+              ? `${item.status} · ${t("chat.sidebar.workspaceDefault")}`
+              : item.status,
             title: item.name,
             keywords: [item.id, item.name],
             description: item.rootPath ?? undefined,

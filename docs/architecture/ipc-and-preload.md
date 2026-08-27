@@ -42,8 +42,10 @@ renderer 应通过单一适配层读取 host / runtime 细节，而不是在业�
 - `isPackaged`
 - `backendUrl`
 
-当前仅支持 Windows，Electron 与 Tauri 都必须将 `platform` 暴露为
-`win32`。renderer 不应感知 Rust 的 `windows` 平台字符串。
+Electron 直接暴露 Node 平台值，Windows 为 `win32`、macOS 为
+`darwin`。Tauri 当前仍只实现 Windows 的 `win32` 合同；后续接入
+macOS 时应把 Rust 的 `macos` 映射为 `darwin`，renderer 不应感知
+Rust 平台字符串。
 
 这类信息用于让 renderer 判断当前运行上下文，但不应把更多业务逻辑堆回 preload。
 

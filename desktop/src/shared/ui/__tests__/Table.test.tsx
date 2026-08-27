@@ -75,6 +75,20 @@ describe("MinimalTable", () => {
 
   it("applies compact size", () => {
     render(<MinimalTable data={data} columns={columns} compact />);
-    expect(screen.getByText("Alice").closest("td")).toHaveClass("px-3");
+    expect(screen.getByText("Alice").closest("td")).toHaveClass("px-2.5", "py-1.5");
+  });
+
+  it("uses the development report table density by default", () => {
+    render(<MinimalTable data={data} columns={columns} />);
+
+    expect(screen.getByText("Alice").closest("td")).toHaveClass("px-3", "py-2");
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass(
+      "text-xs",
+      "text-text-secondary",
+    );
+    expect(screen.getByRole("table").parentElement?.parentElement).toHaveClass(
+      "rounded-ui-control",
+      "border-border/70",
+    );
   });
 });
