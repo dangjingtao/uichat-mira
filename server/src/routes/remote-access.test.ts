@@ -28,6 +28,12 @@ const mocks = vi.hoisted(() => {
     tailscale: {
       getSnapshot: vi.fn(),
     },
+    thread: {
+      listChatWorkspaces: vi.fn(),
+    },
+    workspaces: {
+      list: vi.fn(),
+    },
   };
 });
 
@@ -38,6 +44,14 @@ vi.mock("@/services/remote-access-pairing.service.js", () => ({
 
 vi.mock("@/services/tailscale-remote-access.service.js", () => ({
   tailscaleRemoteAccessService: mocks.tailscale,
+}));
+
+vi.mock("@/services/thread.service.js", () => ({
+  threadService: mocks.thread,
+}));
+
+vi.mock("@/db/repositories/chat-workspace.repository.js", () => ({
+  chatWorkspaceRepository: mocks.workspaces,
 }));
 
 vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
@@ -112,6 +126,37 @@ beforeEach(() => {
     scopes: ["threads:read"],
     credential: "mira_device_credential",
   });
+  mocks.thread.listChatWorkspaces.mockReturnValue([
+    {
+      id: "workspace-active",
+      name: "Mira BASE",
+      rootPath: "/Users/tester/mira",
+      isDefault: true,
+      status: "active",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    },
+  ]);
+  mocks.workspaces.list.mockReturnValue([
+    {
+      id: "workspace-active",
+      userId: user.id,
+      name: "Mira BASE",
+      rootPath: "/Users/tester/mira",
+      status: "active",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-02T00:00:00.000Z",
+    },
+    {
+      id: "workspace-archived",
+      userId: user.id,
+      name: "Old project",
+      rootPath: "/Users/tester/old-project",
+      status: "archived",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-02T00:00:00.000Z",
+    },
+  ]);
 });
 
 describe("remote access routes", () => {
@@ -271,7 +316,55 @@ describe("remote access routes", () => {
 
     assert.equal(manifestResponse.statusCode, 200, manifestResponse.body);
     assert.equal(manifestResponse.json().data.device.id, "device-1");
+    assert.deepEqual(manifestResponse.json().data.routes.workspaces, [
+      "GET /remote/v1/workspaces",
+    ]);
     await app.close();
     await manifestApp.close();
+  });
+
+  it("returns active and archived mobile-safe workspaces without rootPath", async () => {
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["threads:read"],
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/remote/v1/workspaces",
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    expect(mocks.thread.listChatWorkspaces).toHaveBeenCalledWith(user.id);
+    expect(mocks.workspaces.list).toHaveBeenCalledWith({
+      userId: user.id,
+      status: "all",
+    });
+    assert.deepEqual(response.json().data, [
+      {
+        id: "workspace-active",
+        name: "Mira BASE",
+        isDefault: true,
+        status: "active",
+        createdAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-02T00:00:00.000Z",
+      },
+      {
+        id: "workspace-archived",
+        name: "Old project",
+        isDefault: false,
+        status: "archived",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-02T00:00:00.000Z",
+      },
+    ]);
+    assert.equal("rootPath" in response.json().data[0], false);
+    assert.equal("rootPath" in response.json().data[1], false);
+    await app.close();
   });
 });
