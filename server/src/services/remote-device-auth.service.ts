@@ -106,6 +106,14 @@ export const getRequiredRemoteScope = (
 
   if (
     normalizedMethod === "GET" &&
+    parts.length === 1 &&
+    parts[0] === "chat-workspaces"
+  ) {
+    return "threads:read";
+  }
+
+  if (
+    normalizedMethod === "GET" &&
     parts.length === 2 &&
     parts[0] === "threads"
   ) {
