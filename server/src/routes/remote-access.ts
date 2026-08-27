@@ -15,6 +15,7 @@ import {
   updateRemoteRelayUserConfig,
 } from "@/services/remote-relay-config.service.js";
 import { tailscaleRemoteAccessService } from "@/services/tailscale-remote-access.service.js";
+import { threadService } from "@/services/thread.service.js";
 import { successEnvelope, errorEnvelope } from "@/routes/schema-helpers.js";
 import { success } from "@/utils/index.js";
 import {
@@ -23,6 +24,7 @@ import {
   notFound,
   routeHandler,
 } from "@/utils/route-errors.js";
+import { chatWorkspaceRepository } from "@/db/repositories/chat-workspace.repository.js";
 import {
   REMOTE_DEVICE_SCOPES,
   REMOTE_PAIRING_TRANSPORTS,
@@ -31,6 +33,27 @@ import {
 const looseObjectSchema = {
   type: "object",
   additionalProperties: true,
+} as const;
+
+const remoteWorkspaceSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "id",
+    "name",
+    "isDefault",
+    "status",
+    "createdAt",
+    "updatedAt",
+  ],
+  properties: {
+    id: { type: "string" },
+    name: { type: "string" },
+    isDefault: { type: "boolean" },
+    status: { type: "string", enum: ["active", "archived"] },
+    createdAt: { type: "string", format: "date-time" },
+    updatedAt: { type: "string", format: "date-time" },
+  },
 } as const;
 
 const mapPairingError = (error: unknown): never => {
@@ -368,7 +391,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
     {
       schema: {
         tags: ["Remote Pairing"],
-        summary: "Claim a one-time pairing challenge from mobile",
+        summary: "Claim a one-time mobile pairing challenge",
         operationId: "claimRemotePairingChallenge",
         body: {
           type: "object",
@@ -455,6 +478,52 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
   );
 
   app.get(
+    "/remote/v1/workspaces",
+    {
+      schema: {
+        tags: ["Remote Access"],
+        summary: "List mobile-safe chat workspaces",
+        operationId: "listRemoteDeviceWorkspaces",
+        response: {
+          200: successEnvelope({
+            type: "array",
+            items: remoteWorkspaceSchema,
+          }),
+          401: errorEnvelope,
+          403: errorEnvelope,
+          500: errorEnvelope,
+        },
+      },
+    },
+    routeHandler("Failed to list remote device workspaces", async (request) => {
+      const user = request.authUser;
+      if (!request.remoteDevice || !user) {
+        throw forbidden("A paired remote device credential is required");
+      }
+
+      const activeWorkspaces = threadService.listChatWorkspaces(user.id);
+      const defaultWorkspaceIds = new Set(
+        activeWorkspaces
+          .filter((workspace) => workspace.isDefault)
+          .map((workspace) => workspace.id),
+      );
+
+      return success(
+        chatWorkspaceRepository
+          .list({ userId: user.id, status: "all" })
+          .map((workspace) => ({
+            id: workspace.id,
+            name: workspace.name,
+            isDefault: defaultWorkspaceIds.has(workspace.id),
+            status: workspace.status,
+            createdAt: workspace.createdAt,
+            updatedAt: workspace.updatedAt,
+          })),
+      );
+    }),
+  );
+
+  app.get(
     "/remote/v1/manifest",
     {
       schema: {
@@ -484,6 +553,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
           scopes: device.permissions,
         },
         routes: {
+          workspaces: ["GET /remote/v1/workspaces"],
           threads: ["GET /threads", "GET /threads/:id"],
           messages: ["GET /threads/:id/messages", "POST /proxy/chat/default"],
           agent: [
