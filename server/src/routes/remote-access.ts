@@ -391,7 +391,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
     {
       schema: {
         tags: ["Remote Pairing"],
-        summary: "Claim a one-time mobile pairing challenge",
+        summary: "Claim a one-time pairing challenge from mobile",
         operationId: "claimRemotePairingChallenge",
         body: {
           type: "object",
