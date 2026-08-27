@@ -501,24 +501,31 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
         throw forbidden("A paired remote device credential is required");
       }
 
-      const activeWorkspaces = threadService.listChatWorkspaces(user.id);
-      const defaultWorkspaceIds = new Set(
-        activeWorkspaces
-          .filter((workspace) => workspace.isDefault)
-          .map((workspace) => workspace.id),
-      );
+      const activeWorkspaces = threadService
+        .listChatWorkspaces(user.id)
+        .map((workspace) => ({
+          id: workspace.id,
+          name: workspace.name,
+          isDefault: workspace.isDefault,
+          status: workspace.status,
+          createdAt: workspace.createdAt,
+          updatedAt: workspace.updatedAt,
+        }));
+      const archivedWorkspaces = chatWorkspaceRepository
+        .list({ userId: user.id, status: "archived" })
+        .map((workspace) => ({
+          id: workspace.id,
+          name: workspace.name,
+          isDefault: false,
+          status: workspace.status,
+          createdAt: workspace.createdAt,
+          updatedAt: workspace.updatedAt,
+        }));
 
       return success(
-        chatWorkspaceRepository
-          .list({ userId: user.id, status: "all" })
-          .map((workspace) => ({
-            id: workspace.id,
-            name: workspace.name,
-            isDefault: defaultWorkspaceIds.has(workspace.id),
-            status: workspace.status,
-            createdAt: workspace.createdAt,
-            updatedAt: workspace.updatedAt,
-          })),
+        [...activeWorkspaces, ...archivedWorkspaces].sort((left, right) =>
+          right.updatedAt.localeCompare(left.updatedAt),
+        ),
       );
     }),
   );
