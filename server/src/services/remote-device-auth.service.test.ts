@@ -28,6 +28,12 @@ describe("remote device route gateway", () => {
     expect(getRequiredRemoteScope("GET", "/remote/v1/roles")).toBe(
       "threads:read",
     );
+    expect(
+      getRequiredRemoteScope(
+        "GET",
+        "/remote/v1/workspaces/workspace-1/threads?status=active&limit=50",
+      ),
+    ).toBe("threads:read");
     expect(getRequiredRemoteScope("GET", "/threads?status=active")).toBe(
       "threads:read",
     );
@@ -56,6 +62,12 @@ describe("remote device route gateway", () => {
     expect(getRequiredRemoteScope("POST", "/agent/runs/run-1/resume")).toBeNull();
     expect(getRequiredRemoteScope("GET", "/attachments/file-1")).toBeNull();
     expect(getRequiredRemoteScope("GET", "/roles")).toBeNull();
+    expect(
+      getRequiredRemoteScope(
+        "POST",
+        "/remote/v1/workspaces/workspace-1/threads",
+      ),
+    ).toBeNull();
   });
 
   it("requires the exact granted scope", () => {
