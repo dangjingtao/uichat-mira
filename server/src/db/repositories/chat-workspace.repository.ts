@@ -9,7 +9,7 @@ import { nowIso } from "@/utils/time.js";
 
 export interface ChatWorkspaceListFilters {
   userId: number;
-  status?: "active" | "archived" | "all";
+  status?: "active" | "archived";
   sortOrder?: "asc" | "desc";
 }
 
@@ -18,9 +18,9 @@ export const chatWorkspaceRepository = {
     const db = getDb();
     const conditions = [eq(chatWorkspaces.userId, filters.userId)];
 
-    if (filters.status === "active" || filters.status === "archived") {
+    if (filters.status) {
       conditions.push(eq(chatWorkspaces.status, filters.status));
-    } else if (filters.status !== "all") {
+    } else {
       conditions.push(eq(chatWorkspaces.status, "active"));
     }
 
