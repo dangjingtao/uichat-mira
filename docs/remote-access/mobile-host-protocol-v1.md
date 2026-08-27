@@ -3,7 +3,7 @@ title: Mira Mobile Host Protocol V1 (legacy host contract)
 status: reference
 doc_type: reference
 canonical: false
-last_verified: 2026-08-26
+last_verified: 2026-08-27
 canonical_source: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
 canonical_source_branch: dev
 superseded_by: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canonical-v1.md
@@ -21,7 +21,7 @@ superseded_by: uichat-mira-mobile@dev:docs/remote-access/remote-connection-canon
 
 `uichat-mira-mobile` 通过 Direct（Tailscale）或 Mira Relay 访问 Mira Desktop Host。Transport 只负责可达性与转发；Mira 继续负责配对、设备凭证、用户归属、能力范围、工具审批、撤销和审计。
 
-V1 不复制一套 Thread、Message 或 Agent Runtime。完成配对后，设备凭证只被允许访问一组明确的现有 canonical routes，由 Remote Gateway 在进入业务路由前完成设备认证与 scope 校验。
+V1 不复制一套 Thread、Message、Workspace 或 Agent Runtime。完成配对后，设备凭证只被允许访问一组明确的现有 canonical routes 或 Mobile-safe projection，由 Remote Gateway 在进入业务路由前完成设备认证与 scope 校验。
 
 ```text
 Mobile
@@ -34,8 +34,8 @@ Remote Gateway
   ├─ resolve owner user
   ├─ check method + path + scope
   ▼
-Canonical Mira Routes
-  ├─ Thread / Message
+Canonical Mira Routes / safe projections
+  ├─ Workspace / Thread / Message
   ├─ Persisted Chat Stream
   ├─ Agent Run
   └─ Artifact Read
@@ -141,7 +141,7 @@ V1 定义以下 scope：
 
 | Scope | 能力 |
 | --- | --- |
-| `threads:read` | 列出和读取当前用户 Thread |
+| `threads:read` | 列出和读取当前用户 Thread；读取用于组织 Thread 的 Mobile-safe Workspace 元数据 |
 | `messages:read` | 读取 Thread Message |
 | `messages:write` | 通过 persisted default chat stream 发送消息 |
 | `agent:read` | 读取 Agent Run |
@@ -161,12 +161,15 @@ agent:control
 artifacts:read
 ```
 
+Workspace V1 不新增独立 scope。`GET /remote/v1/workspaces` 是 `threads:read` 下用于解析 `thread.workspaceId` 的只读元数据投影，不提供 Workspace 创建、编辑、删除能力。
+
 ## 6. Canonical route allowlist
 
 Device credential 不获得整个后端权限。Remote Gateway 只允许：
 
 ```text
 GET  /remote/v1/manifest
+GET  /remote/v1/workspaces
 GET  /threads
 GET  /threads/:id
 GET  /threads/:id/messages
@@ -178,6 +181,19 @@ POST /agent/runs/:runId/cancel
 GET  /threads/:id/media/:mediaId/content
 ```
 
+`GET /remote/v1/workspaces` 返回当前用户的 active / archived ChatWorkspace，但只投影：
+
+```text
+id
+name
+isDefault
+status
+createdAt
+updatedAt
+```
+
+Host 本机 `rootPath` 永远不进入该 Remote response。Mobile 通过 `id` 与 Thread 的 `workspaceId` 关联，不维护另一套 Project / Workspace 真相源。
+
 所有其他 route 返回 `403`，即使 owner user 是管理员也不例外。
 
 `POST /proxy/chat/default` 继续使用现有 persisted stream contract，因此 mobile 与 desktop 共享同一个 User Message 持久化、RAG / Agent 分支、Assistant Message、审批和 SSE 事件真相。
@@ -187,7 +203,7 @@ GET  /threads/:id/media/:mediaId/content
 V1 不伪造尚未存在的 durable event journal。重连采用 canonical state replay：
 
 1. 重新读取 `/remote/v1/manifest`，确认凭证和 scope 仍有效。
-2. 重新读取 Thread 与 Message。
+2. 重新读取 Workspace、Thread 与 Message。
 3. 若最后一条 Assistant metadata 含 `agent.runId`，读取对应 Agent Run。
 4. 只有 Agent Run 仍处于 `waiting_approval` 且 approval ID 未变化时，才允许显示原审批操作。
 5. mobile 为每次发送生成稳定 `messageId`，重连后不得以新 ID 重发同一 User Message。
@@ -201,6 +217,7 @@ V1 不伪造尚未存在的 durable event journal。重连采用 canonical state
 - Desktop 必须显示真实请求设备与 scope，不能自动批准。
 - 同处 Tailnet 不等于通过 Mira 应用授权。
 - Device credential 不能调用账号设置、Provider、Knowledge Base 写操作、Terminal 或任意非 allowlist route。
+- Workspace Remote projection 不返回 `rootPath`，不允许 Workspace 写操作。
 - Agent 审批仍使用现有 exact invocation 与 checkpoint；Remote Gateway 不改变 Harness 合同。
 
 ## 9. V1 验收
@@ -212,4 +229,6 @@ V1 不伪造尚未存在的 durable event journal。重连采用 canonical state
 - device credential 只返回一次，数据库只保存哈希。
 - 撤销设备后，manifest 和 canonical route 均返回未授权。
 - scope 不足返回 `403`，而不是把请求转交业务路由。
+- `threads:read` 设备可读取 Mobile-safe Workspace 列表并通过 `workspaceId` 与 Thread 稳定关联。
+- Workspace 列表包含 active / archived 状态且不返回 `rootPath`。
 - mobile 使用 device credential 调用 persisted default chat stream 时，仍按 owner user 的 Thread 权限和 Agent 审批合同执行。

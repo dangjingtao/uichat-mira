@@ -22,6 +22,9 @@ describe("remote device route gateway", () => {
     expect(getRequiredRemoteScope("GET", "/remote/v1/manifest")).toBe(
       "authenticated",
     );
+    expect(getRequiredRemoteScope("GET", "/remote/v1/workspaces")).toBe(
+      "threads:read",
+    );
     expect(getRequiredRemoteScope("GET", "/threads?status=active")).toBe(
       "threads:read",
     );
