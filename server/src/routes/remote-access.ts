@@ -561,7 +561,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
         },
         routes: {
           workspaces: ["GET /remote/v1/workspaces"],
-          threads: ["GET /threads", "GET /threads/:id"],
+          threads: ["GET /threads", "GET /threads/:id", "DELETE /threads/:id"],
           messages: ["GET /threads/:id/messages", "POST /proxy/chat/default"],
           agent: [
             "GET /agent/runs/:runId",
