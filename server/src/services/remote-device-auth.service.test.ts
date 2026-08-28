@@ -60,6 +60,7 @@ describe("remote device route gateway", () => {
   it("rejects nearby but non-canonical routes", () => {
     expect(getRequiredRemoteScope("POST", "/threads")).toBeNull();
     expect(getRequiredRemoteScope("PATCH", "/threads/thread-1")).toBeNull();
+    expect(getRequiredRemoteScope("DELETE", "/threads/history")).toBeNull();
     expect(getRequiredRemoteScope("POST", "/threads/thread-1/messages")).toBeNull();
     expect(getRequiredRemoteScope("POST", "/proxy/chat/volcengine")).toBeNull();
     expect(getRequiredRemoteScope("GET", "/general-settings")).toBeNull();
