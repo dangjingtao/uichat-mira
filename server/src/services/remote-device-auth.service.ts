@@ -144,6 +144,30 @@ export const getRequiredRemoteScope = (
   }
 
   if (
+    normalizedMethod === "POST" &&
+    parts.length === 1 &&
+    parts[0] === "threads"
+  ) {
+    // Compatibility decision for already-paired 0.2.x devices: messages:write
+    // is the existing conversation-mutation grant used by chat send and single
+    // thread deletion. Thread creation joins that same grant so users do not
+    // have to re-pair solely to activate a newly advertised canonical route.
+    return "messages:write";
+  }
+
+  if (
+    normalizedMethod === "DELETE" &&
+    parts.length === 2 &&
+    parts[0] === "threads" &&
+    parts[1] !== "history"
+  ) {
+    // Existing 0.2.x paired devices already carry messages:write. Treat
+    // deleting one owned conversation as a conversation-write mutation. The
+    // reserved /threads/history bulk-cleanup route is intentionally denied.
+    return "messages:write";
+  }
+
+  if (
     normalizedMethod === "GET" &&
     parts.length === 3 &&
     parts[0] === "threads" &&
