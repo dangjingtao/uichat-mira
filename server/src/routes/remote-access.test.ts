@@ -297,7 +297,7 @@ describe("remote access routes", () => {
         id: "device-1",
         name: "K70",
         platform: "android",
-        permissions: ["threads:read"],
+        permissions: ["threads:read", "messages:write"],
       },
     });
     const manifestResponse = await manifestApp.inject({
@@ -309,6 +309,12 @@ describe("remote access routes", () => {
     assert.equal(manifestResponse.json().data.device.id, "device-1");
     assert.deepEqual(manifestResponse.json().data.routes.workspaces, [
       "GET /remote/v1/workspaces",
+    ]);
+    assert.deepEqual(manifestResponse.json().data.routes.threads, [
+      "GET /threads",
+      "GET /threads/:id",
+      "POST /threads",
+      "DELETE /threads/:id",
     ]);
     await app.close();
     await manifestApp.close();
