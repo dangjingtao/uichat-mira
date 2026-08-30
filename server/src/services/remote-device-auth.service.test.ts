@@ -18,7 +18,7 @@ const device: RemoteDeviceRecord = {
 };
 
 describe("remote device route gateway", () => {
-  it("maps only canonical mobile routes to explicit scopes", () => {
+  it("maps only explicit mobile capabilities to scopes", () => {
     expect(getRequiredRemoteScope("GET", "/remote/v1/manifest")).toBe(
       "authenticated",
     );
@@ -37,6 +37,12 @@ describe("remote device route gateway", () => {
     expect(getRequiredRemoteScope("GET", "/threads?status=active")).toBe(
       "threads:read",
     );
+    expect(getRequiredRemoteScope("POST", "/threads")).toBe(
+      "messages:write",
+    );
+    expect(getRequiredRemoteScope("DELETE", "/threads/thread-1")).toBe(
+      "messages:write",
+    );
     expect(getRequiredRemoteScope("GET", "/threads/thread-1/messages")).toBe(
       "messages:read",
     );
@@ -54,8 +60,11 @@ describe("remote device route gateway", () => {
     ).toBe("artifacts:read");
   });
 
-  it("rejects nearby but non-canonical routes", () => {
-    expect(getRequiredRemoteScope("POST", "/threads")).toBeNull();
+  it("rejects nearby but unadvertised write routes", () => {
+    expect(getRequiredRemoteScope("PATCH", "/threads/thread-1")).toBeNull();
+    expect(getRequiredRemoteScope("POST", "/threads/thread-1/archive")).toBeNull();
+    expect(getRequiredRemoteScope("POST", "/threads/thread-1/restore")).toBeNull();
+    expect(getRequiredRemoteScope("DELETE", "/threads/history")).toBeNull();
     expect(getRequiredRemoteScope("POST", "/threads/thread-1/messages")).toBeNull();
     expect(getRequiredRemoteScope("POST", "/proxy/chat/volcengine")).toBeNull();
     expect(getRequiredRemoteScope("GET", "/general-settings")).toBeNull();
