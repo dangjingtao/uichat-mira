@@ -605,28 +605,16 @@ export const initializeModelConfigDatabase = (): void => {
       });
     }
 
-    const taskDefault = DEFAULT_ROLE_CONFIGS.find(
-      (config) => config.type === "task",
-    );
     const existingTask = modelConfigRepository.findDefaultByType("task");
 
-    if (taskDefault && existingTask) {
+    if (existingTask) {
       const currentTaskParams = parseParams(existingTask.params);
-      if (
-        needsManagedTaskParams(currentTaskParams) ||
-        existingTask.providerCode !== taskDefault.providerCode ||
-        existingTask.remoteModelId !== taskDefault.remoteModelId ||
-        existingTask.name !== taskDefault.name
-      ) {
+      if (needsManagedTaskParams(currentTaskParams)) {
         modelConfigRepository.updateDefault("task", {
           params: JSON.stringify({
             ...currentTaskParams,
             ...MANAGED_TASK_PARAMS,
           }),
-          providerCode: taskDefault.providerCode,
-          providerConnectionId: taskDefault.providerCode,
-          remoteModelId: taskDefault.remoteModelId,
-          name: taskDefault.name,
         });
       }
     }
