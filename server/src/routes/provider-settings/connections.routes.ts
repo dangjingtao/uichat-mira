@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { providerSettingsService } from "@/services/provider-settings.service.js";
 import { success } from "@/utils/index.js";
 import { createRouteError, routeHandler } from "@/utils/route-errors.js";
+import { normalizeModelSettingsBackup } from "./model-settings-backup.js";
 import { providerSettingsRouteSchemas } from "./schemas.js";
 import type {
   CreateProviderConnectionBody,
@@ -31,7 +32,11 @@ export const registerProviderConnectionRoutes = async (
     "/providers/model-settings/export",
     { schema: providerSettingsRouteSchemas.exportModelSettings },
     routeHandler("Failed to export model settings", async () =>
-      success(providerSettingsService.exportModelSettings())),
+      success(
+        normalizeModelSettingsBackup(
+          providerSettingsService.exportModelSettings(),
+        ),
+      )),
   );
 
   app.put<{ Body: ImportModelSettingsBody }>(
@@ -40,7 +45,9 @@ export const registerProviderConnectionRoutes = async (
     routeHandler("Failed to import model settings", async (request) => {
       try {
         return success(
-          providerSettingsService.importModelSettings(request.body),
+          providerSettingsService.importModelSettings(
+            normalizeModelSettingsBackup(request.body),
+          ),
           "Model settings imported",
         );
       } catch (error) {
