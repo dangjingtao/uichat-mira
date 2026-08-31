@@ -102,6 +102,69 @@ describe("provider settings routes", () => {
     await app.close();
   });
 
+  it("normalizes legacy empty model-settings references before import", async () => {
+    service.importModelSettings.mockReturnValue({
+      connectionCount: 2,
+      assignmentCount: 1,
+    });
+    const app = await createApp();
+    const response = await app.inject({
+      method: "PUT",
+      url: "/providers/model-settings/import",
+      payload: {
+        format: "uichat-mira-model-settings",
+        version: 1,
+        exportedAt: "2026-08-29T00:00:00.000Z",
+        connections: [
+          {
+            id: "custom-legacy",
+            templateCode: "openai-compatible-custom",
+            providerCode: "",
+            displayName: "Legacy Custom",
+            baseUrl: "https://legacy.example.com/v1",
+            apiKey: "secret",
+          },
+          {
+            id: "ollama",
+            templateCode: "ollama",
+            providerCode: "",
+            displayName: "Ollama",
+            baseUrl: "http://127.0.0.1:11434",
+            apiKey: "",
+          },
+        ],
+        assignments: [
+          {
+            type: "agentTask",
+            name: "",
+            providerConnectionId: "",
+            remoteModelId: "",
+            params: { enabled: true },
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(service.importModelSettings).toHaveBeenCalledWith({
+      format: "uichat-mira-model-settings",
+      version: 1,
+      exportedAt: "2026-08-29T00:00:00.000Z",
+      connections: [
+        expect.objectContaining({ id: "custom-legacy", providerCode: null }),
+        expect.objectContaining({ id: "ollama", providerCode: "ollama" }),
+      ],
+      assignments: [
+        expect.objectContaining({
+          type: "agentTask",
+          providerConnectionId: null,
+          remoteModelId: null,
+        }),
+      ],
+    });
+    await app.close();
+  });
+
   it("maps provider sync and role-selection failures to 400 without hiding the cause", async () => {
     service.syncProviderModels.mockRejectedValue(new Error("provider offline"));
     service.selectRoleModel.mockImplementation(() => {
