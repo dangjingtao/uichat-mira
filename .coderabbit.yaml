@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "zh-CN"
+early_access: false
+tone_instructions: >-
+  使用简洁中文，结论和可执行问题优先；避免寒暄、复述 diff、无依据猜测和超出当前 PR 范围的架构扩张。UI 变更优先评审信息层级、一致性、可访问性、主题与 token 使用。
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  review_details: false
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 10
+    base_branches:
+      - "dev"
+    ignore_title_keywords:
+      - "WIP"
+      - "[skip review]"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "renovate[bot]"
+      - "github-actions[bot]"
+
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/coverage/**"
+    - "!**/.test-artifact/**"
+    - "!**/pnpm-lock.yaml"
+    - "!**/package-lock.json"
+    - "!**/yarn.lock"
+    - "!**/*.min.js"
+    - "!**/*.map"
+
+  path_instructions:
+    - path: "desktop/src/**"
+      instructions: |
+        UI/UX 是这一目录的优先评审维度。评审时以 AGENTS.md、desktop/src/shared/ui/COMPONENTS.md、desktop/src/shared/ui/ui-design-guidelines-tailwind.md 为当前设计约束。
+        - 优先发现会真实影响用户体验的问题：信息层级不清、交互路径绕、状态反馈缺失、布局拥挤或松散、重复入口、可发现性差、误触风险、空态/错误态/加载态不完整。
+        - 优先复用 desktop/src/shared/ui 已有纯 UI 组件；业务页重复手写已有模式时指出一致性和维护风险，但不要为了抽象而抽象。
+        - 检查是否使用语义 token（surface/text/icon/border/primary/status），避免硬编码颜色或把 gray/slate/blue 等当主视觉体系；确保浅色、深色与主题预设下都成立。
+        - 检查圆角、阴影、卡片密度是否克制；业务页不要无理由引入 rounded-2xl/rounded-3xl、大面积厚阴影或卡片套卡片。
+        - 检查 focus-visible、键盘操作、aria/可访问名称、禁用态、hover/focus/selected 状态与点击目标是否合理。
+        - 对视觉偏好不要做主观吹毛求疵；只有违反现有规范、造成层级/一致性/可用性问题，或产生明确回归风险时才提出。
+
+    - path: "desktop/src/shared/ui/**"
+      instructions: |
+        这是共享 UI 基础层，评审标准高于普通业务页。
+        - 检查变更是否保持现有 API/行为向后兼容；若确需破坏性修改，必须在 PR 中有明确依据。
+        - 新增或修改共享组件时，检查 COMPONENTS.md 与 ui-design-guidelines-tailwind.md 是否需要同步更新。
+        - 检查组件是否保持低噪音、高可读、语义 token、浅/深色兼容、focus-visible 和轻量交互反馈。
+        - 避免把业务逻辑塞进共享 UI 组件，也避免仅为单一页面制造过度抽象。
+
+    - path: "electron/**"
+      instructions: |
+        优先检查 Electron 主进程、preload、IPC 与 renderer/native 边界是否遵守 AGENTS.md。任何扩大 renderer 直接 Node 能力、弱化 preload 边界、改变高风险执行/审批语义的变更都应明确指出。
+
+    - path: "server/**"
+      instructions: |
+        优先检查真实行为回归、协议/状态语义、数据安全与错误处理。不要为了风格或抽象偏好推动大重构；涉及 Agent 主链时保护 Planner → Normalize → Policy → ToolNode → Evidence → Planner 的既有边界。
+
+chat:
+  auto_reply: true
