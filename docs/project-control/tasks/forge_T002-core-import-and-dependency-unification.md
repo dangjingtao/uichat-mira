@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T001-integration-contract-and-source-baseline.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # forge_T002 Forge Core Import and Dependency Unification
@@ -83,6 +83,9 @@ task_state: READY_FOR_REVIEW
 - Node 20 兼容性：本卡生产代码仅新增 `node:crypto.randomUUID()` 这一 Node built-in，Node 20 官方文档支持该 API（该 API自 Node 14.17/15.6 起提供）；未使用 Node 22-only API，也未新增 dependency。当前执行环境仅有 Node 22，因此未伪造“Node 20 实机 smoke”。
 - 相对 `dev` diff 仅包含本任务卡和 `server/src/forge/**`；0 个 forbidden path、0 trailing whitespace、0 conflict marker、0 literal escaped-newline 污染。
 - Codex review 提出的 generic `integrated` mutation 与 duplicate terminal callback overwrite 均为固定源基线真实行为，不在 T002 改写：前者由 T007 明确收紧，后者由 T006 process supervision / terminal evidence 阶段收口。T002 保持 source semantics，不提前跨卡修改状态机。
+
+- Final self-review: PASS。T002 diff 仅包含本任务卡与 `server/src/forge/**`；production Core strict compile / contract smoke 通过；review threads 已按真实 source parity / 后续卡边界处置，无 T002 blocker。
+- Exact repository `pnpm --filter @ui-chat-mira/server typecheck` / Vitest 未在当前容器 checkout 中执行，原因是容器无法解析 GitHub/npm；合入 `dev` 后由现有 Windows `Check dev -> pnpm check` 提供整仓真实验证，若失败则本结论必须立即重开。
 
 ## Unknown / Human Decision
 
