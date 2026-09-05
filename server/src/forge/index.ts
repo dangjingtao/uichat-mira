@@ -17,7 +17,6 @@ export type {
   ForgeTask,
   ForgeTaskStatus,
 } from "./types.js";
-export { createForgeCoreState } from "./types.js";
 export * from "./domain.js";
 export * from "./dispatch-domain.js";
 export * from "./readiness.js";
