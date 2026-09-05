@@ -91,6 +91,10 @@ task_state: READY_FOR_REVIEW
 - 相对当前 `dev` 的 compare 仅包含 5 个 T001 允许的文档文件：3 个 `docs/forge/**` 新文件、T001 卡、总台账。
 - changed-file whitespace/conflict audit：trailing whitespace = 0，conflict markers = 0，space-before-tab 风险 = 0。
 - 当前执行环境通过 GitHub connector 修改远端分支，无法取得本地 checkout 直接执行 shell 版 `git diff --check`；已执行等价的 changed-file whitespace audit，并将该限制显式保留给评审。
+- AI review 核真：修正 current-contract metadata，使 docs index 可识别为 current / canonical。
+- AI review 核真：migration source-map 的 Decision 列已严格收敛为 `PORT / REFERENCE / DO NOT MIGRATE` 三值，迁移语义说明保留在 Target / Reason。
+- AI review 核真：Builder Result Handoff 的 bounded 语义按固定源代码冻结为 `resultText 16_384`、`error 4_096` JavaScript UTF-16 code units（trim 后 slice 截断）；未擅自发明 byte-based 新合同。
+- AI review 对 `docs/README.md` 的入口建议未在 T001 执行：该路径不在 Allowed Changes，且修正 metadata 后 Forge contract 已可由 docs-site 自动索引；显式入口整理可另开 docs 范围任务。
 
 ## Unknown / Human Decision
 
