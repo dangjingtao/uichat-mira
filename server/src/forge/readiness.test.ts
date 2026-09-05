@@ -7,10 +7,10 @@ import {
   updateTask,
 } from "./domain.js";
 import { getDispatchReadiness, validateBatchDependencies } from "./readiness.js";
-import { createForgeCoreState } from "./types.js";
+import type { ForgeCoreState } from "./types.js";
 
 function projectState() {
-  const state = createForgeCoreState();
+  const state = createCoreState();
   const project = registerProject(state, {
     name: "Dispatch Demo",
     rootPath: "/tmp/dispatch-demo",
@@ -109,4 +109,4 @@ describe("Forge dispatch readiness", () => {
       "T001",
     ]);
   });
-});
+});\nfunction createCoreState(): ForgeCoreState {\n  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };\n}\n
