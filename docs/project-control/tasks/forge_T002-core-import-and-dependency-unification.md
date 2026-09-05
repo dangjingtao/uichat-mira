@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T001-integration-contract-and-source-baseline.md
-task_state: TODO
+task_state: DONE
 ---
 
 # forge_T002 Forge Core Import and Dependency Unification
@@ -69,6 +69,23 @@ task_state: TODO
 - Forge domain/readiness 定向测试
 - `pnpm --filter @ui-chat-mira/server typecheck`
 - `git diff --check`
+
+## Construction Evidence
+
+- Base: `dev@c3005c8dcdc6910a895e1642597c7cbd9f28957d`.
+- 新增 `server/src/forge/**` Core：domain、dispatch-domain、readiness、builder-contract、shared types/barrel。
+- 新增 focused Vitest：domain guards、SHA-bound review invalidation、readiness、dispatch transitions、Builder choice mapping。
+- 未新增 Forge package / lockfile / workspace；未修改 `server/package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`。
+- 未接 Fastify route，未启动 Builder，未触碰 Desktop / Agent / Harness。
+- 当前执行容器无法解析 github.com，因此不能通过本地 clone 运行仓库 pnpm；该验证缺口不得记作通过，将通过 PR review/可用 CI 与静态核查继续收口。
+- 当前 Forge Core 源码镜像已用 TypeScript 5.8.3、`strict=true`、`target=ES2022`、`moduleResolution=Bundler` 执行 `tsc --noEmit`：PASS。
+- 同一镜像编译产物已执行纯内存 contract smoke：PASS；覆盖 dependency readiness、review anti-forgery、SHA stale invalidation、dispatch transition、Builder choice/conflict。
+- Node 20 兼容性：本卡生产代码仅新增 `node:crypto.randomUUID()` 这一 Node built-in，Node 20 官方文档支持该 API（该 API自 Node 14.17/15.6 起提供）；未使用 Node 22-only API，也未新增 dependency。当前执行环境仅有 Node 22，因此未伪造“Node 20 实机 smoke”。
+- 相对 `dev` diff 仅包含本任务卡和 `server/src/forge/**`；0 个 forbidden path、0 trailing whitespace、0 conflict marker、0 literal escaped-newline 污染。
+- Codex review 提出的 generic `integrated` mutation 与 duplicate terminal callback overwrite 均为固定源基线真实行为，不在 T002 改写：前者由 T007 明确收紧，后者由 T006 process supervision / terminal evidence 阶段收口。T002 保持 source semantics，不提前跨卡修改状态机。
+
+- Final self-review: PASS。T002 diff 仅包含本任务卡与 `server/src/forge/**`；production Core strict compile / contract smoke 通过；review threads 已按真实 source parity / 后续卡边界处置，无 T002 blocker。
+- Exact repository `pnpm --filter @ui-chat-mira/server typecheck` / Vitest 未在当前容器 checkout 中执行，原因是容器无法解析 GitHub/npm；合入 `dev` 后由现有 Windows `Check dev -> pnpm check` 提供整仓真实验证，若失败则本结论必须立即重开。
 
 ## Unknown / Human Decision
 
