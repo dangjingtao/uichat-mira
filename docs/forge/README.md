@@ -1,10 +1,10 @@
 # 淬行 / Forge
 
-Status: Current  
-Owner: forge / architecture  
-Last verified: 2026-09-05  
-Layer: product-runtime  
-Module: Forge  
+Status: Current
+Owner: forge / architecture
+Last verified: 2026-09-05
+Layer: product-runtime
+Module: Forge
 Canonical: true
 
 ## Purpose
