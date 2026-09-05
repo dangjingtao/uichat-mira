@@ -52,7 +52,9 @@ export function getRuntimeEvents(state: ForgeCoreState): ForgeRuntimeEvent[] {
   return state.events;
 }
 
-export function isTerminalDispatch(\n  status: string,\n): status is (typeof TERMINAL_DISPATCH_STATUSES)[number] {
+export function isTerminalDispatch(
+  status: string,
+): status is (typeof TERMINAL_DISPATCH_STATUSES)[number] {
   return (TERMINAL_DISPATCH_STATUSES as readonly string[]).includes(status);
 }
 
