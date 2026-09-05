@@ -1,9 +1,9 @@
 # Forge Migration Source Map
 
-Status: Current  
-Owner: forge / architecture  
-Last verified: 2026-09-05  
-Source: `dangjingtao/mira-forge@6557b9ff552c4be3d3d1be2da0b24bb6d1344ed0`  
+Status: Current
+Owner: forge / architecture
+Last verified: 2026-09-05
+Source: `dangjingtao/mira-forge@6557b9ff552c4be3d3d1be2da0b24bb6d1344ed0`
 Target: `dangjingtao/uichat-mira` `dev`
 
 ## Baseline Note
