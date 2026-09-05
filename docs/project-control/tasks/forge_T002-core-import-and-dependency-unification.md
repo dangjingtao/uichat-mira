@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T001-integration-contract-and-source-baseline.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T002 Forge Core Import and Dependency Unification
@@ -69,6 +69,15 @@ task_state: TODO
 - Forge domain/readiness 定向测试
 - `pnpm --filter @ui-chat-mira/server typecheck`
 - `git diff --check`
+
+## Construction Evidence
+
+- Base: `dev@c3005c8dcdc6910a895e1642597c7cbd9f28957d`.
+- 新增 `server/src/forge/**` Core：domain、dispatch-domain、readiness、builder-contract、shared types/barrel。
+- 新增 focused Vitest：domain guards、SHA-bound review invalidation、readiness、dispatch transitions、Builder choice mapping。
+- 未新增 Forge package / lockfile / workspace；未修改 `server/package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`。
+- 未接 Fastify route，未启动 Builder，未触碰 Desktop / Agent / Harness。
+- 当前执行容器无法解析 github.com，因此不能通过本地 clone 运行仓库 pnpm；该验证缺口不得记作通过，将通过 PR review/可用 CI 与静态核查继续收口。
 
 ## Unknown / Human Decision
 
