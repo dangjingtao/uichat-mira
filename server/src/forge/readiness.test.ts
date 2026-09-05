@@ -109,4 +109,8 @@ describe("Forge dispatch readiness", () => {
       "T001",
     ]);
   });
-});\nfunction createCoreState(): ForgeCoreState {\n  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };\n}\n
+});
+function createCoreState(): ForgeCoreState {
+  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };
+}
+
