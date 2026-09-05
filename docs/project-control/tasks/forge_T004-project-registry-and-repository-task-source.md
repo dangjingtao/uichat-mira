@@ -1,0 +1,79 @@
+---
+status: current
+priority: P0
+owner: forge / server
+last_verified: 2026-09-05
+layer: project-control
+module: Forge
+feature: ProjectTaskSource
+doc_type: task-card
+canonical: true
+related:
+  - docs/project-control/tasks/forge_T003-runtime-lifecycle-and-persistence-ownership.md
+task_state: TODO
+---
+
+# forge_T004 Project Registry and Repository Task Source
+
+## Target
+
+迁移并接通 Forge Project Registry 与 Repository-native Task Source，使淬行能够绑定真实本地仓库、读取 Ledger / Task Card，并在显式动作下创建或更新 Task Card。
+
+## Must Read
+
+- `AGENTS.md`
+- `docs/forge/FORGE_CURRENT_CONTRACT.md`
+- 源 Forge `docs/task-source-contract.md`
+- 源 Forge `server/repo-task-source.mjs`
+- 源 Forge `server/project-task-actions.mjs`
+- Mira 当前 project-control task card / ledger 规范
+
+## Allowed Changes
+
+- `server/src/forge/project/**`
+- `server/src/forge/task-source/**`
+- `server/src/forge/**` 中直接相关共享 types / tests
+- `docs/forge/**`（仅 Task Source current contract）
+- 本任务卡状态 / 证据
+
+## Forbidden Changes
+
+- 建立第二套 Task Card 数据库
+- 把任务正文复制进 Forge runtime persistence
+- 自动修复 Ledger / Card drift
+- 从任意 prose 猜依赖、状态或 Task ID
+- 允许 taskLedger / taskDir 逃逸 registered project root
+- 改 Mira 项目台账格式来迁就 Forge
+
+## Required Behavior
+
+保留并验证：
+
+- Ledger 至少 `ID | Task | Status`
+- Task ID 唯一
+- 每个任务恰好匹配一张 Task Card
+- realpath / workspace boundary
+- 中文旧卡 `状态：` 等已接受兼容读取
+- read side-effect free
+- create/update 显式写入
+- ledger/card 写入失败时不留下半成功状态
+- drift 只 warning，不静默“修好”
+
+## Acceptance Criteria
+
+1. 可注册真实本地项目并配置 integration branch / task source。
+2. 可 inspect、resolve、create、update repository task。
+3. 错 root、缺卡、重复卡、路径逃逸都明确失败。
+4. Forge runtime 只保存 task reference / execution binding。
+5. 项目自己的 Task Card 仍是需求 / 产品状态真相。
+
+## Validation
+
+- 临时仓库 Task Source fixture
+- wrong-root / duplicate / escape / localized-card tests
+- server typecheck
+- `git diff --check`
+
+## Unknown / Human Decision
+
+None.
