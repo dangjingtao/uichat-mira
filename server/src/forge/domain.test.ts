@@ -285,4 +285,8 @@ describe("Forge core domain", () => {
     expect(batch.tasks[0]?.status).not.toBe("review_passed");
     expect(batch.tasks[0]?.reviewedSha).toBeNull();
   });
-});\nfunction createCoreState(): ForgeCoreState {\n  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };\n}\n
+});
+function createCoreState(): ForgeCoreState {
+  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };
+}
+
