@@ -78,7 +78,7 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | `src/main.tsx` | DO NOT MIGRATE | Mira renderer already owns bootstrap |
 | `src/workbench/**` | REFERENCE | `desktop/src/features/forge/**`; runtime summary/inspector/event log/task context reimplemented against typed Mira API |
 | `src/workbench/live-runtime-model.js` + `.d.ts` | PORT | typed projection/model under Forge Desktop feature/API contract |
-| `src/styles/**` | DO NOT COPY AS DESIGN SYSTEM | interaction/state semantics may be referenced; visual implementation must use Mira tokens/shared UI |
+| `src/styles/**` | DO NOT MIGRATE | interaction/state semantics may be referenced; visual implementation must use Mira tokens/shared UI |
 | old Web/Vite shell | DO NOT MIGRATE | no iframe, no second frontend project |
 
 当前 target `dev` 已有 `desktop/src/features/forge/**`。后续 T009 应在这一目标目录上按 OpenDesign + Mira UI contract 收口，而不是把旧 `src/**` 整体覆盖进去。
@@ -92,10 +92,10 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | `docs/tui-interaction.md` | REFERENCE | keyboard-first / focus behavior输入，不保留独立 TUI app |
 | `docs/frontend-style-contract.md` | REFERENCE | Mira Desktop design system 优先 |
 | `docs/user-guide.zh-CN.md` | REFERENCE | 产品语义来源；后续在 Mira 文档体系重写 |
-| `docs/v1-status.md` | HISTORICAL SNAPSHOT | 不作为当前状态真相 |
-| `docs/v2-plan.md` | HISTORICAL / NON-NORMATIVE | 不作为迁移施工真相 |
-| `docs/workbench/00-work-ledger.md` | SOURCE STATUS EVIDENCE | T015-T018 当前状态来源之一 |
-| `docs/workbench/01-second-wave.md`, `02-third-wave.md` | HISTORICAL EXECUTION EVIDENCE | 仅用于理解已验证路径 |
+| `docs/v1-status.md` | REFERENCE | 不作为当前状态真相 |
+| `docs/v2-plan.md` | REFERENCE | 不作为迁移施工真相 |
+| `docs/workbench/00-work-ledger.md` | REFERENCE | T015-T018 当前状态来源之一 |
+| `docs/workbench/01-second-wave.md`, `02-third-wave.md` | REFERENCE | 仅用于理解已验证路径 |
 | `docs/workbench/tasks/T001-T018*.md` | REFERENCE | 当前迁移重点读取 T015-T018；早期卡用于行为来源追踪，不直接复制成 Mira 项目卡 |
 
 ## Scripts / Smoke / Test Support
