@@ -181,15 +181,3 @@ export interface ForgeCoreState {
   dispatches?: ForgeDispatch[];
   events?: ForgeRuntimeEvent[];
 }
-
-export function createForgeCoreState(): ForgeCoreState {
-  return {
-    projects: [],
-    batches: [],
-    adapters: [],
-    sessions: [],
-    reviews: [],
-    dispatches: [],
-    events: [],
-  };
-}
