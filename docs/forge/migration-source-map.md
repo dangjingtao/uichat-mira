@@ -52,14 +52,14 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | `server/dispatch-manager.test.mjs`, `dispatch-serial.test.mjs`, `builder-dispatch.test.mjs` | PORT TEST SEMANTICS | `server/src/forge/dispatch/**/*.test.ts` |
 | `server/builder-contract.mjs` | PORT | `server/src/forge/adapters/builder/**` or shared Forge contract |
 | `server/opencode-adapter.mjs`, `piagent-adapter.mjs`, `codex-builder-adapter.mjs` | PORT | `server/src/forge/adapters/builder/**` |
-| matching Builder adapter tests | PORT TEST SEMANTICS | target adapter `*.test.ts` |
+| `server/opencode-adapter.test.mjs`, `piagent-adapter.test.mjs`, `codex-builder-adapter.test.mjs` | PORT TEST SEMANTICS | target Builder adapter `*.test.ts` |
 | `server/readiness.mjs`, `readiness.test.mjs` | PORT | `server/src/forge/dispatch/**` / readiness tests |
-| `server/project-task-actions.mjs`, test | PORT | `server/src/forge/project/**` / `task-source/**` |
-| `server/repo-task-source.mjs`, test | PORT | `server/src/forge/task-source/**` |
-| `server/main-thread-domain.mjs`, test | PORT | `server/src/forge/main-thread/**` |
-| `server/main-thread-manager.mjs`, test | PORT | `server/src/forge/main-thread/**` |
-| `server/main-thread-adapters.mjs`, test | PORT | `server/src/forge/adapters/main-thread/**` |
-| `server/codex-desktop-adapter.mjs`, test | PORT | `server/src/forge/adapters/main-thread/**` |
+| `server/project-task-actions.mjs`, `project-task-actions.test.mjs` | PORT | `server/src/forge/project/**` / `task-source/**` |
+| `server/repo-task-source.mjs`, `repo-task-source.test.mjs` | PORT | `server/src/forge/task-source/**` |
+| `server/main-thread-domain.mjs`, `main-thread-domain.test.mjs` | PORT | `server/src/forge/main-thread/**` |
+| `server/main-thread-manager.mjs`, `main-thread-manager.test.mjs` | PORT | `server/src/forge/main-thread/**` |
+| `server/main-thread-adapters.mjs`, `main-thread-adapters.test.mjs` | PORT | `server/src/forge/adapters/main-thread/**` |
+| `server/codex-desktop-adapter.mjs`, `codex-desktop-adapter.test.mjs` | PORT | `server/src/forge/adapters/main-thread/**` |
 | `server/t018-main-thread-result-context.test.mjs` | PORT TEST SEMANTICS | Main Thread / Builder Result Handoff regression tests |
 | `server/store.mjs`, `store.test.mjs` | PORT BEHAVIOR, NOT PATH | `server/src/forge/runtime/**`; preserve atomic/serialized mutation semantics, but persistence path/lifecycle must be Mira-owned |
 | `server/acceptance.mjs`, `acceptance.test.mjs` | REFERENCE / PORT TEST SEMANTICS | Forge integration acceptance tests; do not preserve old standalone server assumptions |
