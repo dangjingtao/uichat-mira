@@ -12,7 +12,7 @@ related:
   - AGENTS.md
   - docs/project-control/project-control-ledger.md
   - docs/architecture/README.md
-task_state: TODO
+task_state: READY_FOR_REVIEW
 ---
 
 # forge_T001 Forge Integration Contract and Source Baseline
@@ -76,6 +76,17 @@ task_state: TODO
 - 文档链接与路径检查
 - `git diff --check`
 - 人工核对源基线与迁移映射
+
+## Delivery Evidence
+
+- 固定源基线已按 `dangjingtao/mira-forge@6557b9ff552c4be3d3d1be2da0b24bb6d1344ed0` 重新读取。
+- 源 Work Ledger 已确认当前状态：T015/T016/T017 = PASS，T018 = REVIEW。
+- 已新增 `docs/forge/README.md`，明确淬行 / Forge 产品、runtime、truth 和 Desktop 边界。
+- 已新增 `docs/forge/FORGE_CURRENT_CONTRACT.md`，冻结单仓单依赖、两套真相、Main Thread / Builder 分离、explicit dispatch、SHA-bound review、builder_result handoff 等不可丢失合同。
+- 已新增 `docs/forge/migration-source-map.md`，覆盖旧 Forge root/build shell、`server/**`、`src/**`、docs、scripts 与测试的 PORT / REFERENCE / DO NOT MIGRATE 去向。
+- T001 施工前目标 `uichat-mira dev` 已重新核对为 `684ea0d9e68fca9e5f4fcd9d302d3396a4c6131e`；此前 `27be0eb` 只保留为派卡时历史 target observation。
+- 当前目标分支已有 `desktop/src/features/forge/**` UI 壳；合同明确它不是 T009 完成证据，也不得反向覆盖 Forge domain truth。
+- 本卡未修改 `server/**`、`desktop/**`、`electron/**`、`tauri/**`、package 或 lockfile。
 
 ## Unknown / Human Decision
 
