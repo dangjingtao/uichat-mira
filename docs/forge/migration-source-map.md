@@ -49,10 +49,10 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | `server/domain.mjs`, `domain.test.mjs` | PORT | `server/src/forge/domain/**` + focused tests |
 | `server/dispatch-domain.mjs` | PORT | `server/src/forge/dispatch/**` |
 | `server/dispatch-manager.mjs` | PORT | `server/src/forge/dispatch/**` / runtime supervision |
-| `server/dispatch-manager.test.mjs`, `dispatch-serial.test.mjs`, `builder-dispatch.test.mjs` | PORT TEST SEMANTICS | `server/src/forge/dispatch/**/*.test.ts` |
+| `server/dispatch-manager.test.mjs`, `dispatch-serial.test.mjs`, `builder-dispatch.test.mjs` | PORT | `server/src/forge/dispatch/**/*.test.ts` |
 | `server/builder-contract.mjs` | PORT | `server/src/forge/adapters/builder/**` or shared Forge contract |
 | `server/opencode-adapter.mjs`, `piagent-adapter.mjs`, `codex-builder-adapter.mjs` | PORT | `server/src/forge/adapters/builder/**` |
-| `server/opencode-adapter.test.mjs`, `piagent-adapter.test.mjs`, `codex-builder-adapter.test.mjs` | PORT TEST SEMANTICS | target Builder adapter `*.test.ts` |
+| `server/opencode-adapter.test.mjs`, `piagent-adapter.test.mjs`, `codex-builder-adapter.test.mjs` | PORT | target Builder adapter `*.test.ts` |
 | `server/readiness.mjs`, `readiness.test.mjs` | PORT | `server/src/forge/dispatch/**` / readiness tests |
 | `server/project-task-actions.mjs`, `project-task-actions.test.mjs` | PORT | `server/src/forge/project/**` / `task-source/**` |
 | `server/repo-task-source.mjs`, `repo-task-source.test.mjs` | PORT | `server/src/forge/task-source/**` |
@@ -60,23 +60,24 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | `server/main-thread-manager.mjs`, `main-thread-manager.test.mjs` | PORT | `server/src/forge/main-thread/**` |
 | `server/main-thread-adapters.mjs`, `main-thread-adapters.test.mjs` | PORT | `server/src/forge/adapters/main-thread/**` |
 | `server/codex-desktop-adapter.mjs`, `codex-desktop-adapter.test.mjs` | PORT | `server/src/forge/adapters/main-thread/**` |
-| `server/t018-main-thread-result-context.test.mjs` | PORT TEST SEMANTICS | Main Thread / Builder Result Handoff regression tests |
-| `server/store.mjs`, `store.test.mjs` | PORT BEHAVIOR, NOT PATH | `server/src/forge/runtime/**`; preserve atomic/serialized mutation semantics, but persistence path/lifecycle must be Mira-owned |
-| `server/acceptance.mjs`, `acceptance.test.mjs` | REFERENCE / PORT TEST SEMANTICS | Forge integration acceptance tests; do not preserve old standalone server assumptions |
-| `server/index.mjs` | DO NOT MIGRATE AS BOOTSTRAP | route/domain behavior is re-expressed under `server/src/forge/routes/**` and registered from Mira `server/src/index.ts`; no second HTTP server |
+| `server/t018-main-thread-result-context.test.mjs` | PORT | Main Thread / Builder Result Handoff regression tests |
+| `server/store.mjs`, `store.test.mjs` | PORT | `server/src/forge/runtime/**`; preserve atomic/serialized mutation semantics, but persistence path/lifecycle must be Mira-owned |
+| `server/acceptance.mjs` | REFERENCE | standalone acceptance runner 仅作行为证据，不保留旧 control-plane 假设 |
+| `server/acceptance.test.mjs` | PORT | 将 integrated acceptance test semantics 迁到 Mira Forge 测试，去除 standalone server 假设 |
+| `server/index.mjs` | DO NOT MIGRATE | route/domain behavior is re-expressed under `server/src/forge/routes/**` and registered from Mira `server/src/index.ts`; no second HTTP server |
 
 ## Legacy Web / Renderer
 
 | Source | Decision | Mira Target |
 | --- | --- | --- |
-| `src/App.tsx` | REFERENCE / PORT PRODUCT SEMANTICS | `desktop/src/features/forge/**`; do not copy old app shell |
-| `src/MainThreadPanel.tsx` | REFERENCE / PORT INTERACTION | Mira Forge Main Thread surface |
+| `src/App.tsx` | REFERENCE | `desktop/src/features/forge/**`; do not copy old app shell |
+| `src/MainThreadPanel.tsx` | REFERENCE | Mira Forge Main Thread surface |
 | `src/FirstRunCheck.tsx` | REFERENCE | only retain machine-check behavior if still required by integrated product; not a separate app surface |
 | `src/ShortcutFeedback.tsx` | REFERENCE | keyboard affordance may be reimplemented through Mira shared UI |
-| `src/main-thread-focus.ts` | PORT IF STILL NEEDED | Forge Desktop local interaction helper |
+| `src/main-thread-focus.ts` | REFERENCE | 仅作为 Main Thread focus 行为参考；T009 若确认仍需该 helper，再在 Mira Desktop 内重新实现 |
 | `src/main.tsx` | DO NOT MIGRATE | Mira renderer already owns bootstrap |
-| `src/workbench/**` | REFERENCE / PORT PRODUCT SEMANTICS | `desktop/src/features/forge/**`; runtime summary/inspector/event log/task context reimplemented against typed Mira API |
-| `src/workbench/live-runtime-model.js` + `.d.ts` | PORT BEHAVIOR | typed projection/model under Forge Desktop feature/API contract |
+| `src/workbench/**` | REFERENCE | `desktop/src/features/forge/**`; runtime summary/inspector/event log/task context reimplemented against typed Mira API |
+| `src/workbench/live-runtime-model.js` + `.d.ts` | PORT | typed projection/model under Forge Desktop feature/API contract |
 | `src/styles/**` | DO NOT COPY AS DESIGN SYSTEM | interaction/state semantics may be referenced; visual implementation must use Mira tokens/shared UI |
 | old Web/Vite shell | DO NOT MIGRATE | no iframe, no second frontend project |
 
@@ -87,9 +88,9 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | Source | Decision | Target |
 | --- | --- | --- |
 | `docs/architecture.md` | REFERENCE | `docs/forge/FORGE_CURRENT_CONTRACT.md` + Mira architecture docs |
-| `docs/task-source-contract.md` | PORT CONTRACT | 保留 repository truth / runtime truth、路径边界、identity、显式写入等规范到 Forge current docs / implementation tests |
+| `docs/task-source-contract.md` | PORT | 保留 repository truth / runtime truth、路径边界、identity、显式写入等规范到 Forge current docs / implementation tests |
 | `docs/tui-interaction.md` | REFERENCE | keyboard-first / focus behavior输入，不保留独立 TUI app |
-| `docs/frontend-style-contract.md` | HISTORICAL UI REFERENCE | Mira Desktop design system 优先 |
+| `docs/frontend-style-contract.md` | REFERENCE | Mira Desktop design system 优先 |
 | `docs/user-guide.zh-CN.md` | REFERENCE | 产品语义来源；后续在 Mira 文档体系重写 |
 | `docs/v1-status.md` | HISTORICAL SNAPSHOT | 不作为当前状态真相 |
 | `docs/v2-plan.md` | HISTORICAL / NON-NORMATIVE | 不作为迁移施工真相 |
@@ -102,13 +103,13 @@ T001 实际施工前重新读取当前 `dev`，HEAD 已为 `684ea0d9e68fca9e5f4f
 | Source | Decision | Target |
 | --- | --- | --- |
 | `scripts/dev.mjs` | DO NOT MIGRATE | 使用 Mira 根工程 dev startup |
-| `scripts/fake-opencode.mjs` | PORT TEST SUPPORT IF NEEDED | Forge test-support，不能进入生产 fallback |
-| `scripts/builder-adapter-smoke.mjs` | REFERENCE / PORT TEST | integrated Forge provider diagnostic |
-| `scripts/dispatch-smoke.mjs` | PORT TEST SEMANTICS | Forge dispatch integration test |
-| `scripts/readiness-smoke.mjs` | PORT TEST SEMANTICS | Forge readiness integration test |
-| `scripts/smoke.mjs` | REFERENCE / REBUILD | T010 integrated product-loop smoke，不保留 standalone control-plane assumptions |
-| `scripts/frontend-style-contract.test.mjs` | DO NOT PORT AS OLD STYLE CONTRACT | T009 使用 Mira shared UI / design guidelines 验证 |
-| `scripts/live-runtime-model.test.mjs` | PORT TEST SEMANTICS | Forge Desktop runtime projection regression |
+| `scripts/fake-opencode.mjs` | PORT | 仅迁移为 Forge test-support 等价物，不能进入生产 fallback |
+| `scripts/builder-adapter-smoke.mjs` | PORT | 迁为 integrated Forge provider diagnostic，不保留 standalone startup 假设 |
+| `scripts/dispatch-smoke.mjs` | PORT | Forge dispatch integration test |
+| `scripts/readiness-smoke.mjs` | PORT | Forge readiness integration test |
+| `scripts/smoke.mjs` | REFERENCE | 仅提取验收场景；T010 重新构造 integrated product-loop smoke，不复制 standalone control-plane runner |
+| `scripts/frontend-style-contract.test.mjs` | DO NOT MIGRATE | T009 使用 Mira shared UI / design guidelines 验证 |
+| `scripts/live-runtime-model.test.mjs` | PORT | Forge Desktop runtime projection regression |
 
 ## Test Migration Rule
 
