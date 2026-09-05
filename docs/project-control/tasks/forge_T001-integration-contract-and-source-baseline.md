@@ -87,6 +87,10 @@ task_state: READY_FOR_REVIEW
 - T001 施工前目标 `uichat-mira dev` 已重新核对为 `684ea0d9e68fca9e5f4fcd9d302d3396a4c6131e`；此前 `27be0eb` 只保留为派卡时历史 target observation。
 - 当前目标分支已有 `desktop/src/features/forge/**` UI 壳；合同明确它不是 T009 完成证据，也不得反向覆盖 Forge domain truth。
 - 本卡未修改 `server/**`、`desktop/**`、`electron/**`、`tauri/**`、package 或 lockfile。
+- 递归 source-map 覆盖核对：固定源基线 `server/**`、`src/**`、`docs/**`、`scripts/**` 共 103 个文件全部有明确分类，0 missing。
+- 相对当前 `dev` 的 compare 仅包含 5 个 T001 允许的文档文件：3 个 `docs/forge/**` 新文件、T001 卡、总台账。
+- changed-file whitespace/conflict audit：trailing whitespace = 0，conflict markers = 0，space-before-tab 风险 = 0。
+- 当前执行环境通过 GitHub connector 修改远端分支，无法取得本地 checkout 直接执行 shell 版 `git diff --check`；已执行等价的 changed-file whitespace audit，并将该限制显式保留给评审。
 
 ## Unknown / Human Decision
 
