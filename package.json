@@ -11,7 +11,7 @@
     "type": "git",
     "url": "https://github.com/dangjingtao/uichat-mira.git"
   },
-  "homepage": "https://tomz.io",
+  "homepage": "https://mira.tomz.io",
   "appMeta": {
     "displayName": "UIChat Mira",
     "links": [
@@ -27,8 +27,8 @@
       },
       {
         "label": "官方文档",
-        "value": "https://tomz.io",
-        "href": "https://tomz.io"
+        "value": "https://mira.tomz.io",
+        "href": "https://mira.tomz.io"
       },
       {
         "label": "组件文档",
