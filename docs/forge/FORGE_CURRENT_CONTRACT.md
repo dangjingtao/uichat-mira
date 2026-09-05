@@ -1,8 +1,8 @@
 # Forge Current Contract
 
-Status: Current / Normative for Mira integration  
-Owner: forge / architecture  
-Last verified: 2026-09-05  
+Status: Current / Normative for Mira integration
+Owner: forge / architecture
+Last verified: 2026-09-05
 Source baseline: `dangjingtao/mira-forge@6557b9ff552c4be3d3d1be2da0b24bb6d1344ed0`
 
 ## 1. Authority Order
@@ -198,7 +198,7 @@ Ledger/Card drift 只允许 warning；不得静默修复。
 
 ## 12. Desktop Product Boundary
 
-对外名：淬行。  
+对外名：淬行。
 内部工程名：Forge / `forge`。
 
 外部 UI 必须使用 Mira Desktop：
