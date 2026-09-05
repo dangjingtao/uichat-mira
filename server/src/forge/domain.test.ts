@@ -10,10 +10,10 @@ import {
   updateSession,
   updateTask,
 } from "./domain.js";
-import { createForgeCoreState } from "./types.js";
+import type { ForgeCoreState } from "./types.js";
 
 function sessionFixture() {
-  const state = createForgeCoreState();
+  const state = createCoreState();
   const project = registerProject(state, { name: "Demo", rootPath: "/tmp/demo" });
   const batch = createBatch(state, { projectId: project.id, tasks: [{ id: "T001" }] });
   const builder = registerAdapter(state, {
@@ -30,7 +30,7 @@ function sessionFixture() {
 }
 
 function reviewFixture() {
-  const state = createForgeCoreState();
+  const state = createCoreState();
   const project = registerProject(state, { name: "Review Demo", rootPath: "/tmp/review-demo" });
   const batch = createBatch(state, { projectId: project.id, tasks: [{ id: "T001" }] });
   const reviewer = registerAdapter(state, {
@@ -53,7 +53,7 @@ function reviewFixture() {
 
 describe("Forge core domain", () => {
   it("forms the project -> batch -> task runtime pipeline", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const project = registerProject(state, { name: "Demo", rootPath: "/tmp/demo" });
     const batch = createBatch(state, {
       projectId: project.id,
@@ -68,7 +68,7 @@ describe("Forge core domain", () => {
   });
 
   it("rejects invalid task status and forged review fields", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const project = registerProject(state, { name: "Demo", rootPath: "/tmp/demo" });
     const batch = createBatch(state, { projectId: project.id, tasks: [{ id: "T001" }] });
     updateTask(state, batch.id, "T001", { currentSha: "abc" });
@@ -88,7 +88,7 @@ describe("Forge core domain", () => {
   });
 
   it("rejects duplicate batch ids and malformed dependency declarations", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const project = registerProject(state, { name: "Demo", rootPath: "/tmp/demo" });
     createBatch(state, {
       id: "B-fixed",
@@ -113,7 +113,7 @@ describe("Forge core domain", () => {
   });
 
   it("keeps the adapter registry provider-neutral and heartbeat-driven", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const adapter = registerAdapter(state, {
       id: "builder-local",
       name: "Local Builder",
@@ -285,4 +285,4 @@ describe("Forge core domain", () => {
     expect(batch.tasks[0]?.status).not.toBe("review_passed");
     expect(batch.tasks[0]?.reviewedSha).toBeNull();
   });
-});
+});\nfunction createCoreState(): ForgeCoreState {\n  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };\n}\n
