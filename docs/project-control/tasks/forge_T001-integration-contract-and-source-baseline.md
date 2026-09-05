@@ -12,7 +12,7 @@ related:
   - AGENTS.md
   - docs/project-control/project-control-ledger.md
   - docs/architecture/README.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # forge_T001 Forge Integration Contract and Source Baseline
@@ -95,6 +95,8 @@ task_state: READY_FOR_REVIEW
 - AI review 核真：migration source-map 的 Decision 列已严格收敛为 `PORT / REFERENCE / DO NOT MIGRATE` 三值，迁移语义说明保留在 Target / Reason。
 - AI review 核真：Builder Result Handoff 的 bounded 语义按固定源代码冻结为 `resultText 16_384`、`error 4_096` JavaScript UTF-16 code units（trim 后 slice 截断）；未擅自发明 byte-based 新合同。
 - AI review 对 `docs/README.md` 的入口建议未在 T001 执行：该路径不在 Allowed Changes，且修正 metadata 后 Forge contract 已可由 docs-site 自动索引；显式入口整理可另开 docs 范围任务。
+
+- Final review: PASS；AI review 有效问题已整改或按 task scope 明确处置，当前 PR 无 unresolved review thread，Branch Policy 通过，diff 仍仅限 T001 允许文档范围。
 
 ## Unknown / Human Decision
 
