@@ -1,8 +1,17 @@
+---
+status: current
+owner: forge / architecture
+last_verified: 2026-09-05
+layer: runtime
+module: Forge
+feature: IntegrationContract
+doc_type: current-contract
+canonical: true
+---
+
 # Forge Current Contract
 
-Status: Current / Normative for Mira integration
-Owner: forge / architecture
-Last verified: 2026-09-05
+Normative scope: Mira integration
 Source baseline: `dangjingtao/mira-forge@6557b9ff552c4be3d3d1be2da0b24bb6d1344ed0`
 
 ## 1. Authority Order
@@ -172,10 +181,19 @@ Handoff 必须：
 - 绑定 project/batch/task/dispatch/session identity；
 - 以 dispatch identity 幂等；
 - 携带 authoritative dispatch/session/task state；
-- 可携带 bounded `resultText` / error；
+- 可携带 bounded `resultText` / `error`；
 - 不把 Builder prose 当成成功真相；
 - 不重复在每次 polling / refresh 中追加；
 - 不注入 Builder 完整 conversation history。
+
+固定源基线的可验证大小语义必须原样保留，不在 T001 擅自改成新的 byte-budget 合同：
+
+- handoff `resultText`：先执行 JavaScript `String.trim()`，再以 `String.slice(0, 16_384)` 截断；
+- handoff `error`：先执行 JavaScript `String.trim()`，再以 `String.slice(0, 4_096)` 截断；
+- 上述上限按 JavaScript UTF-16 code unit 计数，不是 UTF-8 byte 数；
+- 超限行为是截断后持久化 / 投影，不是拒绝整个 handoff；
+- API、持久化、Main Thread 注入和测试必须引用同一 observable semantics；
+- 若后续要改成 UTF-8 byte 上限或其他编码口径，必须另行修改合同并取得 owner 决策，不能在迁移中暗改。
 
 下一次 Main Thread turn 可以消费上次用户 turn 之后到达的 bounded Builder results，但不能把同一 result 永久重复注入。
 
