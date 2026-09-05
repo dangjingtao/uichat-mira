@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs";
 import { beforeEach, afterEach, test, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  commitTurnToMemory: vi.fn(),
+}));
+
+vi.mock("@/memory/runtime.js", () => ({
+  memoryService: {
+    commitTurn: mocks.commitTurnToMemory,
+  },
+}));
+
 import { initializeAuthDatabase } from "@/db/auth.db";
 import { resetDatabaseClients } from "@/db/index";
 import { initializeKnowledgeBaseDatabase } from "@/db/knowledge-base.db";
@@ -54,6 +65,7 @@ const setupDb = () => {
 
 beforeEach(() => {
   agentRunStore.clear();
+  mocks.commitTurnToMemory.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -78,6 +90,7 @@ afterEach(() => {
     }
   }
   activeDbPath = null;
+  mocks.commitTurnToMemory.mockReset();
 });
 
 const createPersistedWaitingApprovalRun = (options?: {

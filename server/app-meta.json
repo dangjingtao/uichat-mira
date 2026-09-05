@@ -1,6 +1,6 @@
 {
   "name": "ui-chat-mira",
-  "version": "0.99.7",
+  "version": "0.99.12",
   "author": "Tomz Dang <dangjingtao@gmail.com>",
   "description": "An intelligent agent cabin that starts with a chat and returns to your side.",
   "repository": {
@@ -36,13 +36,53 @@
       "branch": "dev",
       "versions": [
         {
+          "version": "0.99.12",
+          "commit": {
+            "hash": "fb1af5dad1efa6263cecc85589d73430402ec02f",
+            "shortHash": "fb1af5d",
+            "message": "chore(review): balance CodeRabbit code and UI review",
+            "author": "DangJingtao",
+            "date": "2026-09-03T22:32:42+08:00"
+          }
+        },
+        {
+          "version": "0.99.11",
+          "commit": {
+            "hash": "e1752500cafd300bb6c9c82e9b5a610beb985d2c",
+            "shortHash": "e175250",
+            "message": "MOB-024: allow paired Mobile thread creation",
+            "author": "DangJingtao",
+            "date": "2026-08-29T20:45:42+08:00"
+          }
+        },
+        {
+          "version": "0.99.10",
+          "commit": {
+            "hash": "2a6770e4ec543963e2d55e09c77d40bce8e93f16",
+            "shortHash": "2a6770e",
+            "message": "Merge pull request #84 from dangjingtao/fix/issue-80-workspace-thread-pagination",
+            "author": "DangJingtao",
+            "date": "2026-08-28T00:32:24+08:00"
+          }
+        },
+        {
+          "version": "0.99.9",
+          "commit": {
+            "hash": "f8187e9f161a3f7fd92e56008b6ba517f0b6528e",
+            "shortHash": "f8187e9",
+            "message": "feat(remote): merge relay-first pairing work",
+            "author": "DangJingtao",
+            "date": "2026-08-26T13:10:19+08:00"
+          }
+        },
+        {
           "version": "0.99.7",
           "commit": {
-            "hash": "584cef5640df640e164d5886877461a030b40e60",
-            "shortHash": "584cef5",
-            "message": "feat(macos): add isolated Electron development support",
+            "hash": "3c7431eaeae2fdc6275e908af9ab176e17703539",
+            "shortHash": "3c7431e",
+            "message": "chore(runtime): align desktop development port",
             "author": "Tomz Dang",
-            "date": "2026-08-22T13:52:30+08:00"
+            "date": "2026-08-22T15:54:17+08:00"
           }
         },
         {

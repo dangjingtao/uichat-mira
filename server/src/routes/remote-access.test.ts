@@ -34,6 +34,9 @@ const mocks = vi.hoisted(() => {
     workspaces: {
       list: vi.fn(),
     },
+    relay: {
+      getPairingMetadata: vi.fn(),
+    },
   };
 });
 
@@ -53,6 +56,43 @@ vi.mock("@/services/thread.service.js", () => ({
 vi.mock("@/db/repositories/chat-workspace.repository.js", () => ({
   chatWorkspaceRepository: mocks.workspaces,
 }));
+
+vi.mock("@/services/remote-relay-config.service.js", () => {
+  class RemoteRelayConfigError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "RemoteRelayConfigError";
+    }
+  }
+
+  return {
+    RemoteRelayConfigError,
+    getRemoteRelayPairingMetadata: mocks.relay.getPairingMetadata,
+    getRemoteRelayUserConfig: vi.fn(() => ({
+      enabled: false,
+      endpointMode: "default",
+      customUrl: "",
+      effectiveUrl: null,
+      defaultAvailable: false,
+      updatedAt: null,
+    })),
+    resolvePersistedRemoteRelayConnectorConfig: vi.fn(() => ({
+      enabled: false,
+      relayUrl: null,
+      relayId: null,
+      hostToken: null,
+      clientToken: null,
+    })),
+    updateRemoteRelayUserConfig: vi.fn(() => ({
+      enabled: false,
+      endpointMode: "default",
+      customUrl: "",
+      effectiveUrl: null,
+      defaultAvailable: false,
+      updatedAt: null,
+    })),
+  };
+});
 
 vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
   REMOTE_DEVICE_SCOPES: [
@@ -95,6 +135,7 @@ const createApp = async (options: { authenticated?: boolean; device?: unknown } 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.relay.getPairingMetadata.mockReturnValue(null);
   mocks.tailscale.getSnapshot.mockResolvedValue(readySnapshot);
   mocks.pairing.createChallenge.mockReturnValue({
     challengeId: "challenge-1",
