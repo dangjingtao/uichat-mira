@@ -11,11 +11,11 @@ import {
   resolveBuilderAdapterId,
   resolveBuiltinBuilder,
 } from "./builder-contract.js";
-import { createForgeCoreState } from "./types.js";
+import type { ForgeCoreState } from "./types.js";
 
 describe("Forge dispatch primitives", () => {
   it("preserves dispatch transition guards and terminal timestamps", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const dispatch = createDispatch(state, {
       id: "D-1",
       projectId: "P-1",
@@ -52,7 +52,7 @@ describe("Forge dispatch primitives", () => {
   });
 
   it("rejects duplicate dispatch ids and invalid statuses", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const input = {
       id: "D-fixed",
       projectId: "P-1",
@@ -69,7 +69,7 @@ describe("Forge dispatch primitives", () => {
   });
 
   it("appends bounded-shape runtime event data without inventing provider semantics", () => {
-    const state = createForgeCoreState();
+    const state = createCoreState();
     const event = appendRuntimeEvent(state, {
       id: "E-1",
       type: "dispatch.started",
@@ -103,4 +103,4 @@ describe("Forge Builder contract", () => {
       /unsupported builder/,
     );
   });
-});
+});\nfunction createCoreState(): ForgeCoreState {\n  return { projects: [], batches: [], adapters: [], sessions: [], reviews: [], dispatches: [], events: [] };\n}\n
