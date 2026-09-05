@@ -144,19 +144,12 @@ export function transitionDispatch(
   if (isTerminalDispatch(typedStatus) && !dispatch.endedAt) dispatch.endedAt = timestamp;
   dispatch.status = typedStatus;
 
-  const fields = [
-    "externalSessionId",
-    "pid",
-    "exitCode",
-    "signal",
-    "error",
-    "resultText",
-  ] as const;
-  for (const field of fields) {
-    if (patch[field] !== undefined) {
-      (dispatch[field] as typeof patch[typeof field]) = patch[field];
-    }
-  }
+  if (patch.externalSessionId !== undefined) dispatch.externalSessionId = patch.externalSessionId;
+  if (patch.pid !== undefined) dispatch.pid = patch.pid;
+  if (patch.exitCode !== undefined) dispatch.exitCode = patch.exitCode;
+  if (patch.signal !== undefined) dispatch.signal = patch.signal;
+  if (patch.error !== undefined) dispatch.error = patch.error;
+  if (patch.resultText !== undefined) dispatch.resultText = patch.resultText;
   dispatch.updatedAt = timestamp;
   return dispatch;
 }
