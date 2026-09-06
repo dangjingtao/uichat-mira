@@ -105,6 +105,26 @@ describe("ForgeTerminalWorkspace", () => {
     expect(screen.getByText("dispatch selected task")).toBeInTheDocument();
   });
 
+  it("executes command palette shortcuts instead of only displaying them", () => {
+    const onRefresh = vi.fn();
+    render(
+      <ForgeTerminalWorkspace
+        snapshot={snapshot}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "/" });
+    fireEvent.keyDown(window, { key: "r" });
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("dialog", {
+        name: "Terminal command palette",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("switches back to the standard Forge view explicitly", () => {
     const onSwitchView = vi.fn();
     render(
