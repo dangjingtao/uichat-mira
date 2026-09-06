@@ -32,6 +32,7 @@ export interface MainThreadArtifactEvent {
 }
 
 export interface MainThreadDispatchHandoff {
+  kind?: undefined;
   projectId: string;
   taskId: string;
   taskRef: string;
