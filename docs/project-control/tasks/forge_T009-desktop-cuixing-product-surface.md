@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T008-mira-server-api-and-desktop-client-contract.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T009 淬行 Desktop Product Surface
