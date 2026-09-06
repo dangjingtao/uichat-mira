@@ -36,13 +36,15 @@ class ControlledRunner implements BuilderRunner {
   input: BuilderStartInput | null = null;
   killed: NodeJS.Signals[] = [];
 
+  constructor(private readonly killResult = true) {}
+
   start(input: BuilderStartInput): BuilderProcessHandle {
     this.input = input;
     return {
       pid: 4242,
       kill: (signal: NodeJS.Signals = "SIGTERM") => {
         this.killed.push(signal);
-        return true;
+        return this.killResult;
       },
     };
   }
@@ -284,6 +286,54 @@ describe("Forge Builder dispatch manager", () => {
       });
       expect(second.adapterId).toBe(PIAGENT_ADAPTER_ID);
       await manager.cancelDispatch(second.id);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not forge cancelled state when live process termination fails", async () => {
+    const { root, store, batch } = await createFixture(["T100"]);
+    try {
+      const runner = new ControlledRunner(false);
+      const manager = createDispatchManager({
+        store,
+        runners: new Map([[OPENCODE_ADAPTER_ID, runner]]),
+      });
+
+      const dispatch = await manager.dispatchTask({
+        batchId: batch.id,
+        taskId: "T100",
+        builder: "opencode",
+      });
+      runner.started();
+      await flush(store);
+
+      await expect(
+        manager.cancelDispatch(dispatch.id),
+      ).rejects.toThrow(/failed to terminate live Builder process/);
+
+      let state = await store.read();
+      let durable = state.dispatches.find(
+        (item) => item.id === dispatch.id,
+      );
+      expect(durable?.status).toBe("running");
+      expect(
+        state.events.some(
+          (event) =>
+            event.dispatchId === dispatch.id &&
+            event.type === "dispatch.warning" &&
+            event.data.code === "cancel_signal_failed",
+        ),
+      ).toBe(true);
+
+      runner.exit({ code: 0, resultText: "real terminal result" });
+      await flush(store);
+      state = await store.read();
+      durable = state.dispatches.find(
+        (item) => item.id === dispatch.id,
+      );
+      expect(durable?.status).toBe("completed");
+      expect(state.batches[0]?.tasks[0]?.status).toBe("reviewing");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
