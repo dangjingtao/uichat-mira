@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { FullPageStatus } from "@/shared/ui";
+import { Button, FullPageStatus } from "@/shared/ui";
 import ForgeWorkspace from "../components/ForgeWorkspace";
 import useForgeWorkspace from "../hooks/useForgeWorkspace";
 
@@ -13,9 +13,27 @@ export default function CuixingPage() {
 
   if (workspace.error && !workspace.snapshot) {
     return (
-      <FullPageStatus
-        message={`淬行加载失败：${workspace.error}`}
-      />
+      <main className="flex h-full min-h-0 items-center justify-center bg-surface-secondary p-6">
+        <section className="w-full max-w-lg rounded-ui-panel border border-border bg-surface-primary p-5 text-sm text-text-secondary shadow-shadow-sm">
+          <h1 className="text-base font-semibold text-text-primary">
+            淬行加载失败
+          </h1>
+          <p className="mt-2 break-words leading-6">{workspace.error}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button
+              variant="primary"
+              onClick={() => {
+                void workspace.refresh();
+              }}
+            >
+              重试
+            </Button>
+            <Button variant="ghost" onClick={() => navigate("/chat")}>
+              返回聊天
+            </Button>
+          </div>
+        </section>
+      </main>
     );
   }
 
