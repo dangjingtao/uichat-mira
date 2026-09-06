@@ -1,3 +1,21 @@
+import {
+  ADAPTER_KINDS,
+  ADAPTER_STATUSES,
+  REVIEW_STATUSES,
+  SESSION_ROLES,
+  SESSION_STATUSES,
+  TASK_STATUSES,
+} from "../types.js";
+import { DISPATCH_STATUSES } from "../dispatch-domain.js";
+import {
+  BUILDER_CHOICES,
+  BUILTIN_BUILDER_ADAPTER_IDS,
+} from "../builder-contract.js";
+import {
+  MAIN_THREAD_ADAPTERS,
+  MAIN_THREAD_EVENT_TYPES,
+  MAIN_THREAD_STATUSES,
+} from "../main-thread/domain.js";
 import type {
   ForgeAdapter,
   ForgeBatch,
@@ -13,6 +31,38 @@ import type {
   MainThreadRecord,
 } from "../main-thread/domain.js";
 import type { ForgeRuntimeState } from "../runtime/state.js";
+
+export interface ForgeMeta {
+  taskStatuses: readonly string[];
+  adapterKinds: readonly string[];
+  adapterStatuses: readonly string[];
+  sessionRoles: readonly string[];
+  sessionStatuses: readonly string[];
+  reviewStatuses: readonly string[];
+  dispatchStatuses: readonly string[];
+  builderChoices: readonly string[];
+  builtinBuilderAdapters: readonly string[];
+  mainThreadAdapters: readonly string[];
+  mainThreadStatuses: readonly string[];
+  mainThreadEventTypes: readonly string[];
+}
+
+export function forgeMeta(): ForgeMeta {
+  return {
+    taskStatuses: TASK_STATUSES,
+    adapterKinds: ADAPTER_KINDS,
+    adapterStatuses: ADAPTER_STATUSES,
+    sessionRoles: SESSION_ROLES,
+    sessionStatuses: SESSION_STATUSES,
+    reviewStatuses: REVIEW_STATUSES,
+    dispatchStatuses: DISPATCH_STATUSES,
+    builderChoices: BUILDER_CHOICES,
+    builtinBuilderAdapters: BUILTIN_BUILDER_ADAPTER_IDS,
+    mainThreadAdapters: MAIN_THREAD_ADAPTERS,
+    mainThreadStatuses: MAIN_THREAD_STATUSES,
+    mainThreadEventTypes: MAIN_THREAD_EVENT_TYPES,
+  };
+}
 
 export interface ForgeRuntimeSummary {
   schemaVersion: number;
