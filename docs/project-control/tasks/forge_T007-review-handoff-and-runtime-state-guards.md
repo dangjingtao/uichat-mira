@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T006-builder-dispatch-and-process-supervision.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T007 Review Handoff and Runtime State Guards
