@@ -7,7 +7,10 @@ import {
 } from "react";
 import { message } from "@/shared/ui";
 import type { ForgeInspectorData } from "@/shared/api/forge/types";
-import type { ForgeTask } from "../types";
+import type {
+  ForgeRegisterProjectValues,
+  ForgeTask,
+} from "../types";
 import {
   DesktopForgeProtocol,
   type ForgeDesktopProtocol,
@@ -15,14 +18,6 @@ import {
   type ForgeShellData,
 } from "../core/protocol";
 import { buildForgeWorkspaceSnapshot } from "../core/workspaceModel";
-
-export interface ForgeRegisterProjectValues {
-  name: string;
-  repositoryPath: string;
-  branch: string;
-  taskLedger?: string;
-  taskDir?: string;
-}
 
 export interface UseForgeWorkspaceOptions {
   protocol?: ForgeDesktopProtocol;
