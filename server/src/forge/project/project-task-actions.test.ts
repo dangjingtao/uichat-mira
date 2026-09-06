@@ -5,8 +5,8 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createForgeRuntimeStore } from "../runtime/store.js";
 import {
@@ -22,8 +22,18 @@ import {
   updateForgeProject,
 } from "./project-registry.js";
 
+const testArtifactRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../../.test-artifact/forge-t004-project",
+);
+
+async function makeTestRoot(prefix: string): Promise<string> {
+  await mkdir(testArtifactRoot, { recursive: true });
+  return mkdtemp(path.join(testArtifactRoot, prefix));
+}
+
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), "mira-forge-project-registry-"));
+  const root = await makeTestRoot("case-");
   const taskDir = path.join(root, "docs", "tasks");
   await mkdir(taskDir, { recursive: true });
   await writeFile(
@@ -116,6 +126,28 @@ describe("Forge project registry", () => {
         taskDir: "docs/tasks",
       });
       expect(configured.source?.tasks.map((task) => task.id)).toEqual(["T100"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves concurrent updates to different project fields", async () => {
+    const { root, store } = await fixture();
+    try {
+      await registerForgeProject(store, {
+        id: "P-1",
+        name: "Fixture",
+        rootPath: root,
+      });
+
+      await Promise.all([
+        updateForgeProject(store, "P-1", { name: "Renamed" }),
+        updateForgeProject(store, "P-1", { integrationBranch: "release" }),
+      ]);
+
+      const project = await getForgeProject(store, "P-1");
+      expect(project.name).toBe("Renamed");
+      expect(project.integrationBranch).toBe("release");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
