@@ -12,6 +12,7 @@ const FORGE_VIEW_MODE_KEY = "mira:forge:view-mode";
 type ForgeViewMode = "standard" | "terminal";
 
 const readForgeViewMode = (): ForgeViewMode => {
+  if (typeof window === "undefined") return "standard";
   try {
     return window.localStorage.getItem(FORGE_VIEW_MODE_KEY) === "terminal"
       ? "terminal"
