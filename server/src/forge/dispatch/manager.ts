@@ -554,14 +554,20 @@ export function createDispatchManager(input: {
         request.sourceThreadId,
       );
       const inlinePrompt = optionalString(request.prompt);
-      const prompt =
-        inlinePrompt ??
-        buildTaskDispatchPrompt({
-          project: binding.project,
-          batch: binding.batch,
-          task: binding.task,
-          taskRef: repositoryTask.taskRef,
-        });
+      const canonicalPrompt = buildTaskDispatchPrompt({
+        project: binding.project,
+        batch: binding.batch,
+        task: binding.task,
+        taskRef: repositoryTask.taskRef,
+      });
+      const prompt = inlinePrompt
+        ? [
+            canonicalPrompt,
+            "",
+            "## Additional Operator Instruction",
+            inlinePrompt,
+          ].join("\n")
+        : canonicalPrompt;
       const promptSource = inlinePrompt ? "inline" : "task_ref";
 
       const session = createSession(state, {
