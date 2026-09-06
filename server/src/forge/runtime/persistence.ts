@@ -16,8 +16,13 @@ function resolveSqliteDatabasePath(databaseUrl: string): string {
       "Forge runtime requires Mira's durable SQLite DATABASE_URL to resolve backend data ownership",
     );
   }
+  if (!path.isAbsolute(filePath)) {
+    throw new Error(
+      "Forge runtime requires an absolute Mira SQLite DATABASE_URL; relative paths cannot own durable Forge state",
+    );
+  }
 
-  return path.resolve(filePath);
+  return path.normalize(filePath);
 }
 
 export function resolveForgeStateFileFromDatabaseUrl(databaseUrl: string): string {
