@@ -363,7 +363,9 @@ export function useForgeWorkspace(
         await protocol.dispatchTask(batchId, task.id, {
           builder,
           sourceThreadId: thread.id,
-          taskRef: task.source,
+          ...(task.source !== "Repository task unavailable"
+            ? { taskRef: task.source }
+            : {}),
         });
         await load({
           preferredProjectId: projectId,
