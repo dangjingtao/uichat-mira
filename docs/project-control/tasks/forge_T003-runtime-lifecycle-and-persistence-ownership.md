@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T002-core-import-and-dependency-unification.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T003 Forge Runtime Lifecycle and Persistence Ownership
@@ -54,6 +54,29 @@ task_state: TODO
 - 启动 reconcile 必须把丢失 supervision 的 active dispatch / main-thread turn 标成 interrupted/error，而不是假装继续运行。
 - 新安装不再依赖独立 Forge server 或独立 dependency install。
 - 若支持旧 `~/.mira-forge/state.json` 导入，只允许一次性、可观察、可失败的迁移；不得静默双写两个真相源。
+
+## Data Root Decision
+
+- Mira 已有稳定 backend data-root 链路：生产 Electron 将 `app.getPath("userData")/data` 注入 `UI_CHAT_DATABASE_DIR`；Server `setupDatabase()` 最终把实际 SQLite 文件写入绝对 `DATABASE_URL`。
+- Forge 不直接读取 `process.cwd()` 作为持久化根。Forge runtime 仅在 Mira database 初始化之后，从**绝对 SQLite `DATABASE_URL` 的父目录**派生 `<backend-data-root>/forge/state.json`。
+- 相对 `DATABASE_URL`、`:memory:`、非 SQLite durable URL 在 Forge 初始化时显式失败，不隐式 fallback 到 cwd。
+- 本卡不自动导入旧 `~/.mira-forge/state.json`，也不双写旧/新 state。若后续需要旧数据迁移，必须另做一次性、可观察、可失败的迁移路径。
+- 继续使用 schemaVersion 1 JSON runtime state，保留旧 Forge 原子 temp-file + rename 和串行 mutation 语义；本卡不顺手改成新的 SQLite schema。
+
+## Construction Evidence
+
+- Base: `dev@5453e473eec7b2399a2e3d33d06927ecd9d5ae1f`.
+- 新增 `server/src/forge/runtime/**`：runtime state/schema、Mira-owned store、persistence path resolver、startup reconcile、runtime singleton/lifecycle resource registry。
+- startup reconcile 覆盖：
+  - 非 terminal dispatch → `interrupted`；
+  - active Builder session → `disconnected`；
+  - runtime task `building` → `interrupted`；
+  - adapter → `offline`；
+  - Main Thread `running` → `error` + durable interrupted status event。
+- 已完成 Mira Server 接线：只有 `server/src/index.ts` 的 Forge initialize / `onClose` shutdown；没有 Forge route、固定端口、sidecar 或 child control-plane。
+- runtime 支持 manager/resource 注册：初始化前注册会在 runtime initialize 时 reconcile；初始化后注册会立即 reconcile；shutdown 反向关闭全部已注册资源并 flush durable store。T005/T006 后续 manager 可直接挂入，不需要第二套生命周期。
+- 新增定向测试：persistence reopen、serialized mutation、temp-file atomic write、schema-1 additive compatibility、absolute data-root guard、dispatch/Main Thread restart reconcile、terminal fact preservation、singleton、concurrent initialize idempotency、managed-resource shutdown。
+- 旧 `127.0.0.1:47831` 和 `MIRA_FORGE_STATE_FILE` 均未进入新实现。
 
 ## Acceptance Criteria
 
