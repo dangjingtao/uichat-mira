@@ -1,7 +1,9 @@
 import type {
-  ForgeDispatchStatus,
+  ForgeDispatch as ApiForgeDispatch,
   ForgeTaskStatus,
 } from "@/shared/api/forge/types";
+
+export type ForgeDispatchStatus = ApiForgeDispatch["status"];
 
 export type ForgeRepositoryState = string;
 export type ForgeRuntimeState = ForgeTaskStatus;
