@@ -50,6 +50,37 @@ export interface UpdateRepositoryTaskInput {
 
 type AtomicWrite = (filePath: string, content: string) => Promise<void>;
 
+const projectWriteQueues = new Map<string, Promise<void>>();
+
+async function withProjectWriteLock<T>(
+  project: ForgeProject,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const rootInput = requiredString(project?.rootPath, "project.rootPath");
+  const root = await realpath(rootInput).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error("project root is unavailable: " + message);
+  });
+
+  const previous = projectWriteQueues.get(root) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolveGate) => {
+    release = resolveGate;
+  });
+  const tail = previous.then(() => gate);
+  projectWriteQueues.set(root, tail);
+
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (projectWriteQueues.get(root) === tail) {
+      projectWriteQueues.delete(root);
+    }
+  }
+}
+
 function requiredString(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(name + " is required");
@@ -297,11 +328,17 @@ function replaceTaskCardFields(
   let next = content;
   if (input.title !== undefined) {
     const safeTitle = singleLine(input.title, "title");
-    next = next.replace(/^#\s+.+?\s*$/m, "# " + input.id + " — " + safeTitle);
+    next = next.replace(
+      /^#\s+.+?\s*$/m,
+      () => "# " + input.id + " — " + safeTitle,
+    );
   }
   if (input.status !== undefined) {
     const safeStatus = singleLine(input.status, "status");
-    next = next.replace(/^(?:Status\s*:|状态\s*[:：])\s*.+?\s*$/m, "Status: " + safeStatus);
+    next = next.replace(
+      /^(?:Status\s*:|状态\s*[:：])\s*.+?\s*$/m,
+      () => "Status: " + safeStatus,
+    );
   }
   parseTaskCard(next, input.id);
   return next;
@@ -391,6 +428,7 @@ export class RepositoryTaskSource {
   }
 
   async create(project: ForgeProject, input: CreateRepositoryTaskInput): Promise<RepositoryTaskSummary> {
+    return withProjectWriteLock(project, async () => {
     await this.inspect(project);
     const id = normalizeTaskId(input?.id);
     const paths = await configuredPaths(project);
@@ -437,10 +475,18 @@ export class RepositoryTaskSource {
     try {
       await this.atomicWrite(paths.ledgerPath, nextLedger);
     } catch (error) {
-      await unlink(cardPath);
+      try {
+        await unlink(cardPath);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "ledger write failed and task card rollback failed for " + id,
+        );
+      }
       throw error;
     }
     return this.resolve(project, id);
+    });
   }
 
   async update(
@@ -448,6 +494,7 @@ export class RepositoryTaskSource {
     inputTaskId: unknown,
     patch: UpdateRepositoryTaskInput,
   ): Promise<RepositoryTaskSummary> {
+    return withProjectWriteLock(project, async () => {
     await this.inspect(project);
     const id = normalizeTaskId(inputTaskId);
     const paths = await configuredPaths(project);
@@ -481,8 +528,14 @@ export class RepositoryTaskSource {
     }
 
     const cells = [...ledger.row.cells];
-    cells[table.taskIndex] = nextTitle;
-    cells[table.statusIndex] = nextStatus;
+    cells[table.taskIndex] =
+      patch.content !== undefined || patch.title !== undefined
+        ? nextTitle
+        : ledger.title;
+    cells[table.statusIndex] =
+      patch.content !== undefined || patch.status !== undefined
+        ? nextStatus
+        : ledger.status;
     const nextLines = [...table.lines];
     nextLines[ledger.row.lineIndex] = renderTableRow(cells);
     const nextLedger = nextLines.join("\n");
@@ -491,10 +544,18 @@ export class RepositoryTaskSource {
     try {
       await this.atomicWrite(paths.ledgerPath, nextLedger);
     } catch (error) {
-      await this.atomicWrite(cardPath, currentCard);
+      try {
+        await this.atomicWrite(cardPath, currentCard);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          "ledger write failed and task card rollback failed for " + id,
+        );
+      }
       throw error;
     }
     return this.resolve(project, id);
+    });
   }
 }
 
