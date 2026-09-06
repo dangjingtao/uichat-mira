@@ -23,6 +23,7 @@ export class ForgeRuntime {
   private initialized = false;
   private closed = false;
   private initReport: ForgeRuntimeInitReport | null = null;
+  private initPromise: Promise<ForgeRuntimeInitReport> | null = null;
   private shutdownPromise: Promise<void> | null = null;
 
   constructor(options: CreateForgeRuntimeOptions = {}) {
@@ -47,16 +48,32 @@ export class ForgeRuntime {
     if (this.initialized && this.initReport) {
       return this.initReport;
     }
+    if (this.initPromise) {
+      return this.initPromise;
+    }
 
-    const reconcile = await this.store.mutate((state) =>
-      reconcileForgeRuntimeState(state),
-    );
-    this.initialized = true;
-    this.initReport = {
-      stateFile: this.store.filePath,
-      reconcile,
-    };
-    return this.initReport;
+    this.initPromise = (async () => {
+      const reconcile = await this.store.mutate((state) =>
+        reconcileForgeRuntimeState(state),
+      );
+
+      for (const resource of this.resources.values()) {
+        await resource.reconcile?.();
+      }
+
+      this.initialized = true;
+      this.initReport = {
+        stateFile: this.store.filePath,
+        reconcile,
+      };
+      return this.initReport;
+    })();
+
+    try {
+      return await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
   }
 
   async registerResource(
@@ -86,6 +103,14 @@ export class ForgeRuntime {
 
     this.shutdownPromise = (async () => {
       const errors: unknown[] = [];
+
+      if (this.initPromise) {
+        try {
+          await this.initPromise;
+        } catch (error) {
+          errors.push(error);
+        }
+      }
       const resources = [...this.resources.entries()].reverse();
 
       for (const [, resource] of resources) {
