@@ -172,52 +172,54 @@ export async function updateForgeProject(
   project: ForgeProject;
   source: RepositoryTaskSourceInspection | null;
 }> {
-  const snapshot = await store.read();
-  const current = projectForId(snapshot.projects, projectId);
-
-  const name =
-    input.name === undefined ? current.name : requiredSingleLine(input.name, "name");
-  const repository =
-    input.repository === undefined
-      ? current.repository
-      : optionalSingleLine(input.repository, "repository");
-  const integrationBranch =
-    input.integrationBranch === undefined
-      ? current.integrationBranch
-      : requiredSingleLine(input.integrationBranch, "integrationBranch");
-
-  const nextLedger =
-    input.taskLedger === undefined
-      ? current.taskLedger
-      : optionalSingleLine(input.taskLedger, "taskLedger");
-  const nextTaskDir =
-    input.taskDir === undefined
-      ? current.taskDir
-      : optionalSingleLine(input.taskDir, "taskDir");
-  if ((nextLedger && !nextTaskDir) || (!nextLedger && nextTaskDir)) {
-    throw new Error("taskLedger and taskDir must be configured together");
-  }
-
-  const candidate: ForgeProject = {
-    ...current,
-    name,
-    repository,
-    integrationBranch,
-    taskLedger: nextLedger,
-    taskDir: nextTaskDir,
-  };
-  const source = await inspectConfiguredSource(candidate);
-
-  const updated = await store.mutate((state) => {
+  return store.mutate(async (state) => {
     const target = projectForId(state.projects, projectId);
+
+    const name =
+      input.name === undefined
+        ? target.name
+        : requiredSingleLine(input.name, "name");
+    const repository =
+      input.repository === undefined
+        ? target.repository
+        : optionalSingleLine(input.repository, "repository");
+    const integrationBranch =
+      input.integrationBranch === undefined
+        ? target.integrationBranch
+        : requiredSingleLine(input.integrationBranch, "integrationBranch");
+    const nextLedger =
+      input.taskLedger === undefined
+        ? target.taskLedger
+        : optionalSingleLine(input.taskLedger, "taskLedger");
+    const nextTaskDir =
+      input.taskDir === undefined
+        ? target.taskDir
+        : optionalSingleLine(input.taskDir, "taskDir");
+
+    if ((nextLedger && !nextTaskDir) || (!nextLedger && nextTaskDir)) {
+      throw new Error("taskLedger and taskDir must be configured together");
+    }
+
+    const candidate: ForgeProject = {
+      ...target,
+      name,
+      repository,
+      integrationBranch,
+      taskLedger: nextLedger,
+      taskDir: nextTaskDir,
+    };
+    const source = await inspectConfiguredSource(candidate);
+
     target.name = name;
     target.repository = repository;
     target.integrationBranch = integrationBranch;
     target.taskLedger = nextLedger;
     target.taskDir = nextTaskDir;
     target.updatedAt = new Date().toISOString();
-    return { ...target };
-  });
 
-  return { project: updated, source };
+    return {
+      project: { ...target },
+      source,
+    };
+  });
 }
