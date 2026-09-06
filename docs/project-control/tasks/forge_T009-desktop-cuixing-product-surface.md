@@ -160,14 +160,14 @@ task_state: DOING
   - Main Thread 长请求期间未主动启动 refresh polling；
   - readiness 请求失败被吞掉，可能把 transport failure 误呈现为 domain unavailable；
   - 首次加载失败页缺少 Retry / Back，用户会被困在 `/forge`。
-- follow-up branch：`fix/forge-t009-review-followup`，仅处理上述 3 个 finding，不扩大 T009 范围。
+- follow-up：PR #110（`fix/forge-t009-review-followup`）已 squash merge 到 `dev`，merge commit `0edfbc9c00419de9e4e10aef21e111843123ae3f`；仅处理上述 3 个 finding，不扩大 T009 范围。
 - follow-up 修复：
   - send request in-flight 时启动 3s polling，响应完成后停止；
   - readiness failure 保留 `batchId + error`，投影为明确 operational evidence，不伪造成 blocked；
   - 初始加载失败页提供“重试 / 返回聊天”。
 - 新增 focused regression：protocol readiness failure、workspace projection/presentation、long-send polling、initial-load recovery actions。
-- CodeRabbit 对 PR #109 因 PR 已关闭未完成有效 review；Codex findings 以 follow-up PR 为准。
-- Self-review：进行中，follow-up 合并后再收口。
+- PR #110 Branch Policy：PASS；合并前 0 review thread。CodeRabbit 仍 pending、Codex 未在合并前返回新 finding，按 owner 既定 fallback 规则不继续阻塞主线。
+- Self-review：PASS；3 个 late-review P2 均已逐条修复并补 focused regression。
 - Blocker check：
   - `shared/uchat/**` 0 修改；Forge route knowledge 只存在 Desktop Chat feature integration；
   - `ForgeWorkspace` / workspace components 不 import `forgeApi`，transport / model / orchestration / view 分层成立；
