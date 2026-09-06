@@ -105,6 +105,9 @@ describe("Forge runtime persistence ownership", () => {
     expect(() => resolveForgeStateFileFromDatabaseUrl("file::memory:")).toThrow(
       /durable SQLite DATABASE_URL/,
     );
+    expect(() => resolveForgeStateFileFromDatabaseUrl("file:./relative.db")).toThrow(
+      /absolute Mira SQLite DATABASE_URL/,
+    );
   });
 });
 
@@ -179,6 +182,28 @@ describe("Forge runtime startup reconcile", () => {
 });
 
 describe("Forge runtime lifecycle ownership", () => {
+  it("reconciles pre-registered resources once across concurrent initialize calls", async () => {
+    const { file } = await makeStateFile("mira-forge-runtime-init-once-");
+    const runtime = new ForgeRuntime({ stateFile: file });
+    let reconciled = 0;
+
+    await runtime.registerResource("pre-init-manager", {
+      async reconcile() {
+        reconciled += 1;
+      },
+    });
+
+    const [first, second] = await Promise.all([
+      runtime.initialize(),
+      runtime.initialize(),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(reconciled).toBe(1);
+
+    await runtime.shutdown();
+  });
+
   it("keeps one active Mira-owned runtime and shuts registered resources down once", async () => {
     resetForgeRuntimeForTests();
     const { file } = await makeStateFile("mira-forge-runtime-singleton-");
