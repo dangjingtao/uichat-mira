@@ -2,7 +2,7 @@
 status: current
 priority: P1
 owner: forge / desktop
-last_verified: 2026-09-05
+last_verified: 2026-09-06
 layer: project-control
 module: Forge
 feature: CuixingDesktop
@@ -182,6 +182,11 @@ task_state: DONE
   - production Forge UI 无固定 backend port、Node/fs/child_process 直连。
 - 技术自审结论：通过。
 - Owner visual review：通过；标准淬行产品面无需整改。
+- Terminal View PR #111 已 squash merge 到 `dev`，merge commit `a33ad71efa460f6db351462b75916f19d235be68`。
+- PR #111 Branch Policy：PASS；合并前 0 unresolved review thread。
+- CodeRabbit / Codex 在合并前未返回有效 latest-head review；按 owner 既定 fallback 规则由自审收口。
+- 自审边界扫描：0 `shared/uchat` 修改、0 package/lock、0 legacy `:47831`、0 `forgeApi` 直连、0 `/api/*` 直连、0 Node runtime 侵入。
+- 当前 PR workflow 未执行 Desktop typecheck / focused Vitest，且执行容器无法联网拉取仓库；因此不把“未观察到失败”写成“测试已通过”。
 - 旧 Forge TUI 作为同一产品域的 Terminal View 已迁入 Mira Desktop：
   - 不迁移旧 Vite / package / standalone server / styles dependency；
   - 新视图直接消费同一 `ForgeWorkspaceSnapshot` 与同一组 select / send / dispatch / cancel / integrate callbacks；
