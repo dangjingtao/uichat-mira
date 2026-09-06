@@ -17,15 +17,21 @@ describe("Forge Desktop API client", () => {
   it("maps product reads to stable /forge routes without /api or ports", async () => {
     vi.mocked(get).mockResolvedValue({ projectCount: 0 } as never);
 
+    await forgeApi.getMeta();
+    await forgeApi.listDispatches({ status: "running" });
     await forgeApi.getRuntimeSummary();
     await forgeApi.listBatches("P 1");
     await forgeApi.getInspector({ dispatchId: "D/1" });
 
-    expect(get).toHaveBeenNthCalledWith(1, "/forge/runtime/summary");
-    expect(get).toHaveBeenNthCalledWith(2, "/forge/batches", {
+    expect(get).toHaveBeenNthCalledWith(1, "/forge/meta");
+    expect(get).toHaveBeenNthCalledWith(2, "/forge/dispatches", {
+      params: { status: "running" },
+    });
+    expect(get).toHaveBeenNthCalledWith(3, "/forge/runtime/summary");
+    expect(get).toHaveBeenNthCalledWith(4, "/forge/batches", {
       params: { projectId: "P 1" },
     });
-    expect(get).toHaveBeenNthCalledWith(3, "/forge/inspector", {
+    expect(get).toHaveBeenNthCalledWith(5, "/forge/inspector", {
       params: { dispatchId: "D/1" },
     });
 
