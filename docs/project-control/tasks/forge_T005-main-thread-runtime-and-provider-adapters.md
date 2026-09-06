@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T004-project-registry-and-repository-task-source.md
-task_state: DONE
+task_state: DOING
 ---
 
 # forge_T005 Main Thread Runtime and Provider Adapters
@@ -119,6 +119,14 @@ task_state: DONE
 - Static hygiene：changed files 0 conflict marker、0 trailing whitespace。
 - 新增 provider fake-process / durable continuation / wrong-thread / write-attempt / Task capability / explicit handoff regressions。当前 PR workflow 不执行 Forge Vitest，因此不伪造“定向 Vitest 已运行”；合并后以 `dev` 的 `pnpm check` 和 Windows staged-server smoke 为最终整仓门禁。
 - Final self-review: PASS。若合并后任一真实门禁失败，立即重开 T005。
+
+## Post-Merge Gate Failure — 2026-09-06
+
+- PR #103 merge SHA `97bd347ae54fe8d3ef194efb8c7fc7ad10623530` 的 Windows staged-server smoke PASS，但 `Check dev -> Type check` FAIL；因此 T005 已按既定规则立即重开。
+- 失败仅有两个 T005 自身 TypeScript blocker：
+  1. `codex-desktop.ts` 对异步 notification callback 写入的 `terminal` 做 optional property access 时，被 TypeScript 控制流收窄为 `never`；改为先经 `asRecord(terminal)` 恢复运行时 record 边界，再读取 `params`，不改变协议行为。
+  2. `main-thread/runtime.ts` 注册到 T003 `ForgeRuntimeManagedResource` 的 `reconcile` 必须是 `void | Promise<void>`，但 manager 返回 interrupted thread ID list；adapter 改为 await 后丢弃返回值，不改变 manager reconcile 结果本身。
+- 修复分支：`fix/forge-t005-typecheck`。除上述两处类型适配与本卡状态/证据外不改功能合同。
 
 ## Unknown / Human Decision
 
