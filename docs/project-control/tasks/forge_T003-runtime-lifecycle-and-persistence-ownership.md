@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T002-core-import-and-dependency-unification.md
-task_state: READY_FOR_REVIEW
+task_state: DONE
 ---
 
 # forge_T003 Forge Runtime Lifecycle and Persistence Ownership
@@ -103,6 +103,9 @@ task_state: READY_FOR_REVIEW
 - Production Forge runtime contains no `process.cwd()`, `:47831`, `MIRA_FORGE_STATE_FILE`, or legacy `.mira-forge` dependency.
 - Existing repository/CI `DATABASE_URL` usages inspected are absolute file paths; T003's relative-path rejection does not conflict with the repository's canonical startup/CI path contract.
 - Current execution environment does not have a writable checkout with dependencies, so pre-merge full `pnpm check` / focused Vitest are not claimed. As with T002, merge is gated by code review/static contract inspection, then the real `dev` push `Check dev -> pnpm check` and Windows staged-server smoke are authoritative; any failure reopens T003 immediately.
+
+- Final self-review: PASS。T003 满足 runtime ownership / persistence / restart reconcile / shutdown 边界；无独立 server、sidecar、旧 state 双写或 cwd-owned durable root。
+- AI review 当前无 unresolved blocker；CodeRabbit 对早期 HEAD 报出的 barrel syntax 问题已在最新 code HEAD 修复。最终是否站稳以合并后 `dev` 的 `pnpm check` 与 Windows staged-server smoke 为准，失败立即重开 T003。
 
 ## Unknown / Human Decision
 
