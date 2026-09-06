@@ -206,6 +206,40 @@ describe("buildForgeWorkspaceSnapshot", () => {
     expect(snapshot.tasks[0]?.repositoryState).not.toBe("PASS");
   });
 
+  it("keeps the latest integrated runtime state instead of falling back to waiting", () => {
+    const integratedShell = {
+      ...shell,
+      batches: [
+        {
+          ...shell.batches[0],
+          status: "integrated" as const,
+          tasks: [
+            {
+              ...shell.batches[0].tasks[0],
+              status: "integrated" as const,
+            },
+          ],
+        },
+      ],
+    };
+    const integratedProjectData = {
+      ...projectData,
+      batches: integratedShell.batches,
+      readiness: [],
+    } as ForgeProjectData;
+
+    const snapshot = buildForgeWorkspaceSnapshot({
+      shell: integratedShell,
+      projectData: integratedProjectData,
+      selectedProjectId: "P-1",
+      selectedTaskId: "T100",
+      inspector: null,
+    });
+
+    expect(snapshot.tasks[0]?.runtimeState).toBe("integrated");
+    expect(snapshot.tasks[0]?.readiness).toBe("unavailable");
+  });
+
   it("projects Builder Result Handoff without promoting Task truth", () => {
     const snapshot = buildForgeWorkspaceSnapshot({
       shell,
