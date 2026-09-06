@@ -5,6 +5,7 @@ import type {
   ForgeDispatchReadiness,
   ForgeInspectorData,
   ForgeMainThread,
+  ForgeMainThreadEvent,
   ForgeMainThreadSnapshot,
   ForgeProject,
   ForgeRepositoryTask,
@@ -254,5 +255,3 @@ export const forgeApi = {
     sessionId?: string;
   }) => get<ForgeRuntimeEvent[]>("/forge/events", { params: query }),
 };
-
-type ForgeMainThreadEvent = import("./types").ForgeMainThreadEvent;
