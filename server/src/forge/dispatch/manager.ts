@@ -264,6 +264,7 @@ export function createDispatchManager(input: {
   }
 
   const handles = new Map<string, BuilderProcessHandle>();
+  const terminatingDispatches = new Set<string>();
 
   async function markStarted(
     dispatchId: string,
@@ -350,6 +351,7 @@ export function createDispatchManager(input: {
     dispatchId: string,
     result: BuilderExitResult,
   ): Promise<void> {
+    if (terminatingDispatches.has(dispatchId)) return;
     handles.delete(dispatchId);
     await store.mutate((state) => {
       const dispatch = findDispatch(state, dispatchId);
@@ -430,6 +432,7 @@ export function createDispatchManager(input: {
     error: unknown,
     details: { stderr?: unknown } = {},
   ): Promise<void> {
+    if (terminatingDispatches.has(dispatchId)) return;
     handles.delete(dispatchId);
     const message =
       error instanceof Error ? error.message : String(error);
@@ -649,58 +652,81 @@ export function createDispatchManager(input: {
     dispatchId: unknown,
   ): Promise<ForgeDispatch> {
     const id = requiredString(dispatchId, "dispatchId");
-    const handle = handles.get(id);
-    const result = await store.mutate((state) => {
-      const dispatch = findDispatch(state, id);
-      if (isTerminalDispatch(dispatch.status)) {
-        return {
-          dispatch: structuredClone(dispatch),
-          changed: false,
-        };
-      }
-
-      const { batch, task } = resolveBinding(
-        state,
-        dispatch.batchId,
-        dispatch.taskId,
-      );
-      const session = state.sessions.find(
-        (item) => item.id === dispatch.sessionId,
-      );
-      if (
-        session &&
-        (ACTIVE_SESSION_STATUSES as readonly string[]).includes(
-          session.status,
-        )
-      ) {
-        updateSession(state, session.id, {
-          status: "disconnected",
-        });
-      }
-      updateTask(state, batch.id, task.id, {
-        status: "interrupted",
-      });
-      heartbeatAdapter(state, dispatch.adapterId, {
-        status: "available",
-      });
-      transitionDispatch(state, dispatch.id, "cancelled", {
-        signal: "SIGTERM",
-      });
-      dispatchEvent(state, dispatch, "dispatch.cancelled", {
-        reason: "explicit_cancel",
-      });
-
-      return {
-        dispatch: structuredClone(dispatch),
-        changed: true,
-      };
-    });
-
-    if (result.changed) {
-      handles.delete(id);
-      handle?.kill("SIGTERM");
+    const snapshot = await store.read();
+    const current = findDispatch(snapshot, id);
+    if (isTerminalDispatch(current.status)) {
+      return structuredClone(current);
     }
-    return result.dispatch;
+
+    const handle = handles.get(id);
+    if (!handle) {
+      throw new Error(
+        "cannot cancel dispatch without an owned live process handle: " + id,
+      );
+    }
+
+    terminatingDispatches.add(id);
+    const signalSent = handle.kill("SIGTERM");
+    if (!signalSent) {
+      terminatingDispatches.delete(id);
+      await store.mutate((state) => {
+        const dispatch = findDispatch(state, id);
+        if (!isTerminalDispatch(dispatch.status)) {
+          dispatchEvent(state, dispatch, "dispatch.warning", {
+            code: "cancel_signal_failed",
+            signal: "SIGTERM",
+          });
+        }
+      });
+      throw new Error(
+        "failed to terminate live Builder process for dispatch: " + id,
+      );
+    }
+
+    try {
+      const cancelled = await store.mutate((state) => {
+        const dispatch = findDispatch(state, id);
+        if (isTerminalDispatch(dispatch.status)) {
+          return structuredClone(dispatch);
+        }
+
+        const { batch, task } = resolveBinding(
+          state,
+          dispatch.batchId,
+          dispatch.taskId,
+        );
+        const session = state.sessions.find(
+          (item) => item.id === dispatch.sessionId,
+        );
+        if (
+          session &&
+          (ACTIVE_SESSION_STATUSES as readonly string[]).includes(
+            session.status,
+          )
+        ) {
+          updateSession(state, session.id, {
+            status: "disconnected",
+          });
+        }
+        updateTask(state, batch.id, task.id, {
+          status: "interrupted",
+        });
+        heartbeatAdapter(state, dispatch.adapterId, {
+          status: "available",
+        });
+        transitionDispatch(state, dispatch.id, "cancelled", {
+          signal: "SIGTERM",
+        });
+        dispatchEvent(state, dispatch, "dispatch.cancelled", {
+          reason: "explicit_cancel",
+        });
+        return structuredClone(dispatch);
+      });
+      handles.delete(id);
+      return cancelled;
+    } finally {
+      terminatingDispatches.delete(id);
+    }
   }
 
   async function reconcile(): Promise<number> {
@@ -760,48 +786,78 @@ export function createDispatchManager(input: {
 
   async function shutdown(): Promise<void> {
     const ids = [...handles.keys()];
+    const errors: unknown[] = [];
+
     for (const id of ids) {
       const handle = handles.get(id);
-      await store.mutate((state) => {
-        const dispatch = findDispatch(state, id);
-        if (isTerminalDispatch(dispatch.status)) return dispatch;
+      terminatingDispatches.add(id);
+      try {
+        await store.mutate((state) => {
+          const dispatch = findDispatch(state, id);
+          if (isTerminalDispatch(dispatch.status)) return dispatch;
 
-        const { batch, task } = resolveBinding(
-          state,
-          dispatch.batchId,
-          dispatch.taskId,
-        );
-        const session = state.sessions.find(
-          (item) => item.id === dispatch.sessionId,
-        );
-        if (
-          session &&
-          (ACTIVE_SESSION_STATUSES as readonly string[]).includes(
-            session.status,
-          )
-        ) {
-          updateSession(state, session.id, {
-            status: "disconnected",
+          const { batch, task } = resolveBinding(
+            state,
+            dispatch.batchId,
+            dispatch.taskId,
+          );
+          const session = state.sessions.find(
+            (item) => item.id === dispatch.sessionId,
+          );
+          if (
+            session &&
+            (ACTIVE_SESSION_STATUSES as readonly string[]).includes(
+              session.status,
+            )
+          ) {
+            updateSession(state, session.id, {
+              status: "disconnected",
+            });
+          }
+          updateTask(state, batch.id, task.id, {
+            status: "interrupted",
           });
-        }
-        updateTask(state, batch.id, task.id, {
-          status: "interrupted",
+          heartbeatAdapter(state, dispatch.adapterId, {
+            status: "offline",
+          });
+          transitionDispatch(state, dispatch.id, "interrupted", {
+            signal: "SIGTERM",
+            error: "control plane shutdown",
+          });
+          dispatchEvent(state, dispatch, "dispatch.interrupted", {
+            reason: "control_plane_shutdown",
+          });
+          return dispatch;
         });
-        heartbeatAdapter(state, dispatch.adapterId, {
-          status: "offline",
-        });
-        transitionDispatch(state, dispatch.id, "interrupted", {
-          signal: "SIGTERM",
-          error: "control plane shutdown",
-        });
-        dispatchEvent(state, dispatch, "dispatch.interrupted", {
-          reason: "control_plane_shutdown",
-        });
-        return dispatch;
-      });
 
-      handles.delete(id);
-      handle?.kill("SIGTERM");
+        handles.delete(id);
+        if (handle && !handle.kill("SIGTERM")) {
+          await store.mutate((state) => {
+            const dispatch = findDispatch(state, id);
+            dispatchEvent(state, dispatch, "dispatch.warning", {
+              code: "shutdown_signal_failed",
+              signal: "SIGTERM",
+            });
+          });
+          errors.push(
+            new Error(
+              "failed to terminate live Builder process during shutdown: " +
+                id,
+            ),
+          );
+        }
+      } catch (error) {
+        errors.push(error);
+      } finally {
+        terminatingDispatches.delete(id);
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new AggregateError(
+        errors,
+        "Builder dispatch shutdown failed",
+      );
     }
   }
 
