@@ -198,11 +198,16 @@ export function projectInspector(
 
   const events = state.events
     .filter((event) => {
-      if (project && event.projectId !== project.id) return false;
-      if (batch && event.batchId !== batch.id) return false;
-      if (task && event.taskId !== task.id) return false;
-      if (dispatch && event.dispatchId !== dispatch.id) return false;
-      if (session && event.sessionId !== session.id) return false;
+      if (query.projectId && event.projectId !== query.projectId) return false;
+      if (query.batchId && event.batchId !== query.batchId) return false;
+      if (query.taskId && event.taskId !== query.taskId) return false;
+      if (query.dispatchId && event.dispatchId !== query.dispatchId) return false;
+      if (query.sessionId && event.sessionId !== query.sessionId) return false;
+      if (!query.projectId && project && event.projectId !== project.id) return false;
+      if (!query.batchId && batch && event.batchId !== batch.id) return false;
+      if (!query.taskId && task && event.taskId !== task.id) return false;
+      if (!query.dispatchId && dispatch && event.dispatchId !== dispatch.id) return false;
+      if (!query.sessionId && session && event.sessionId !== session.id) return false;
       return true;
     })
     .slice(-200)
