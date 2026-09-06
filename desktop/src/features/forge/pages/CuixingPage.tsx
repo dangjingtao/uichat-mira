@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, FullPageStatus } from "@/shared/ui";
-import ForgeWorkspace from "../components/ForgeWorkspace";
+import ForgeWorkspace, {
+  type ForgeWorkspaceProps,
+} from "../components/ForgeWorkspace";
 import ForgeTerminalWorkspace from "../components/ForgeTerminalWorkspace";
 import useForgeWorkspace from "../hooks/useForgeWorkspace";
 
@@ -63,29 +65,19 @@ export default function CuixingPage() {
     );
   }
 
-  const commonProps = {
+  const commonProps: ForgeWorkspaceProps = {
     snapshot: workspace.snapshot,
     busy: workspace.busy,
     onBackToChat: () => navigate("/chat"),
     onRefresh: () => workspace.refresh(),
-    onSelectProject: (projectId: string) =>
-      workspace.selectProject(projectId),
-    onSelectTask: (taskId: string) => workspace.selectTask(taskId),
-    onRegisterProject: (values: Parameters<
-      typeof workspace.registerProject
-    >[0]) => workspace.registerProject(values),
-    onSendMessage: (value: string) => workspace.sendMessage(value),
-    onDispatch: (
-      task: Parameters<typeof workspace.dispatchTask>[0],
-      builder: Parameters<typeof workspace.dispatchTask>[1],
-    ) => workspace.dispatchTask(task, builder),
-    onCancel: (
-      runtime: Parameters<typeof workspace.cancelDispatch>[0] extends string
-        ? { id: string }
-        : never,
-    ) => workspace.cancelDispatch(runtime.id),
-    onIntegrate: (task: Parameters<typeof workspace.integrateTask>[0]) =>
-      workspace.integrateTask(task),
+    onSelectProject: (projectId) => workspace.selectProject(projectId),
+    onSelectTask: (taskId) => workspace.selectTask(taskId),
+    onRegisterProject: (values) => workspace.registerProject(values),
+    onSendMessage: (value) => workspace.sendMessage(value),
+    onDispatch: (task, builder) =>
+      workspace.dispatchTask(task, builder),
+    onCancel: (runtime) => workspace.cancelDispatch(runtime.id),
+    onIntegrate: (task) => workspace.integrateTask(task),
   };
 
   if (viewMode === "terminal") {
