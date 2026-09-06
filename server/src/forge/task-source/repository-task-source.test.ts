@@ -273,7 +273,7 @@ describe("Repository Task Source", () => {
     try {
       const source = new RepositoryTaskSource();
       await source.update(project, "T100", {
-        title: "Dollar   it("refuses repository writes while existing task truth is malformed", async () => { 
+        title: "Dollar   it("refuses repository writes while existing task truth is malformed", async () => {
     const { root, taskDir, ledgerPath, project } = await fixture();
     try {
       await rm(path.join(taskDir, "T101-localized.md"));
@@ -381,7 +381,7 @@ describe("Repository Task Source", () => {
         path.join(taskDir, "T100-first-task.md"),
         "utf8",
       );
-      expect(card).toContain("# T100 — Dollar   it("refuses repository writes while existing task truth is malformed", async () => { 
+      expect(card).toContain("# T100 — Dollar   it("refuses repository writes while existing task truth is malformed", async () => {
     const { root, taskDir, ledgerPath, project } = await fixture();
     try {
       await rm(path.join(taskDir, "T101-localized.md"));
