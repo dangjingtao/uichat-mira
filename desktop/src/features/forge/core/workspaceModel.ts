@@ -178,6 +178,9 @@ const mapTask = (
   const readiness = batch
     ? projectData.readiness.find((item) => item.batchId === batch.id)
     : null;
+  const readinessFailure = batch
+    ? projectData.readinessFailures.find((item) => item.batchId === batch.id)
+    : null;
   const ready = readiness?.ready.find((item) => item.taskId === taskId);
   const blocked = readiness?.blocked.find(
     (item) => item.taskId === taskId,
@@ -213,8 +216,9 @@ const mapTask = (
     source: repositoryTask?.taskRef ?? "Repository task unavailable",
     dependencies: runtimeTask?.dependsOn ?? [],
     readiness: readinessState,
-    readinessReasons:
-      blocked?.reasons.map((reason) => reason.code) ?? [],
+    readinessReasons: readinessFailure
+      ? [`readiness_check_failed: ${readinessFailure.error}`]
+      : blocked?.reasons.map((reason) => reason.code) ?? [],
     warnings: repositoryTask?.warnings ?? [],
     currentSha: runtimeTask?.currentSha ?? null,
     reviewedSha: runtimeTask?.reviewedSha ?? null,

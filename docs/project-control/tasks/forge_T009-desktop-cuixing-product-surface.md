@@ -155,12 +155,19 @@ task_state: DOING
 
 ## Technical Review Evidence
 
-- PR #109，base=`dev`，feature branch=`feature/forge-t009-desktop-surface`。
-- Latest technical self-review HEAD: `b9381d990935adaa2d174c9c989f1796e3a823be`。
-- Branch Policy：PASS；0 unresolved review thread。
-- CodeRabbit：latest-head review 已触发但仍 processing，当前无 finding。
-- Codex：未提供有效 review；按 owner 既定 fallback 规则，本卡技术实现允许自审收口，不让 reviewer pending 卡死主线。
-- Self-review：PASS。
+- PR #109 已合并到 `dev`（merge commit `0ffc19cf95bde30ff6379272175a46b9ede1970c`）。
+- Codex 在 PR #109 合并后返回 3 个 P2 follow-up finding：
+  - Main Thread 长请求期间未主动启动 refresh polling；
+  - readiness 请求失败被吞掉，可能把 transport failure 误呈现为 domain unavailable；
+  - 首次加载失败页缺少 Retry / Back，用户会被困在 `/forge`。
+- follow-up branch：`fix/forge-t009-review-followup`，仅处理上述 3 个 finding，不扩大 T009 范围。
+- follow-up 修复：
+  - send request in-flight 时启动 3s polling，响应完成后停止；
+  - readiness failure 保留 `batchId + error`，投影为明确 operational evidence，不伪造成 blocked；
+  - 初始加载失败页提供“重试 / 返回聊天”。
+- 新增 focused regression：protocol readiness failure、workspace projection/presentation、long-send polling、initial-load recovery actions。
+- CodeRabbit 对 PR #109 因 PR 已关闭未完成有效 review；Codex findings 以 follow-up PR 为准。
+- Self-review：进行中，follow-up 合并后再收口。
 - Blocker check：
   - `shared/uchat/**` 0 修改；Forge route knowledge 只存在 Desktop Chat feature integration；
   - `ForgeWorkspace` / workspace components 不 import `forgeApi`，transport / model / orchestration / view 分层成立；

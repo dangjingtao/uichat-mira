@@ -160,6 +160,32 @@ describe("ForgeWorkspace", () => {
     expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
   });
 
+  it("shows readiness transport failures separately from domain blocking", () => {
+    const unavailable: ForgeWorkspaceSnapshot = {
+      ...snapshot,
+      tasks: [
+        {
+          ...snapshot.tasks[0],
+          runtimeState: "waiting",
+          readiness: "unavailable",
+          readinessReasons: [
+            "readiness_check_failed: readiness endpoint unavailable",
+          ],
+        },
+      ],
+    };
+
+    render(<ForgeWorkspace snapshot={unavailable} />);
+
+    expect(screen.getByText("Readiness check unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "readiness_check_failed: readiness endpoint unavailable",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
+  });
+
   it("renders the real empty state when the API snapshot is absent", () => {
     render(<ForgeWorkspace snapshot={null} />);
 

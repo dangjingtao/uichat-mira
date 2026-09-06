@@ -56,6 +56,8 @@ export function useForgeWorkspace(
     useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [mainThreadRequestInFlight, setMainThreadRequestInFlight] =
+    useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const inspectorRequestIdRef = useRef(0);
@@ -317,6 +319,7 @@ export function useForgeWorkspace(
       setBusy(true);
       try {
         const thread = await ensureMainThread();
+        setMainThreadRequestInFlight(true);
         const threadSnapshot = await protocol.sendMessage(
           thread.id,
           text,
@@ -345,6 +348,7 @@ export function useForgeWorkspace(
         message.error(detail);
         throw actionError;
       } finally {
+        setMainThreadRequestInFlight(false);
         setBusy(false);
       }
     },
@@ -456,6 +460,7 @@ export function useForgeWorkspace(
 
   useEffect(() => {
     const live =
+      mainThreadRequestInFlight ||
       (snapshot?.activeRuntimeCount ?? 0) > 0 ||
       data.projectData?.threadSnapshot?.thread.status === "running";
     if (!live) return;
@@ -472,6 +477,7 @@ export function useForgeWorkspace(
   }, [
     data.projectData?.threadSnapshot?.thread.status,
     load,
+    mainThreadRequestInFlight,
     snapshot?.activeRuntimeCount,
   ]);
 
