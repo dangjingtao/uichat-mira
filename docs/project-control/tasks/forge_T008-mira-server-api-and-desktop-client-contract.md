@@ -147,6 +147,19 @@ Desktop 开发环境走 `/api/forge/...`；生产使用现有 backendUrl 机制�
 - Focused Server/Desktop Vitest 已新增，但当前 PR workflow 不执行，因此不声明已运行。
 - 最终完成仍以合并后的 `dev -> pnpm check` 与 Windows staged-server smoke 为准；任一失败立即重开 T008。
 
+## Post-Merge Gate Failure — 2026-09-06
+
+- PR #107 merge SHA `9739ffa2fc1858deaf55c9dfa0cd4445002ec599`：
+  - Windows staged-server smoke：PASS。
+  - `Check dev -> Type check`：FAIL。
+- 失败仅有一个 T008 自身类型阻断：
+  - `server/src/forge/routes/service.ts` 从 `../main-thread/runtime.js` 引入 `MainThreadManager`，但该模块仅本地声明该类型，未 export；正式类型定义位于 `../main-thread/manager.js`。
+- 修复仅调整 type import，不改变 runtime/service/route 行为。
+- 修复分支：`fix/forge-t008-typecheck`。修复合并且 `dev` 的 Type check + Windows staged-server 全绿前，T008 保持 DOING。
+
+- Typecheck remediation self-review: PASS。PR #108 仅修正 `MainThreadManager` 的 type import 来源，不改变 runtime/service/route 行为；Branch Policy PASS，0 unresolved review thread。
+- T008 最终完成仍以 PR #108 合并后的 `dev -> Type check` 与 Windows staged-server smoke 重新全绿为准；任一失败再次重开。
+
 ## Unknown / Human Decision
 
 None.
