@@ -7,6 +7,7 @@ import type {
   ForgeMainThread,
   ForgeMainThreadEvent,
   ForgeMainThreadSnapshot,
+  ForgeMeta,
   ForgeProject,
   ForgeRepositoryTask,
   ForgeReview,
@@ -49,6 +50,14 @@ export interface UpdateForgeRepositoryTaskInput {
 }
 
 export const forgeApi = {
+  getMeta: () => get<ForgeMeta>("/forge/meta"),
+  listDispatches: (query?: {
+    projectId?: string;
+    batchId?: string;
+    taskId?: string;
+    status?: string;
+  }) => get<ForgeDispatch[]>("/forge/dispatches", { params: query }),
+
   listProjects: () => get<ForgeProject[]>("/forge/projects"),
   registerProject: (input: RegisterForgeProjectInput) =>
     post<{ project: ForgeProject; source: ForgeTaskSource | null }>(
