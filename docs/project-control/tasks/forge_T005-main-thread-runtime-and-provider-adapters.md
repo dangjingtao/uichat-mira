@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T004-project-registry-and-repository-task-source.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T005 Main Thread Runtime and Provider Adapters
@@ -55,6 +55,31 @@ task_state: TODO
 - provider thinking / tool / artifact 映射到 bounded normalized events。
 - 默认 provider turn timeout 维持当前已验证的 3,000,000ms，除非有新证据支持修改。
 - Task inspect / resolve / create / update / handoff 全部通过 Forge capability boundary。
+
+## Construction Evidence
+
+- Base: `dev@271ce832e2f700412b0385971046aafd4e47d8c6`.
+- 新增 `server/src/forge/main-thread/**`：
+  - provider-neutral durable Main Thread domain；
+  - Main Thread manager；
+  - ForgeRuntime lifecycle attach helper；
+  - durable reopen / continuation、wrong-thread、read-only violation、Task capability / explicit handoff、restart reconcile 回归。
+- 新增 `server/src/forge/adapters/main-thread/**`：
+  - OpenCode Main Thread adapter；
+  - Codex CLI Main Thread adapter；
+  - Codex Desktop app-server adapter；
+  - 默认 adapter registry。
+- 支持且仅支持 `opencode` / `codex-desktop` / `codex` 三种 Main Thread adapter；未引入 PiAgent Main Thread。
+- OpenCode 固定 `--agent plan`，并注入 deny-by-default、read/glob/grep/list/lsp/webfetch/websearch allow 的 `OPENCODE_PERMISSION`。
+- Codex CLI 固定 `--sandbox read-only --ask-for-approval never`。
+- Codex Desktop 固定 thread-level `sandbox: read-only`、turn-level `sandboxPolicy: { type: "readOnly" }`、`approvalPolicy: never`。
+- 三种 provider 默认 turn timeout 均保持固定源已验证的 `3_000_000ms`。
+- durable external thread/session ID 继续精确续接；Codex / Codex Desktop 对 wrong-thread 明确失败，OpenCode 对 provider 报告的不同 session 明确失败。
+- provider thinking / tool / artifact 进入 bounded normalized Main Thread events；provider file-change / edit-write 类事件按 read-only contract violation 失败。
+- Main Thread Task inspect / resolve / create / update 全部复用 T004 project/task capability boundary；未直接读写第二套 task DB。
+- 显式 handoff 只持久化 `projectId + taskId + taskRef + preferredBuilder` 引用，不创建 Dispatch、不启动 Builder。
+- 未搬固定源后期的 `docs/workbench/**` 隐式 Task Source fallback；Mira T004 已冻结为显式 task source 配置，本卡继续遵守该合同。
+- 未接 route / Desktop / Mira Chat / AgentGraph；未加入 Builder Result 回注、Reviewer 或自动 Dispatch。
 
 ## Acceptance Criteria
 
