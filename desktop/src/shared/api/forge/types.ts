@@ -1,3 +1,18 @@
+export interface ForgeMeta {
+  taskStatuses: string[];
+  adapterKinds: string[];
+  adapterStatuses: string[];
+  sessionRoles: string[];
+  sessionStatuses: string[];
+  reviewStatuses: string[];
+  dispatchStatuses: string[];
+  builderChoices: Array<"opencode" | "piagent" | "codex">;
+  builtinBuilderAdapters: string[];
+  mainThreadAdapters: Array<"opencode" | "codex-desktop" | "codex">;
+  mainThreadStatuses: Array<"idle" | "running" | "error">;
+  mainThreadEventTypes: Array<"message" | "thinking" | "tool" | "status" | "artifact" | "handoff">;
+}
+
 export type ForgeTaskStatus =
   | "waiting"
   | "building"
