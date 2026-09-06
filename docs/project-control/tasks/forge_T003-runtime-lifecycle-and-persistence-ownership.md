@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T002-core-import-and-dependency-unification.md
-task_state: DOING
+task_state: READY_FOR_REVIEW
 ---
 
 # forge_T003 Forge Runtime Lifecycle and Persistence Ownership
@@ -94,6 +94,15 @@ task_state: DOING
 - server typecheck
 - `pnpm check`（若修改 server bootstrap）
 - `git diff --check`
+
+## Review Readiness
+
+- Branch Policy on PR #101 latest reviewed HEAD: PASS.
+- Latest scope audit: only this task card, `server/src/forge/**`, and the allowed Forge lifecycle wiring in `server/src/index.ts`.
+- Static hygiene: no conflict markers / trailing whitespace; earlier barrel literal-newline pollution and stale invalid type import were found by self-review and fixed before review readiness.
+- Production Forge runtime contains no `process.cwd()`, `:47831`, `MIRA_FORGE_STATE_FILE`, or legacy `.mira-forge` dependency.
+- Existing repository/CI `DATABASE_URL` usages inspected are absolute file paths; T003's relative-path rejection does not conflict with the repository's canonical startup/CI path contract.
+- Current execution environment does not have a writable checkout with dependencies, so pre-merge full `pnpm check` / focused Vitest are not claimed. As with T002, merge is gated by code review/static contract inspection, then the real `dev` push `Check dev -> pnpm check` and Windows staged-server smoke are authoritative; any failure reopens T003 immediately.
 
 ## Unknown / Human Decision
 
