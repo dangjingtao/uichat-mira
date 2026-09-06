@@ -335,6 +335,12 @@ export function buildForgeWorkspaceSnapshot(
     ...(projectData?.threadSnapshot?.thread.id
       ? { selectedThreadId: projectData.threadSnapshot.thread.id }
       : {}),
+    mainThread: projectData?.threadSnapshot
+      ? {
+          adapter: projectData.threadSnapshot.thread.adapter,
+          status: projectData.threadSnapshot.thread.status,
+        }
+      : null,
     messages: mapMessages(projectData?.threadSnapshot?.events ?? []),
     runtimes: projectData ? mapRuntimes(projectData) : [],
     events: projectData ? mapEvents(projectData) : [],
