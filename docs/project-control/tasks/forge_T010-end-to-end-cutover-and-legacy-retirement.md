@@ -171,6 +171,18 @@ GitHub Actions on 2026-09-06:
 
 These runs establish Acceptance Criteria 2, 4 and 5 for the merged implementation, plus the staged backend portion of packaging/runtime validation. They do **not** establish a full Electron package build or real provider product-loop.
 
+## Legacy Retirement Evidence
+
+Standalone source repository `dangjingtao/mira-forge` is no longer presented as the active Forge product source:
+
+- legacy `dev` README: PR #28 merged, commit `92c9112da5f9899624fd8e5728540a54fba46149`;
+- default `main` README: PR #29 merged, commit `a15d1eda2d2d051bbf064af5f5ca9bbde7698bc5`;
+- both landing surfaces now mark the repository **Historical** and point active development to `dangjingtao/uichat-mira`;
+- the old standalone server / `:47831` / package / Vite instructions are explicitly retained only as historical implementation evidence;
+- repository Archive/Delete was not performed and remains the owner governance decision recorded by this card.
+
+This closes the non-destructive source-of-truth retirement requirement without rewriting or deleting the frozen migration evidence.
+
 ## Remaining Acceptance Evidence
 
 以下在当前 GitHub 施工环境尚未观察，因此**不得写 PASS**：
