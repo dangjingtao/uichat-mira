@@ -58,6 +58,20 @@ node scripts/smoke-staged-server-runtime.mjs
 
 这证明生产 server bundle 使用 Mira 自己的 Forge domain，而不是依赖 standalone Forge control plane。
 
+## Current Automated Evidence
+
+For `uichat-mira@1ed6bbe33072ef5be42e973d5929e273a2450568`:
+
+- `Build Desktop Apps` run `34031409151` / `Check dev` job `101481484853`: PASS.
+  - root `pnpm check` executed;
+  - `check:forge-cutover` printed its PASS line;
+  - workspace typecheck completed.
+- `Windows Native Runtime Smoke` run `34031409141` / job `101481484803`: PASS.
+  - `Staged server Forge cutover smoke passed.`
+  - `Staged server native runtime smoke passed.`
+
+This evidence is current for the integrated code commit above. Full Electron packaging and real provider observations remain separate acceptance items.
+
 ## C. Real Product Loop
 
 使用当前 Mira Desktop 的 **淬行** 页面。标准 UI 或 Terminal View 均可，但必须走同一个 current Forge API/runtime。
