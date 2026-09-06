@@ -42,8 +42,8 @@ export class ForgeRuntime {
   }
 
   async initialize(): Promise<ForgeRuntimeInitReport> {
-    if (this.closed) {
-      throw new Error("Forge runtime is already closed");
+    if (this.closed || this.shutdownPromise) {
+      throw new Error("Forge runtime is closing or already closed");
     }
     if (this.initialized && this.initReport) {
       return this.initReport;
@@ -82,7 +82,9 @@ export class ForgeRuntime {
   ): Promise<void> {
     const id = name.trim();
     if (!id) throw new Error("Forge runtime resource name is required");
-    if (this.closed) throw new Error("Forge runtime is already closed");
+    if (this.closed || this.shutdownPromise) {
+      throw new Error("Forge runtime is closing or already closed");
+    }
     if (this.resources.has(id)) {
       throw new Error(`Forge runtime resource already registered: ${id}`);
     }
@@ -142,10 +144,15 @@ export class ForgeRuntime {
 }
 
 let activeForgeRuntime: ForgeRuntime | null = null;
+let forgeRuntimeShutdownPromise: Promise<void> | null = null;
 
 export async function initializeForgeRuntime(
   options: CreateForgeRuntimeOptions = {},
 ): Promise<ForgeRuntime> {
+  if (forgeRuntimeShutdownPromise) {
+    await forgeRuntimeShutdownPromise;
+  }
+
   if (activeForgeRuntime) {
     await activeForgeRuntime.initialize();
     return activeForgeRuntime;
@@ -169,13 +176,21 @@ export function getActiveForgeRuntime(): ForgeRuntime | null {
 }
 
 export async function shutdownForgeRuntime(): Promise<void> {
+  if (forgeRuntimeShutdownPromise) {
+    return forgeRuntimeShutdownPromise;
+  }
+
   const runtime = activeForgeRuntime;
   if (!runtime) return;
 
   activeForgeRuntime = null;
-  await runtime.shutdown();
+  forgeRuntimeShutdownPromise = runtime.shutdown().finally(() => {
+    forgeRuntimeShutdownPromise = null;
+  });
+  return forgeRuntimeShutdownPromise;
 }
 
 export function resetForgeRuntimeForTests(): void {
   activeForgeRuntime = null;
+  forgeRuntimeShutdownPromise = null;
 }
