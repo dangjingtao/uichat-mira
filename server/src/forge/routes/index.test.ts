@@ -262,6 +262,28 @@ function createService(): ForgeRouteService {
       ready: [],
       blocked: [],
     })),
+    meta: vi.fn(() => ({
+      taskStatuses: [],
+      adapterKinds: [],
+      adapterStatuses: [],
+      sessionRoles: [],
+      sessionStatuses: [],
+      reviewStatuses: [],
+      dispatchStatuses: [],
+      builderChoices: ["opencode", "piagent", "codex"],
+      builtinBuilderAdapters: [],
+      mainThreadAdapters: ["opencode", "codex-desktop", "codex"],
+      mainThreadStatuses: ["idle", "running", "error"],
+      mainThreadEventTypes: [
+        "message",
+        "thinking",
+        "tool",
+        "status",
+        "artifact",
+        "handoff",
+      ],
+    })),
+    listDispatches: vi.fn(async () => []),
     listReviews: vi.fn(async () => []),
     runtimeSummary: vi.fn(async () => ({
       schemaVersion: 1,
@@ -306,6 +328,26 @@ describe("Forge routes", () => {
   it("uses prefix-free backend paths and does not expose a generic runtime task patch", async () => {
     const service = createService();
     const app = await createApp(service);
+
+    const meta = await app.inject({
+      method: "GET",
+      url: "/forge/meta",
+    });
+    expect(meta.statusCode).toBe(200);
+    expect(meta.json().data.builderChoices).toEqual([
+      "opencode",
+      "piagent",
+      "codex",
+    ]);
+
+    const dispatches = await app.inject({
+      method: "GET",
+      url: "/forge/dispatches?status=running",
+    });
+    expect(dispatches.statusCode).toBe(200);
+    expect(service.listDispatches).toHaveBeenCalledWith({
+      status: "running",
+    });
 
     const summary = await app.inject({
       method: "GET",
