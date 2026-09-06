@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, FullPageStatus } from "@/shared/ui";
 import ForgeWorkspace, {
   type ForgeWorkspaceProps,
 } from "../components/ForgeWorkspace";
 import ForgeTerminalWorkspace from "../components/ForgeTerminalWorkspace";
+import ForgeTerminalIntro, {
+  type ForgeTerminalIntroWorkspaceState,
+} from "../components/ForgeTerminalIntro";
 import useForgeWorkspace from "../hooks/useForgeWorkspace";
 
 const FORGE_VIEW_MODE_KEY = "mira:forge:view-mode";
@@ -25,8 +28,12 @@ const readForgeViewMode = (): ForgeViewMode => {
 export default function CuixingPage() {
   const navigate = useNavigate();
   const workspace = useForgeWorkspace();
+  const initialViewMode = useMemo(readForgeViewMode, []);
   const [viewMode, setViewMode] =
-    useState<ForgeViewMode>(readForgeViewMode);
+    useState<ForgeViewMode>(initialViewMode);
+  const [terminalIntroVisible, setTerminalIntroVisible] = useState(
+    initialViewMode === "terminal",
+  );
 
   useEffect(() => {
     try {
@@ -35,6 +42,22 @@ export default function CuixingPage() {
       // Local appearance persistence is best effort only.
     }
   }, [viewMode]);
+
+  const terminalIntroWorkspaceState: ForgeTerminalIntroWorkspaceState =
+    workspace.loading && !workspace.snapshot
+      ? "pending"
+      : workspace.error && !workspace.snapshot
+        ? "error"
+        : "ready";
+
+  if (viewMode === "terminal" && terminalIntroVisible) {
+    return (
+      <ForgeTerminalIntro
+        workspaceState={terminalIntroWorkspaceState}
+        onComplete={() => setTerminalIntroVisible(false)}
+      />
+    );
+  }
 
   if (workspace.loading && !workspace.snapshot) {
     return <FullPageStatus message="正在打开淬行…" />;
@@ -85,7 +108,10 @@ export default function CuixingPage() {
     return (
       <ForgeTerminalWorkspace
         {...commonProps}
-        onSwitchView={() => setViewMode("standard")}
+        onSwitchView={() => {
+          setTerminalIntroVisible(false);
+          setViewMode("standard");
+        }}
       />
     );
   }
@@ -93,7 +119,10 @@ export default function CuixingPage() {
   return (
     <ForgeWorkspace
       {...commonProps}
-      onSwitchView={() => setViewMode("terminal")}
+      onSwitchView={() => {
+        setTerminalIntroVisible(true);
+        setViewMode("terminal");
+      }}
     />
   );
 }

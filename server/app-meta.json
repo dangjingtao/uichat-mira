@@ -38,11 +38,11 @@
         {
           "version": "0.99.12",
           "commit": {
-            "hash": "fb1af5dad1efa6263cecc85589d73430402ec02f",
-            "shortHash": "fb1af5d",
-            "message": "chore(review): balance CodeRabbit code and UI review",
+            "hash": "fb069062ebfe1a70dc31ab0d0783fab7442005cd",
+            "shortHash": "fb06906",
+            "message": "docs(forge): update ledger with legacy retirement evidence",
             "author": "DangJingtao",
-            "date": "2026-09-03T22:32:42+08:00"
+            "date": "2026-09-06T19:58:56+08:00"
           }
         },
         {
