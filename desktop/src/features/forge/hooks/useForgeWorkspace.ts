@@ -63,6 +63,7 @@ export function useForgeWorkspace(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const inspectorRequestIdRef = useRef(0);
   const refreshInFlightRef = useRef(false);
   const dataRef = useRef(data);
   const selectedProjectIdRef = useRef(selectedProjectId);
@@ -168,6 +169,7 @@ export function useForgeWorkspace(
 
         if (requestId !== requestIdRef.current) return;
 
+        inspectorRequestIdRef.current += 1;
         setSelectedProjectId(projectId);
         setSelectedTaskId(taskId);
         setData({ shell, projectData, inspector });
@@ -228,7 +230,9 @@ export function useForgeWorkspace(
 
   const selectTask = useCallback(
     async (taskId: string) => {
+      const requestId = ++inspectorRequestIdRef.current;
       setSelectedTaskId(taskId);
+      selectedTaskIdRef.current = taskId;
       const projectData = dataRef.current.projectData;
       const projectId = selectedProjectIdRef.current;
       const inspector = await loadInspector(
@@ -236,10 +240,7 @@ export function useForgeWorkspace(
         projectId,
         taskId,
       );
-      if (
-        taskId === selectedTaskIdRef.current ||
-        selectedTaskIdRef.current === null
-      ) {
+      if (requestId === inspectorRequestIdRef.current) {
         setData((current) => ({ ...current, inspector }));
       }
     },
