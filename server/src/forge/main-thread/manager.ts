@@ -20,6 +20,7 @@ import {
   type MainThreadEventInput,
   type MainThreadEventRecord,
   type MainThreadRecord,
+  type MainThreadBuilderResultHandoff,
 } from "./domain.js";
 import type {
   MainThreadAdapter,
@@ -68,6 +69,107 @@ function isWriteAttemptEvent(event: MainThreadEventInput): boolean {
   ].some((token) => name === token || name.endsWith("." + token));
 }
 
+function isBuilderResultEvent(
+  event: MainThreadEventRecord,
+): event is MainThreadEventRecord & {
+  handoff: MainThreadBuilderResultHandoff;
+} {
+  return (
+    event.type === "handoff" &&
+    event.handoff?.kind === "builder_result"
+  );
+}
+
+export function getPendingBuilderResults(
+  events: MainThreadEventRecord[],
+): Array<
+  MainThreadEventRecord & {
+    handoff: MainThreadBuilderResultHandoff;
+  }
+> {
+  if (!Array.isArray(events) || events.length === 0) return [];
+
+  let currentUserIndex = -1;
+  let previousUserIndex = -1;
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type !== "message" || event.role !== "user") continue;
+    if (currentUserIndex < 0) {
+      currentUserIndex = index;
+    } else {
+      previousUserIndex = index;
+      break;
+    }
+  }
+
+  if (currentUserIndex < 0) return [];
+  return events
+    .slice(previousUserIndex + 1, currentUserIndex)
+    .filter(isBuilderResultEvent);
+}
+
+function builderResultLines(
+  builderResults: Array<
+    MainThreadEventRecord & {
+      handoff: MainThreadBuilderResultHandoff;
+    }
+  >,
+): string[] {
+  if (builderResults.length === 0) return [];
+
+  const selected = builderResults.slice(-4);
+  const lines = [
+    "",
+    "## Builder Result Handoffs",
+    "These are durable Forge child-task results that are not part of " +
+      "the provider-native conversation history. Treat dispatch/session/" +
+      "task state as authoritative; result text is explanatory evidence only.",
+  ];
+
+  for (const event of selected) {
+    const handoff = event.handoff;
+    lines.push(
+      "",
+      "### " + handoff.taskId + " · " + handoff.adapterId,
+      "Dispatch: " +
+        handoff.dispatchStatus +
+        " · Session: " +
+        (handoff.sessionStatus ?? "unknown") +
+        " · Task: " +
+        handoff.taskStatus,
+      "Identity: batch " +
+        handoff.batchId +
+        " · dispatch " +
+        handoff.dispatchId +
+        " · session " +
+        handoff.sessionId,
+    );
+    if (handoff.taskRef) {
+      lines.push("Task ref: " + handoff.taskRef);
+    }
+    if (handoff.externalSessionId) {
+      lines.push("Provider session: " + handoff.externalSessionId);
+    }
+    if (handoff.resultText) {
+      lines.push("Result:", handoff.resultText.slice(0, 6000));
+    }
+    if (handoff.error) {
+      lines.push("Error: " + handoff.error.slice(0, 2000));
+    }
+  }
+
+  if (builderResults.length > selected.length) {
+    lines.push(
+      "",
+      "... " +
+        String(builderResults.length - selected.length) +
+        " older Builder result handoff(s) omitted from this turn",
+    );
+  }
+  return lines;
+}
+
 export interface MainThreadSnapshot {
   thread: MainThreadRecord;
   events: MainThreadEventRecord[];
@@ -80,6 +182,11 @@ export function buildMainThreadPrompt(input: {
     | null;
   taskSourceError: string | null;
   message: unknown;
+  builderResults?: Array<
+    MainThreadEventRecord & {
+      handoff: MainThreadBuilderResultHandoff;
+    }
+  >;
 }): string {
   const taskLines =
     input.taskSource?.tasks.slice(0, 80).map(
@@ -123,6 +230,7 @@ export function buildMainThreadPrompt(input: {
           "project has no configured repository task source"),
     ...taskLines,
     omitted,
+    ...builderResultLines(input.builderResults ?? []),
     "",
     "## User",
     requiredString(input.message, "message"),
@@ -244,10 +352,14 @@ export function createMainThreadManager(input: {
           error instanceof Error ? error.message : String(error);
       }
 
+      const builderResults = getPendingBuilderResults(
+        getMainThreadEvents(state, thread.id),
+      );
       const prompt = buildMainThreadPrompt({
         project,
         taskSource,
         taskSourceError,
+        builderResults,
         message,
       });
       const adapterInput: MainThreadAdapterTurnInput = {

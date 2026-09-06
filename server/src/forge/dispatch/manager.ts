@@ -21,6 +21,7 @@ import {
 } from "../builder-contract.js";
 import { getDispatchReadiness } from "../readiness.js";
 import { resolveProjectTask } from "../project/project-task-actions.js";
+import { appendBuilderResultHandoff } from "../main-thread/domain.js";
 import type { ForgeRuntimeStore } from "../runtime/store.js";
 import type {
   ForgeDispatch,
@@ -211,6 +212,40 @@ export function buildTaskDispatchPrompt(input: {
     "- Report what changed, validation evidence, remaining risks, and " +
       "any human decision still required.",
   ].join("\n");
+}
+
+function deliverBuilderResult(
+  state: Awaited<ReturnType<ForgeRuntimeStore["read"]>>,
+  dispatch: ForgeDispatch,
+): void {
+  if (!dispatch.sourceThreadId) return;
+
+  const { task } = resolveBinding(
+    state,
+    dispatch.batchId,
+    dispatch.taskId,
+  );
+  const session = state.sessions.find(
+    (item) => item.id === dispatch.sessionId,
+  );
+
+  appendBuilderResultHandoff(state, dispatch.sourceThreadId, {
+    projectId: dispatch.projectId,
+    batchId: dispatch.batchId,
+    taskId: dispatch.taskId,
+    taskRef: dispatch.taskRef,
+    dispatchId: dispatch.id,
+    sessionId: dispatch.sessionId,
+    adapterId: dispatch.adapterId,
+    dispatchStatus: dispatch.status,
+    sessionStatus: session?.status ?? null,
+    taskStatus: task.status,
+    externalSessionId: dispatch.externalSessionId,
+    resultText: dispatch.resultText,
+    error: dispatch.error,
+    startedAt: dispatch.startedAt,
+    endedAt: dispatch.endedAt,
+  });
 }
 
 function dispatchEvent(
@@ -423,6 +458,7 @@ export function createDispatchManager(input: {
         });
       }
 
+      deliverBuilderResult(state, dispatch);
       return dispatch;
     });
   }
@@ -472,6 +508,7 @@ export function createDispatchManager(input: {
       dispatchEvent(state, dispatch, "dispatch.failed", {
         message: boundedString(message, MAX_PROVIDER_TEXT),
       });
+      deliverBuilderResult(state, dispatch);
       return dispatch;
     });
   }
@@ -732,6 +769,7 @@ export function createDispatchManager(input: {
         dispatchEvent(state, dispatch, "dispatch.cancelled", {
           reason: "explicit_cancel",
         });
+        deliverBuilderResult(state, dispatch);
         return structuredClone(dispatch);
       });
       handles.delete(id);
@@ -745,52 +783,56 @@ export function createDispatchManager(input: {
     return store.mutate((state) => {
       let count = 0;
       for (const dispatch of getDispatches(state)) {
-        if (isTerminalDispatch(dispatch.status)) continue;
+        if (!isTerminalDispatch(dispatch.status)) {
+          const session = state.sessions.find(
+            (item) => item.id === dispatch.sessionId,
+          );
+          if (
+            session &&
+            (ACTIVE_SESSION_STATUSES as readonly string[]).includes(
+              session.status,
+            )
+          ) {
+            updateSession(state, session.id, {
+              status: "disconnected",
+            });
+          }
 
-        const session = state.sessions.find(
-          (item) => item.id === dispatch.sessionId,
-        );
-        if (
-          session &&
-          (ACTIVE_SESSION_STATUSES as readonly string[]).includes(
-            session.status,
-          )
-        ) {
-          updateSession(state, session.id, {
-            status: "disconnected",
-          });
-        }
-
-        const binding = resolveBinding(
-          state,
-          dispatch.batchId,
-          dispatch.taskId,
-        );
-        if (binding.task.status === "building") {
-          updateTask(
+          const binding = resolveBinding(
             state,
             dispatch.batchId,
             dispatch.taskId,
-            { status: "interrupted" },
           );
+          if (binding.task.status === "building") {
+            updateTask(
+              state,
+              dispatch.batchId,
+              dispatch.taskId,
+              { status: "interrupted" },
+            );
+          }
+
+          const adapter = state.adapters.find(
+            (item) => item.id === dispatch.adapterId,
+          );
+          if (adapter) {
+            adapter.status = "offline";
+            adapter.updatedAt = new Date().toISOString();
+          }
+
+          transitionDispatch(state, dispatch.id, "interrupted", {
+            error:
+              "control plane restarted; process supervision was lost",
+          });
+          dispatchEvent(state, dispatch, "dispatch.interrupted", {
+            reason: "control_plane_restart",
+          });
+          count += 1;
         }
 
-        const adapter = state.adapters.find(
-          (item) => item.id === dispatch.adapterId,
-        );
-        if (adapter) {
-          adapter.status = "offline";
-          adapter.updatedAt = new Date().toISOString();
+        if (isTerminalDispatch(dispatch.status)) {
+          deliverBuilderResult(state, dispatch);
         }
-
-        transitionDispatch(state, dispatch.id, "interrupted", {
-          error:
-            "control plane restarted; process supervision was lost",
-        });
-        dispatchEvent(state, dispatch, "dispatch.interrupted", {
-          reason: "control_plane_restart",
-        });
-        count += 1;
       }
       return count;
     });
@@ -839,6 +881,7 @@ export function createDispatchManager(input: {
           dispatchEvent(state, dispatch, "dispatch.interrupted", {
             reason: "control_plane_shutdown",
           });
+          deliverBuilderResult(state, dispatch);
           return dispatch;
         });
 

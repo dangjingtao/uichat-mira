@@ -448,6 +448,60 @@ export function resolveReviewHandoff(
   return review;
 }
 
+export interface IntegrateReviewedTaskInput {
+  projectId?: unknown;
+  batchId?: unknown;
+  taskId?: unknown;
+  expectedSha?: unknown;
+}
+
+export function integrateReviewedTask(
+  state: ForgeCoreState,
+  input: IntegrateReviewedTaskInput,
+): ForgeTask {
+  const projectId = requiredString(input.projectId, "projectId");
+  const batchId = requiredString(input.batchId, "batchId");
+  const taskId = requiredString(input.taskId, "taskId");
+  const expectedSha = requiredString(input.expectedSha, "expectedSha");
+  const { batch, task } = resolveTaskBinding(
+    state,
+    projectId,
+    batchId,
+    taskId,
+  );
+
+  if (task.status !== "review_passed") {
+    throw new Error("integration requires review_passed task state");
+  }
+  if (!task.currentSha || task.currentSha !== expectedSha) {
+    throw new Error("integration sha must match task currentSha");
+  }
+  if (!task.reviewedSha || task.reviewedSha !== expectedSha) {
+    throw new Error("integration sha must match task reviewedSha");
+  }
+
+  const review = reviews(state).find(
+    (item) =>
+      item.projectId === projectId &&
+      item.batchId === batchId &&
+      item.taskId === taskId &&
+      item.status === "passed" &&
+      item.actionable === true &&
+      item.requestedSha === expectedSha &&
+      item.reviewedSha === expectedSha,
+  );
+  if (!review) {
+    throw new Error("integration requires an actionable SHA-bound PASS review");
+  }
+
+  const timestamp = now();
+  task.status = "integrated";
+  task.updatedAt = timestamp;
+  batch.updatedAt = timestamp;
+  batch.status = deriveBatchStatus(batch.tasks);
+  return task;
+}
+
 export interface RegisterProjectInput {
   id?: unknown;
   name?: unknown;
@@ -576,6 +630,9 @@ export function updateTask(
 
   if (patch.status === "review_passed") {
     throw new Error("review_passed is managed by review handoff");
+  }
+  if (patch.status === "integrated") {
+    throw new Error("integrated is managed by guarded integration");
   }
   if (patch.reviewedSha !== undefined) {
     throw new Error("reviewedSha is managed by review handoff");

@@ -32,6 +32,7 @@ export interface MainThreadArtifactEvent {
 }
 
 export interface MainThreadDispatchHandoff {
+  kind?: undefined;
   projectId: string;
   taskId: string;
   taskRef: string;
@@ -455,6 +456,42 @@ export function reconcileMainThreads(
     interrupted.push(thread.id);
   }
   return interrupted;
+}
+
+export function appendBuilderResultHandoff(
+  state: ForgeRuntimeState,
+  threadId: unknown,
+  input: Record<string, unknown>,
+): MainThreadEventRecord {
+  const thread = findMainThread(state, threadId);
+  if (thread.projectId !== input?.projectId) {
+    throw new Error(
+      "Builder result project does not match thread project",
+    );
+  }
+
+  const dispatchId = requiredString(input?.dispatchId, "dispatchId");
+  const existing = getMainThreadEvents(state, thread.id).find(
+    (event) =>
+      event.type === "handoff" &&
+      event.handoff?.kind === "builder_result" &&
+      event.handoff.dispatchId === dispatchId,
+  );
+  if (existing) return existing;
+
+  return appendMainThreadEvent(state, thread.id, {
+    type: "handoff",
+    text:
+      "Builder " +
+      String(input.dispatchStatus ?? "") +
+      ": " +
+      String(input.taskId ?? ""),
+    handoff: {
+      ...input,
+      kind: "builder_result",
+      dispatchId,
+    },
+  });
 }
 
 export function createMainThreadHandoff(
