@@ -579,6 +579,40 @@ describe("Forge Builder dispatch manager", () => {
     }
   });
 
+  it("keeps the canonical Task Card mandatory when inline instruction is supplied", async () => {
+    const { root, store, batch } = await createFixture(["T100"]);
+    try {
+      const runner = new ControlledRunner();
+      const manager = createDispatchManager({
+        store,
+        runners: new Map([[OPENCODE_ADAPTER_ID, runner]]),
+      });
+
+      const dispatch = await manager.dispatchTask({
+        batchId: batch.id,
+        taskId: "T100",
+        builder: "opencode",
+        prompt: "Check only the requested acceptance edge case.",
+      });
+
+      expect(runner.input?.prompt).toContain("## Must Read");
+      expect(runner.input?.prompt).toContain("- AGENTS.md");
+      expect(runner.input?.prompt).toContain(
+        "- docs/tasks/T100-task.md",
+      );
+      expect(runner.input?.prompt).toContain(
+        "## Additional Operator Instruction",
+      );
+      expect(runner.input?.prompt).toContain(
+        "Check only the requested acceptance edge case.",
+      );
+
+      await manager.cancelDispatch(dispatch.id);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects mismatched task refs, cross-project source threads and missing selected runners", async () => {
     const { root, store, batch } = await createFixture(["T100"]);
     try {
