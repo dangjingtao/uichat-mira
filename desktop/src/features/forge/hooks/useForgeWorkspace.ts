@@ -76,15 +76,19 @@ export function useForgeWorkspace(
     ) => {
       if (!projectData || !projectId || !taskId) return null;
 
-      const taskBatch = [...projectData.batches]
+      const matchingBatches = [...projectData.batches]
+        .filter((batch) =>
+          batch.tasks.some((task) => task.id === taskId),
+        )
         .sort((left, right) =>
           right.updatedAt.localeCompare(left.updatedAt),
-        )
-        .find(
-          (batch) =>
-            batch.status !== "integrated" &&
-            batch.tasks.some((task) => task.id === taskId),
         );
+      const taskBatch =
+        matchingBatches.find(
+          (batch) => batch.status !== "integrated",
+        ) ??
+        matchingBatches[0] ??
+        null;
       const dispatch = [...projectData.dispatches]
         .sort((left, right) =>
           right.updatedAt.localeCompare(left.updatedAt),
