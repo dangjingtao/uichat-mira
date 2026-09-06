@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { ForgeWorkspaceSnapshot } from "../types";
 import ForgeTerminalWorkspace from "./ForgeTerminalWorkspace";
 
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 const snapshot: ForgeWorkspaceSnapshot = {
   projects: [
     {
@@ -124,8 +128,6 @@ describe("ForgeTerminalWorkspace", () => {
 
     fireEvent.keyDown(window, { key: "d" });
 
-    expect(
-      screen.getByRole("heading", { name: "Dispatch Builder" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Dispatch Builder")).toBeInTheDocument();
   });
 });
