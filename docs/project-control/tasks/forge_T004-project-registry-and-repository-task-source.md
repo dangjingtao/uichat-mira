@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T003-runtime-lifecycle-and-persistence-ownership.md
-task_state: DOING
+task_state: READY_FOR_REVIEW
 ---
 
 # forge_T004 Project Registry and Repository Task Source
@@ -86,6 +86,15 @@ task_state: DOING
 - wrong-root / duplicate / escape / localized-card tests
 - server typecheck
 - `git diff --check`
+
+## Review Readiness
+
+- PR #102 已建立，base=`dev`，head=`feature/forge-t004-project-task-source`。
+- Branch Policy: PASS。
+- CodeRabbit 已对最新 HEAD `1eb26a7b1e758fa5e00f7e01183140b425a7063e` 启动 review，但当前 status 仍为 `pending`；不得视为通过。
+- Codex 已显式触发 latest-head review，但当前未返回正式 review 结果。
+- 变更范围静态审计：仅本任务卡、`server/src/forge/project/**`、`server/src/forge/task-source/**` 与 Forge barrel；0 conflict marker、0 trailing whitespace、无旧 `:47831` / `.mira-forge` / `MIRA_FORGE_STATE_FILE` 依赖。
+- 本卡定向 Vitest 已落代码但当前 PR workflow 不执行 server Vitest；在 AI Review 收口前不合并，合并后仍需以 `dev` 的真实 `pnpm check` / staged server smoke 作为最终整仓验证。
 
 ## Unknown / Human Decision
 
