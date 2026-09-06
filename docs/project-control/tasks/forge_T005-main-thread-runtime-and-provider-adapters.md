@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T004-project-registry-and-repository-task-source.md
-task_state: TODO
+task_state: DONE
 ---
 
 # forge_T005 Main Thread Runtime and Provider Adapters
@@ -56,6 +56,31 @@ task_state: TODO
 - 默认 provider turn timeout 维持当前已验证的 3,000,000ms，除非有新证据支持修改。
 - Task inspect / resolve / create / update / handoff 全部通过 Forge capability boundary。
 
+## Construction Evidence
+
+- Base: `dev@271ce832e2f700412b0385971046aafd4e47d8c6`.
+- 新增 `server/src/forge/main-thread/**`：
+  - provider-neutral durable Main Thread domain；
+  - Main Thread manager；
+  - ForgeRuntime lifecycle attach helper；
+  - durable reopen / continuation、wrong-thread、read-only violation、Task capability / explicit handoff、restart reconcile 回归。
+- 新增 `server/src/forge/adapters/main-thread/**`：
+  - OpenCode Main Thread adapter；
+  - Codex CLI Main Thread adapter；
+  - Codex Desktop app-server adapter；
+  - 默认 adapter registry。
+- 支持且仅支持 `opencode` / `codex-desktop` / `codex` 三种 Main Thread adapter；未引入 PiAgent Main Thread。
+- OpenCode 固定 `--agent plan`，并注入 deny-by-default、read/glob/grep/list/lsp/webfetch/websearch allow 的 `OPENCODE_PERMISSION`。
+- Codex CLI 固定 `--sandbox read-only --ask-for-approval never`。
+- Codex Desktop 固定 thread-level `sandbox: read-only`、turn-level `sandboxPolicy: { type: "readOnly" }`、`approvalPolicy: never`。
+- 三种 provider 默认 turn timeout 均保持固定源已验证的 `3_000_000ms`。
+- durable external thread/session ID 继续精确续接；Codex / Codex Desktop 对 wrong-thread 明确失败，OpenCode 对 provider 报告的不同 session 明确失败。
+- provider thinking / tool / artifact 进入 bounded normalized Main Thread events；provider file-change / edit-write 类事件按 read-only contract violation 失败。
+- Main Thread Task inspect / resolve / create / update 全部复用 T004 project/task capability boundary；未直接读写第二套 task DB。
+- 显式 handoff 只持久化 `projectId + taskId + taskRef + preferredBuilder` 引用，不创建 Dispatch、不启动 Builder。
+- 未搬固定源后期的 `docs/workbench/**` 隐式 Task Source fallback；Mira T004 已冻结为显式 task source 配置，本卡继续遵守该合同。
+- 未接 route / Desktop / Mira Chat / AgentGraph；未加入 Builder Result 回注、Reviewer 或自动 Dispatch。
+
 ## Acceptance Criteria
 
 1. 一个 registered project 可以打开 durable Main Thread。
@@ -72,6 +97,28 @@ task_state: TODO
 - wrong-thread / write-attempt tests
 - server typecheck
 - `git diff --check`
+
+## Final Review Evidence
+
+- PR #103，base=`dev`，feature branch=`feature/forge-t005-main-thread-runtime`。
+- Branch Policy on code HEAD `946cdeb4476064e84584622f6173c298ed7430f6`: PASS。
+- CodeRabbit 已启动 review 但当前仍为 pending；Codex 已触发 latest-head review但未返回正式 finding。按 owner 明确规则，外部 reviewer 无有效结论时允许自审收口，不让 review quota / pending 状态卡死主线。
+- Self-review 重点核验：
+  - Main Thread 仅支持 `opencode / codex-desktop / codex`，无 PiAgent；
+  - OpenCode 固定 plan + deny-by-default read-oriented permission；
+  - Codex CLI / Desktop 均固定 read-only + approval never；
+  - 三 provider 默认 timeout 均为 `3_000_000ms`；
+  - durable external thread/session identity 必须精确续接；
+  - provider file-change / edit-write evidence 会触发 read-only contract violation；
+  - Main Thread state / events 独立于 Mira Chat persistence；
+  - Task inspect / resolve / create / update 全部复用 T004 capability boundary；
+  - handoff 只持久化 repository task reference，不创建 Dispatch；
+  - restart active turn 继续由 Forge runtime reconcile 为 error/interrupted；
+  - adapter dispose 可挂入 T003 ForgeRuntime resource lifecycle。
+- Scope audit：仅本任务卡、`server/src/forge/main-thread/**`、`server/src/forge/adapters/main-thread/**`、Forge barrel；代码中无 route、Builder dispatch、Mira Chat / AgentGraph 修改。
+- Static hygiene：changed files 0 conflict marker、0 trailing whitespace。
+- 新增 provider fake-process / durable continuation / wrong-thread / write-attempt / Task capability / explicit handoff regressions。当前 PR workflow 不执行 Forge Vitest，因此不伪造“定向 Vitest 已运行”；合并后以 `dev` 的 `pnpm check` 和 Windows staged-server smoke 为最终整仓门禁。
+- Final self-review: PASS。若合并后任一真实门禁失败，立即重开 T005。
 
 ## Unknown / Human Decision
 
