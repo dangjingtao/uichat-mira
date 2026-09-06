@@ -13,7 +13,7 @@ related:
   - docs/project-control/tasks/forge_T005-main-thread-runtime-and-provider-adapters.md
   - docs/project-control/tasks/forge_T006-builder-dispatch-and-process-supervision.md
   - docs/project-control/tasks/forge_T007-review-handoff-and-runtime-state-guards.md
-task_state: DONE
+task_state: DOING
 ---
 
 # forge_T008 Mira Server API and Desktop Client Contract
@@ -146,6 +146,16 @@ Desktop 开发环境走 `/api/forge/...`；生产使用现有 backendUrl 机制�
 - Scope audit：12 个 changed files，全部位于 T008 Allowed Changes；0 conflict marker、0 trailing whitespace；扫描中的 `:47831` / `/api/forge` / generic integrated 命中仅存在于任务卡或反向断言测试，不在生产路径。
 - Focused Server/Desktop Vitest 已新增，但当前 PR workflow 不执行，因此不声明已运行。
 - 最终完成仍以合并后的 `dev -> pnpm check` 与 Windows staged-server smoke 为准；任一失败立即重开 T008。
+
+## Post-Merge Gate Failure — 2026-09-06
+
+- PR #107 merge SHA `9739ffa2fc1858deaf55c9dfa0cd4445002ec599`：
+  - Windows staged-server smoke：PASS。
+  - `Check dev -> Type check`：FAIL。
+- 失败仅有一个 T008 自身类型阻断：
+  - `server/src/forge/routes/service.ts` 从 `../main-thread/runtime.js` 引入 `MainThreadManager`，但该模块仅本地声明该类型，未 export；正式类型定义位于 `../main-thread/manager.js`。
+- 修复仅调整 type import，不改变 runtime/service/route 行为。
+- 修复分支：`fix/forge-t008-typecheck`。修复合并且 `dev` 的 Type check + Windows staged-server 全绿前，T008 保持 DOING。
 
 ## Unknown / Human Decision
 
