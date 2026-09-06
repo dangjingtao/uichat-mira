@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T004-project-registry-and-repository-task-source.md
-task_state: DOING
+task_state: DONE
 ---
 
 # forge_T005 Main Thread Runtime and Provider Adapters
@@ -127,6 +127,9 @@ task_state: DOING
   1. `codex-desktop.ts` 对异步 notification callback 写入的 `terminal` 做 optional property access 时，被 TypeScript 控制流收窄为 `never`；改为先经 `asRecord(terminal)` 恢复运行时 record 边界，再读取 `params`，不改变协议行为。
   2. `main-thread/runtime.ts` 注册到 T003 `ForgeRuntimeManagedResource` 的 `reconcile` 必须是 `void | Promise<void>`，但 manager 返回 interrupted thread ID list；adapter 改为 await 后丢弃返回值，不改变 manager reconcile 结果本身。
 - 修复分支：`fix/forge-t005-typecheck`。除上述两处类型适配与本卡状态/证据外不改功能合同。
+
+- Typecheck remediation self-review: PASS。PR #104 仅包含两个已由 `dev` 失败日志精确定位的 T005 类型适配，以及本卡证据；Branch Policy PASS，0 unresolved review thread。外部 reviewer 未返回新 finding，按 owner fallback 规则由自审收口。
+- 最终完成仍以 PR #104 合并后的 `dev -> pnpm check` 重新变绿为准；如仍失败再次重开。
 
 ## Unknown / Human Decision
 
