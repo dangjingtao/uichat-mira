@@ -6,11 +6,6 @@ import {
   type ForgeRouteService,
 } from "./service.js";
 
-const objectSchema = {
-  type: "object",
-  additionalProperties: true,
-} as const;
-
 const projectParams = {
   type: "object",
   required: ["projectId"],
@@ -895,7 +890,6 @@ const forgeRoutes: FastifyPluginAsync<ForgeRoutesOptions> = async (
     }),
   );
 
-  void objectSchema;
 };
 
 export default forgeRoutes;
