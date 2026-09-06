@@ -552,74 +552,19 @@ export function ForgeWorkspace({
         />
       ) : null}
 
-      <Modal
+      <ForgeDispatchModal
         open={dispatchOpen}
-        title="Dispatch Builder"
+        busy={busy}
+        task={selectedTask}
+        builderChoice={builderChoice}
+        builderChoices={snapshot.builderChoices}
+        onBuilderChange={setBuilderChoice}
         onClose={() => setDispatchOpen(false)}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => setDispatchOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={
-                busy ||
-                !selectedTask ||
-                selectedTask.readiness !== "ready" ||
-                !(
-                  selectedTask.runtimeState === "waiting" ||
-                  selectedTask.runtimeState === "fixing"
-                )
-              }
-              onClick={() => {
-                if (!selectedTask || !onDispatch) return;
-                void Promise.resolve(
-                  onDispatch(selectedTask, builderChoice),
-                )
-                  .then(() => setDispatchOpen(false))
-                  .catch(() => undefined);
-              }}
-            >
-              <Play className="h-4 w-4" />
-              Dispatch Builder
-            </Button>
-          </>
-        }
-      >
-        {selectedTask ? (
-          <div className="space-y-4">
-            <StatePair task={selectedTask} />
-            <Select
-              label="Builder"
-              value={builderChoice}
-              onChange={(value) =>
-                setBuilderChoice(
-                  value as "opencode" | "piagent" | "codex",
-                )
-              }
-              options={snapshot.builderChoices.map((builder) => ({
-                value: builder,
-                label: builderLabel(builder),
-              }))}
-            />
-            <div className="rounded-ui-panel border border-border bg-surface-secondary p-3 text-xs leading-5 text-text-secondary">
-              Dispatch 是显式动作。淬行不会自动 fallback 到另一个 Builder，也不会自动 push / merge / deploy。
-            </div>
-            {selectedTask.readiness !== "ready" ? (
-              <p className="text-sm text-danger-text">
-                Dispatch is unavailable until backend readiness passes.
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-sm text-text-tertiary">No task selected.</p>
-        )}
-      </Modal>
+        onDispatch={async (task, builder) => {
+          if (!onDispatch) return;
+          await onDispatch(task, builder);
+        }}
+      />
 
       <ForgeRegisterProjectModal
         open={registerOpen}
