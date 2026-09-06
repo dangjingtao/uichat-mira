@@ -43,9 +43,12 @@ function ForgeTerminalModalFrame({
     document.body.style.overflow = "hidden";
 
     const timer = window.setTimeout(() => {
-      dialogRef.current
-        ?.querySelector<HTMLElement>(focusableSelector)
-        ?.focus();
+      const dialog = dialogRef.current;
+      const preferred =
+        dialog?.querySelector<HTMLElement>("[data-terminal-autofocus]");
+      const fallback =
+        dialog?.querySelector<HTMLElement>(focusableSelector);
+      (preferred ?? fallback)?.focus();
     }, 0);
 
     return () => {
@@ -190,6 +193,7 @@ export function ForgeTerminalRegisterProjectModal({
           project name
           <input
             className={inputClass}
+            data-terminal-autofocus
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="project name"
@@ -335,6 +339,7 @@ export function ForgeTerminalDispatchModal({
             builder
             <select
               className={inputClass}
+              data-terminal-autofocus
               value={builderChoice}
               onChange={(event) =>
                 onBuilderChange(
@@ -431,6 +436,7 @@ export function ForgeTerminalCancelModal({
 
           <button
             type="submit"
+            data-terminal-autofocus
             disabled={busy}
             className={
               actionClass +
