@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T005-main-thread-runtime-and-provider-adapters.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T006 Builder Dispatch and Process Supervision
