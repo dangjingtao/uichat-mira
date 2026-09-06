@@ -157,6 +157,19 @@ export function ForgeTaskContext({
           </div>
         ) : null}
 
+        {task.readiness === "unavailable" &&
+        task.readinessReasons.length ? (
+          <div className="mt-4 rounded-ui-panel border border-warning-border bg-warning-soft p-3 text-xs leading-5 text-warning-text">
+            <div className="flex items-center gap-2 font-medium">
+              <CircleAlert className="h-4 w-4" />
+              Readiness check unavailable
+            </div>
+            <p className="mt-1 break-words">
+              {task.readinessReasons.join(" · ")}
+            </p>
+          </div>
+        ) : null}
+
         {task.runtimeState === "reviewing" ? (
           <div className="mt-4 rounded-ui-panel border border-border bg-surface-secondary p-3 text-xs leading-5 text-text-secondary">
             Builder 已完成当前施工阶段，Runtime 正等待独立 Review。Builder Result 不等于 Repository PASS。
