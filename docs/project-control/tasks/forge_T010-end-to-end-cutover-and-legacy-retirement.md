@@ -147,6 +147,30 @@ Register / select real project
 
 因此 Mira T010 继续要求真实复测，不继承旧仓自动测试或 T016 smoke。
 
+## Automated Cutover Evidence
+
+Current integrated implementation commit:
+
+`1ed6bbe33072ef5be42e973d5929e273a2450568`
+
+GitHub Actions on 2026-09-06:
+
+- **Build Desktop Apps / Check dev** — PASS
+  - run id: `34031409151`
+  - job id: `101481484853`
+  - checkout SHA: `1ed6bbe33072ef5be42e973d5929e273a2450568`
+  - executed root `pnpm check`
+  - log evidence: `Forge cutover check passed: integrated runtime roots are present and no standalone Forge package/control-plane markers were found.`
+  - Desktop / Server / workspace typecheck completed successfully.
+- **Windows Native Runtime Smoke / Staged server runtime** — PASS
+  - run id: `34031409141`
+  - job id: `101481484803`
+  - log evidence: `Staged server Forge cutover smoke passed.`
+  - log evidence: `Staged server native runtime smoke passed.`
+  - therefore current staged `server.cjs` contains integrated Forge and excludes the legacy `:47831` / independent state-root markers checked by the smoke.
+
+These runs establish Acceptance Criteria 2, 4 and 5 for the merged implementation, plus the staged backend portion of packaging/runtime validation. They do **not** establish a full Electron package build or real provider product-loop.
+
 ## Remaining Acceptance Evidence
 
 以下在当前 GitHub 施工环境尚未观察，因此**不得写 PASS**：
@@ -157,6 +181,6 @@ Register / select real project
 - Mira Server restart 后的产品级 reconstruction 观察；
 - 当前 T010 HEAD 的 Windows Electron package build。
 
-PR 合并后应先读取 `dev` 的 `Check dev` 与 `Windows Native Runtime Smoke` 结果；真实 provider / package evidence 继续按 `docs/forge/cutover-smoke.md` 补齐。
+`dev` 的 `Check dev` 与 `Windows Native Runtime Smoke` 已取得 PASS；真实 provider / full package evidence 继续按 `docs/forge/cutover-smoke.md` 补齐。
 
 T010 当前为 `READY_FOR_REVIEW`，不是 `DONE`。
