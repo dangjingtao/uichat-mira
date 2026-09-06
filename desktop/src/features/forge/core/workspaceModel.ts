@@ -180,15 +180,17 @@ const mapTask = (
   );
 
   const readinessState: ForgeTask["readiness"] =
-    runtimeTask?.status === "stale"
-      ? "stale"
-      : !batch
-        ? "ready"
-        : ready
+    !repositoryTask
+      ? "unavailable"
+      : runtimeTask?.status === "stale"
+        ? "stale"
+        : !batch
           ? "ready"
-          : blocked
-            ? "blocked"
-            : "unavailable";
+          : ready
+            ? "ready"
+            : blocked
+              ? "blocked"
+              : "unavailable";
 
   return {
     id: taskId,
