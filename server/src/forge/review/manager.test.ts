@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   createBatch,
@@ -13,8 +13,14 @@ import {
 import { createForgeRuntimeStore } from "../runtime/store.js";
 import { createForgeReviewManager } from "./manager.js";
 
+const artifactRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../../.test-artifact/forge-t007-review",
+);
+
 async function fixture(taskIds = ["T100", "T101"]) {
-  const root = await mkdtemp(path.join(tmpdir(), "forge-t007-review-"));
+  await mkdir(artifactRoot, { recursive: true });
+  const root = await mkdtemp(path.join(artifactRoot, "case-"));
   const store = createForgeRuntimeStore(path.join(root, "state.json"));
 
   const seeded = await store.mutate((state) => {
