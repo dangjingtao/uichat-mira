@@ -347,7 +347,24 @@ Task Skill 可以使用 forked SubAgent。Stateful Skill Flow 是可选确定性
 
 V1 禁止 nested SubAgent 与 recursive `delegate_task`。
 
-## 15. 文档真相合同
+## 15. Forge / 淬行工程不变量
+
+Forge 已并入 Mira 主仓和 Mira Server 生命周期。后续工程必须继续保护：
+
+1. `server/src/forge/**` 是 Forge runtime domain，不恢复第二 HTTP server、sidecar 或 `:47831` control plane；
+2. 不建立 Forge 独立 package / lockfile / pnpm workspace / Vite app；
+3. Repository Ledger / Task Card 是任务真相，Forge runtime 只保存 execution identity / state / evidence；
+4. Main Thread 负责 discussion / inspection / planning，不是 Builder；
+5. Dispatch 必须显式，source Main Thread 只能绑定同 project，当前仍是全局单 active Builder；
+6. Builder terminal success = runtime `reviewing`，不是 Review PASS；
+7. Review PASS 必须绑定当前 concrete SHA；旧 PASS 在 SHA 变化后失效；
+8. terminal Builder result 以 dispatch identity 幂等回到显式相关 Main Thread，下一次用户 turn 只消费新 handoff，不注入 Builder 完整 conversation history；
+9. restart 不伪造 process resume；丢失 supervision 的 active dispatch / thread 必须 reconcile 为 interrupted / error；
+10. Desktop 标准 UI 与 Terminal View 只是同一 Forge product surface 的两种呈现，必须共用同一 typed API 和 orchestration。
+
+T010 是当前 cutover 验收卡。自动 repository/staged-runtime gate 与真实 provider smoke 分开记证据；没有真实观察到 Builder → Main Thread 二次 turn 的链路时，不得把 T010 标记 DONE。
+
+## 16. 文档真相合同
 
 文档站必须区分：
 

@@ -220,6 +220,21 @@ MCP 市场目录以 SQLite 为读取真相，官方 Registry 只作为 backend �
 - Stateful Skill Flow 是可选确定性 controller；
 - V1 禁止 nested SubAgent 与 recursive delegation。
 
+### Forge / 淬行
+
+截至 2026-09-06，Forge 已作为 Mira 内部一级工程执行域接入，而不是独立 control-plane：
+
+- Mira Server 在 `server/src/forge/**` 拥有 Forge runtime lifecycle、persistence、startup reconcile、Main Thread、Builder dispatch、Review 和 API routes；
+- Desktop 产品入口为 **淬行**（`/forge`），标准 UI 与 Terminal View 共用同一份 `ForgeWorkspaceSnapshot`、typed API 和 orchestration；
+- Repository Task Truth 与 Forge Runtime Truth 分离；Task Card 仍是 repository-native 真相，runtime 只保存执行引用与证据；
+- Dispatch 是显式动作，当前保持全局单 active Builder；绑定 source Main Thread 时必须属于同一 project；
+- Builder 正常完成只把 runtime task 推进到 `reviewing`，不等于 Repository PASS；
+- Review 继续按 concrete SHA 绑定，只有当前 SHA 与 reviewed SHA 一致时才能执行 integration；
+- terminal Builder result 会以 dispatch identity 幂等写入显式相关 Main Thread；下一次用户 turn 可消费新到达的 bounded handoff，Builder prose 不覆盖 authoritative runtime state；
+- 当前 Mira runtime 不依赖旧 `:47831` standalone Forge server，也不需要 Forge 独立 package / lockfile / Vite build。
+
+T010 正在执行最终 cutover acceptance。旧源仓 T018 的自动验证不能替代 Mira 当前产品验收；在一条真实本机 Builder → `reviewing` → `builder_result` → next Main Thread turn 链、cancel/restart 观察和当前 Windows package build 都留下证据前，**不得宣传“Forge 迁移已最终验收完成”**。
+
 ### MicroApps Hub 与 MicroAPP Runtime
 
 完整事实见 [[MICROAPP_CURRENT_TRUTH]]。

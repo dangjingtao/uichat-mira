@@ -2,7 +2,7 @@
 status: current
 priority: P0
 owner: forge / integration
-last_verified: 2026-09-05
+last_verified: 2026-09-06
 layer: project-control
 module: Forge
 feature: CutoverAcceptance
@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T009-desktop-cuixing-product-surface.md
-task_state: TODO
+task_state: READY_FOR_REVIEW
 ---
 
 # forge_T010 End-to-End Cutover and Legacy Retirement
@@ -104,3 +104,59 @@ Register / select real project
 ## Unknown / Human Decision
 
 旧 `mira-forge` GitHub repository 最终选择 Archive 还是 Delete 属于 owner 仓库治理动作；本卡只要求其退出 active product source-of-truth。
+
+
+## Construction Evidence
+
+### Current Mira chain audit
+
+2026-09-06 对当前 `dev` 重新核对真实实现，没有为 T010 改写主状态机：
+
+- Desktop `useForgeWorkspace.dispatchTask()` 会先取得当前 project 的 Main Thread，并把其 `thread.id` 作为 `sourceThreadId` 传入显式 Dispatch；
+- Server Dispatch manager 拒绝 cross-project `sourceThreadId`；
+- Builder terminal success 写入 `dispatch=completed` / session completed / runtime task `reviewing`，failure/cancel/restart 写入对应 terminal/interrupted truth；
+- terminal Dispatch 通过 `appendBuilderResultHandoff` 向显式相关 Main Thread 写入 durable handoff，identity 包含 project/batch/task/taskRef/dispatch/session/adapter；
+- Main Thread 下一次 user turn 通过 `getPendingBuilderResults` 把新 handoff 作为 bounded Forge context 注入 provider prompt，明确 runtime state authoritative、result prose explanatory；
+- Forge Runtime startup reconcile 对 lost supervision 不做伪恢复；
+- `server/src/index.ts` 注册 Forge routes，并由同一个 Mira Server lifecycle initialize / shutdown Forge runtime；
+- Desktop typed client 继续使用 Mira 现有 request / backend URL contract，不连接第二 Forge HTTP server。
+
+上述是代码路径审计，不等于真实 provider product-loop 已观察 PASS。
+
+### T010 regression gates
+
+本卡新增：
+
+- `scripts/check-forge-cutover.mjs`
+  - 纳入根 `pnpm check`；
+  - 检查 integrated Forge runtime roots；
+  - 阻断 Forge 内第二 package / lockfile / workspace / Vite root；
+  - 阻断 runtime surface 的 `47831` / `MIRA_FORGE_STATE_FILE` / `.mira-forge`；
+  - 阻断把 standalone `mira-forge/` source tree 嵌回主仓。
+- `scripts/smoke-staged-server-runtime.mjs`
+  - 在既有 Windows staged Node/native smoke 上增加 packaged `server.cjs` Forge cutover 检查；
+  - 要求 bundle 包含 `/forge/meta` 和 Mira-owned Forge initialization；
+  - 要求 bundle 不包含旧 control-plane / state-root marker。
+- `docs/forge/cutover-smoke.md`
+  - 固定最终 real product-loop、cancel、restart、package evidence 记录格式；
+  - 明确旧 Forge T018 仍停留在 REVIEW，不能继承不存在的 PASS。
+
+### Source T018 revalidation
+
+重新读取固定源后期 T018 合同及 PR #24/#25/#26/#27。源仓最终真实缺口是：在修复 Codex Desktop single-writer continuation 后，仍缺一条真实 local Builder observational smoke，尤其是 terminal Builder result -> Main Thread -> next Main Thread turn。
+
+因此 Mira T010 继续要求真实复测，不继承旧仓自动测试或 T016 smoke。
+
+## Remaining Acceptance Evidence
+
+以下在当前 GitHub 施工环境尚未观察，因此**不得写 PASS**：
+
+- 当前 Mira Desktop 上真实 provider Builder 完整成功链；
+- builder_result 后的下一次 Main Thread provider turn 确实使用该 handoff；
+- 真实 cancel / interrupted UI 观察；
+- Mira Server restart 后的产品级 reconstruction 观察；
+- 当前 T010 HEAD 的 Windows Electron package build。
+
+PR 合并后应先读取 `dev` 的 `Check dev` 与 `Windows Native Runtime Smoke` 结果；真实 provider / package evidence 继续按 `docs/forge/cutover-smoke.md` 补齐。
+
+T010 当前为 `READY_FOR_REVIEW`，不是 `DONE`。
