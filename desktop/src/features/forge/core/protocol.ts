@@ -35,7 +35,7 @@ export interface ForgeProjectData {
   threads: ForgeMainThread[];
   threadSnapshot: ForgeMainThreadSnapshot | null;
   events: ForgeRuntimeEvent[];
-  readiness: ForgeDispatchReadiness | null;
+  readiness: ForgeDispatchReadiness[];
 }
 
 const readError = (error: unknown) =>
@@ -135,15 +135,17 @@ export class DesktopForgeProtocol implements ForgeDesktopProtocol {
       ? await forgeApi.getThread(selectedThread.id)
       : null;
 
-    const activeBatch =
-      newestByUpdatedAt(batches).find(
-        (batch) => batch.status !== "integrated",
-      ) ??
-      newestByUpdatedAt(batches)[0] ??
-      null;
-    const readiness = activeBatch
-      ? await forgeApi.getReadiness(activeBatch.id).catch(() => null)
-      : null;
+    const readiness = (
+      await Promise.all(
+        batches
+          .filter((batch) => batch.status !== "integrated")
+          .map((batch) =>
+            forgeApi.getReadiness(batch.id).catch(() => null),
+          ),
+      )
+    ).filter(
+      (item): item is ForgeDispatchReadiness => item !== null,
+    );
 
     return {
       projectId,
