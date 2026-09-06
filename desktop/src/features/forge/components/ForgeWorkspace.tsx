@@ -1,36 +1,149 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  ArrowLeft,
+  CheckCircle2,
   CircleAlert,
   FileClock,
   GitBranch,
+  Hammer,
+  ListTodo,
   Menu,
   PanelRight,
   Play,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Square,
   X,
 } from "lucide-react";
-import { Badge, Button, Drawer, IconButton, Modal } from "@/shared/ui";
-import type { ForgeEvent, ForgeRepositoryState, ForgeRuntimeRecord, ForgeRuntimeState, ForgeTask, ForgeWorkspaceSnapshot } from "../types";
+import {
+  Badge,
+  Button,
+  Drawer,
+  IconButton,
+  Modal,
+  Select,
+  TextInput,
+} from "@/shared/ui";
+import type {
+  ForgeDispatchStatus,
+  ForgeEvent,
+  ForgeInspectorView,
+  ForgeRegisterProjectValues,
+  ForgeRuntimeRecord,
+  ForgeRuntimeState,
+  ForgeTask,
+  ForgeWorkspaceSnapshot,
+} from "../types";
 
 interface ForgeWorkspaceProps {
   snapshot?: ForgeWorkspaceSnapshot | null;
-  onRegisterProject?: (values: { name: string; repositoryPath: string; branch: string }) => void;
-  onDispatch?: (task: ForgeTask) => void;
-  onCancel?: (runtime: ForgeRuntimeRecord) => void;
-  onReview?: (task: ForgeTask) => void;
+  busy?: boolean;
+  onBackToChat?: () => void;
+  onRefresh?: () => void | Promise<void>;
+  onSelectProject?: (projectId: string) => void | Promise<void>;
+  onSelectTask?: (taskId: string) => void | Promise<void>;
+  onRegisterProject?: (
+    values: ForgeRegisterProjectValues,
+  ) => void | Promise<void>;
+  onSendMessage?: (value: string) => void | Promise<void>;
+  onDispatch?: (
+    task: ForgeTask,
+    builder: "opencode" | "piagent" | "codex",
+  ) => void | Promise<void>;
+  onCancel?: (runtime: ForgeRuntimeRecord) => void | Promise<void>;
+  onIntegrate?: (task: ForgeTask) => void | Promise<void>;
 }
 
-const repoLabel: Record<ForgeRepositoryState, string> = { TODO: "TODO", DOING: "DOING", REVIEW: "REVIEW", PASS: "PASS", Integrated: "Integrated" };
-const runtimeLabel: Record<ForgeRuntimeState, string> = { waiting: "Waiting", building: "Building", reviewing: "Reviewing", fixing: "Fixing", interrupted: "Interrupted", failed: "Failed", blocked: "Blocked", stale: "Stale" };
-const repoVariant = (state: ForgeRepositoryState) => state === "PASS" || state === "Integrated" ? "success" : state === "REVIEW" ? "warning" : state === "DOING" ? "primary" : "muted";
-const runtimeVariant = (state: ForgeRuntimeState) => state === "building" || state === "fixing" ? "primary" : state === "reviewing" || state === "stale" ? "warning" : state === "failed" || state === "interrupted" || state === "blocked" ? "danger" : "muted";
+const runtimeLabel: Record<ForgeRuntimeState, string> = {
+  waiting: "Waiting",
+  building: "Building",
+  reviewing: "Reviewing",
+  fixing: "Fixing",
+  waiting_integration: "Waiting integration",
+  interrupted: "Interrupted",
+  stale: "Stale",
+  review_passed: "Review passed",
+  integrated: "Integrated",
+};
+
+const dispatchLabel: Record<ForgeDispatchStatus, string> = {
+  starting: "Starting",
+  running: "Running",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
+};
+
+const runtimeVariant = (state: ForgeRuntimeState) => {
+  if (state === "review_passed" || state === "integrated") return "success";
+  if (state === "building" || state === "fixing") return "primary";
+  if (
+    state === "reviewing" ||
+    state === "waiting_integration" ||
+    state === "stale"
+  ) {
+    return "warning";
+  }
+  if (state === "interrupted") return "danger";
+  return "muted";
+};
+
+const dispatchVariant = (state: ForgeDispatchStatus) => {
+  if (state === "completed") return "success";
+  if (state === "starting" || state === "running") return "primary";
+  if (state === "failed" || state === "interrupted") return "danger";
+  return "muted";
+};
+
+const repositoryVariant = (state: string) => {
+  const normalized = state.trim().toUpperCase();
+  if (normalized === "PASS" || normalized === "INTEGRATED") return "success";
+  if (normalized === "REVIEW") return "warning";
+  if (normalized === "DOING") return "primary";
+  return "muted";
+};
+
+const builderLabel = (builder: string) => {
+  if (builder === "codex" || builder.includes("codex")) return "Codex";
+  if (builder === "piagent" || builder.includes("piagent")) return "PiAgent";
+  if (builder === "opencode" || builder.includes("opencode")) return "OpenCode";
+  return builder;
+};
 
 function StatePair({ task }: { task: ForgeTask }) {
-  return <div className="grid grid-cols-2 divide-x divide-border rounded-ui-panel border border-border bg-surface-primary"><div className="p-3"><div className="text-caption text-text-tertiary">Repository</div><Badge variant={repoVariant(task.repositoryState)}>{repoLabel[task.repositoryState]}</Badge></div><div className="p-3"><div className="text-caption text-text-tertiary">Runtime</div><Badge variant={runtimeVariant(task.runtimeState)}>{runtimeLabel[task.runtimeState]}</Badge></div></div>;
+  const drift =
+    task.repositoryLedgerState !== "UNKNOWN" &&
+    task.repositoryLedgerState !== task.repositoryState;
+
+  return (
+    <div className="grid grid-cols-2 divide-x divide-border rounded-ui-panel border border-border bg-surface-primary">
+      <div className="p-3">
+        <div className="text-caption text-text-tertiary">Repository</div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <Badge variant={repositoryVariant(task.repositoryState)}>
+            {task.repositoryState}
+          </Badge>
+          {drift ? (
+            <span className="font-mono text-[10px] text-warning-text">
+              ledger {task.repositoryLedgerState}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="p-3">
+        <div className="text-caption text-text-tertiary">Runtime</div>
+        <div className="mt-1.5">
+          <Badge variant={runtimeVariant(task.runtimeState)}>
+            {runtimeLabel[task.runtimeState]}
+          </Badge>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TaskContext({ task, onDispatch, onReview, onClose }: { task: ForgeTask | null; onDispatch: () => void; onReview: () => void; onClose?: () => void }) {
