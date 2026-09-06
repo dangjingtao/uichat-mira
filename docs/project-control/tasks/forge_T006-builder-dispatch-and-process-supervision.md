@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T005-main-thread-runtime-and-provider-adapters.md
-task_state: DOING
+task_state: DONE
 ---
 
 # forge_T006 Builder Dispatch and Process Supervision
@@ -116,6 +116,33 @@ task_state: DOING
 - 三种 builder adapter fake-process tests
 - server typecheck
 - `git diff --check`
+
+## Final Review Evidence
+
+- PR #105，base=`dev`，feature branch=`feature/forge-t006-builder-dispatch`。
+- Latest reviewed code HEAD before close: `176ba49917e5f374b2d8fa579dd56761cad32348`。
+- Branch Policy：PASS。
+- Codex review：明确返回 usage limit，无法提供有效 review。
+- CodeRabbit：最新 HEAD review 已启动但仍为 pending；当前 0 review / 0 unresolved review thread / 0 inline finding。按 owner 已明确 fallback 规则，外部 reviewer 无有效结论时允许自审收口，不让 quota / pending 卡死主线。
+- Self-review 重点核验：
+  - 仅 OpenCode / PiAgent / Codex 三种 Builder，统一 provider-neutral runner contract；
+  - 全局单 active Builder lane，跨 provider 仍串行；
+  - 无自动 dispatch、无自动 fallback、无 parallel/worktree scheduler；
+  - dispatch 前先检查 active lane，再通过 T004 解析 exact Repository Task Card，事务内二次检查 lane；
+  - canonical Task Card 永远进入 Must Read；inline prompt 只能追加为 Additional Operator Instruction，不能绕过 Task truth；
+  - optional source Main Thread 必须同 project；
+  - start / provider event / external session / terminal / cancel / restart / shutdown 均进入 durable runtime evidence；
+  - success 仅推进 runtime task -> `reviewing`；不写 Repository Task PASS；
+  - provider-declared error 即使 exit code 0 仍失败；
+  - spawn error / failure -> session failed + task interrupted + dispatch failed；
+  - explicit cancel 必须有 Forge-owned live handle；`kill(SIGTERM)` 返回 false 时写 warning 并拒绝伪造 `cancelled`；
+  - cancel / restart 后 late provider callback 不覆盖 terminal dispatch；
+  - shutdown kill 失败会写 durable warning 并让 managed-resource shutdown 报错，不静默吞掉；
+  - T018 Builder Result -> Main Thread 回注未迁移，保持 T007 后续范围；
+  - 无 route / Desktop / Reviewer / Mira AgentGraph 修改。
+- Scope audit：12 个 changed files 均位于本任务卡或 `server/src/forge/dispatch/**`、`server/src/forge/adapters/builder/**`；0 conflict marker，0 trailing whitespace。
+- 新增 dispatch / serial / cancellation / restart / provider fake-process 回归；当前 PR workflow 不执行 Forge Vitest，因此不伪造“定向 Vitest 已运行”。
+- Final self-review: PASS。最终完成仍以合并后的 `dev -> pnpm check` 与 Windows staged-server smoke 为准；任一失败立即重开 T006。
 
 ## Unknown / Human Decision
 
