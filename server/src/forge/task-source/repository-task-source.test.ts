@@ -197,6 +197,23 @@ describe("Repository Task Source", () => {
     }
   });
 
+  it("refuses repository writes while existing task truth is malformed", async () => {
+    const { root, taskDir, ledgerPath, project } = await fixture();
+    try {
+      await rm(path.join(taskDir, "T101-localized.md"));
+
+      const source = new RepositoryTaskSource();
+      await expect(
+        source.create(project, { id: "T102", title: "Should not write", status: "TODO" }),
+      ).rejects.toThrow(/task card not found for T101/);
+
+      expect((await readdir(taskDir)).some((name) => name.startsWith("T102"))).toBe(false);
+      expect(await readFile(ledgerPath, "utf8")).not.toContain("T102");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("rolls back card creation when ledger write fails", async () => {
     const { root, taskDir, ledgerPath, project } = await fixture();
     try {
