@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T006-builder-dispatch-and-process-supervision.md
-task_state: DOING
+task_state: DONE
 ---
 
 # forge_T007 Review Handoff and Runtime State Guards
@@ -110,6 +110,29 @@ task_state: DOING
 - builder-result idempotency / cross-project rejection tests
 - server typecheck
 - `git diff --check`
+
+## Final Review Evidence
+
+- PR #106，base=`dev`，feature branch=`feature/forge-t007-review-guards`。
+- Final reviewed HEAD: `873535c0af481ce565e27ae4b0cf242f8e8d3400`。
+- Branch Policy：PASS。
+- Codex review：usage limit，未提供有效 review。
+- CodeRabbit：latest-head review 已触发但持续 processing；0 unresolved review thread / 0 inline finding。Owner 已明确授权本卡在外部 reviewer 无法及时收口时走自审 fallback。
+- Self-review：PASS。
+- Self-review blocker check：
+  - generic task mutation 无法伪造 `review_passed / integrated / reviewedSha / reviewRound`；
+  - actionable PASS 仅来自 exact SHA-bound review；
+  - currentSha 变化会使旧 PASS stale/inactive；
+  - integration 为独立 guarded action，要求 `currentSha == reviewedSha == expectedSha` 且存在同 SHA actionable PASS；
+  - builder_result 绑定显式 related Main Thread + dispatch identity，cross-project 拒绝，幂等；
+  - durable handoff 维持 T001 的 16,384 / 4,096 JS UTF-16 trim+slice 语义；
+  - completed / failed / cancelled / restart/shutdown interrupted 均在 authoritative terminal state 形成后写 handoff；
+  - Main Thread 只在下一用户 turn 消费自上次 user turn 后到达的 result，同一 result 后续不重复注入；
+  - Builder prose 不作为 review/success authority；
+  - 无 automatic Reviewer、auto merge/deploy、API route、Desktop UI、并行 scheduler 扩展。
+- Scope note：Required Behavior 的现有真实接缝位于 `server/src/forge/domain.ts` 与 `server/src/forge/dispatch/manager.ts`；任务卡 Allowed Changes 对这两个路径描述不完整，本卡只做必要最小改动并已在 Construction Evidence 中记录。
+- Focused Forge Vitest 已新增但当前 PR workflow 不执行，因此不声明已运行。
+- 合并后必须以 `dev -> pnpm check` 与 Windows staged-server smoke 为最终整仓门禁；任一失败立即重开 T007。
 
 ## Unknown / Human Decision
 
