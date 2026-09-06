@@ -189,6 +189,7 @@ const projectData = {
   },
   events: [],
   readiness: [],
+  readinessFailures: [],
 } as ForgeProjectData;
 
 describe("buildForgeWorkspaceSnapshot", () => {
@@ -257,4 +258,29 @@ describe("buildForgeWorkspaceSnapshot", () => {
     expect(snapshot.tasks[0]?.runtimeState).toBe("reviewing");
     expect(snapshot.tasks[0]?.repositoryState).toBe("REVIEW");
   });
+
+  it("preserves readiness transport failures as operational evidence", () => {
+    const snapshot = buildForgeWorkspaceSnapshot({
+      shell,
+      projectData: {
+        ...projectData,
+        readiness: [],
+        readinessFailures: [
+          {
+            batchId: "B-1",
+            error: "readiness endpoint unavailable",
+          },
+        ],
+      },
+      selectedProjectId: "P-1",
+      selectedTaskId: "T100",
+      inspector: null,
+    });
+
+    expect(snapshot.tasks[0]?.readiness).toBe("unavailable");
+    expect(snapshot.tasks[0]?.readinessReasons).toEqual([
+      "readiness_check_failed: readiness endpoint unavailable",
+    ]);
+  });
+
 });
