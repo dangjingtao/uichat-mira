@@ -66,7 +66,7 @@ task_state: DOING
   - generic `updateTask(status=review_passed)` 继续拒绝；
   - generic `updateTask(status=integrated)` 现明确拒绝；
   - generic `reviewedSha / reviewRound` 继续拒绝；
-  - 新增 `integrateReviewedTask(expectedSha)`：仅 `review_passed` 可进入 `integrated`，且要求 `currentSha == reviewedSha == expectedSha`，同时存在同 SHA 的 actionable PASS review；依赖任务必须已 integrated。
+  - 新增 `integrateReviewedTask(expectedSha)`：仅 `review_passed` 可进入 `integrated`，且要求 `currentSha == reviewedSha == expectedSha`，同时存在同 SHA 的 actionable PASS review。
 - SHA stale semantics：
   - review request 必须等于当前 `task.currentSha`；
   - 非 cancelled resolve 必须 `reviewedSha == requestedSha`；
@@ -91,7 +91,7 @@ task_state: DOING
 - 未实现 automatic Reviewer、auto merge/deploy、generic sub-agent、API route、Desktop UI。
 - 路径说明：任务卡 Required Behavior 的真实现有实现点位于 `server/src/forge/domain.ts` 与 T006 `server/src/forge/dispatch/manager.ts`，而 Allowed Changes 写成 `domain/**` 且未列 dispatch；本卡仅对这两个必要现有接缝做最小修改，没有扩展其余 Domain/Dispatch 行为。
 - 回归覆盖：
-  - review SHA anti-forgery / round / changes_requested / stale / late old-SHA / guarded integration / dependency integration；
+  - review SHA anti-forgery / round / changes_requested / stale / late old-SHA / guarded integration；
   - builder_result UTF-16 bounds / idempotency / cross-project / once-only next-turn / late-result delivery；
   - completed / failed / cancelled / restart-interrupted dispatch handoff authoritative state。
 - 当前 PR workflow 不执行 Forge Vitest，因此不伪造“上述定向 Vitest 已运行”；合并后以 `dev -> pnpm check` 与 Windows staged-server smoke 作为整仓门禁。
