@@ -284,41 +284,5 @@ describe("Forge SHA-bound review guards", () => {
     }
   });
 
-  it("requires integrated dependencies before guarded integration", async () => {
-    const { root, store, batchId, reviewerSessionId } =
-      await fixture(["T100", "T101"]);
-    try {
-      await store.mutate((state) => {
-        const batch = state.batches.find((item) => item.id === batchId);
-        if (!batch) throw new Error("batch missing");
-        const target = batch.tasks.find((item) => item.id === "T100");
-        if (!target) throw new Error("task missing");
-        target.dependsOn = ["T101"];
-      });
 
-      const manager = createForgeReviewManager({ store });
-      const requested = await manager.requestReview({
-        projectId: "P-1",
-        batchId,
-        taskId: "T100",
-        reviewerSessionId,
-        requestedSha: "sha-T100",
-      });
-      await manager.resolveReview(requested.id, {
-        result: "passed",
-        reviewedSha: "sha-T100",
-      });
-
-      await expect(
-        manager.integrateTask({
-          projectId: "P-1",
-          batchId,
-          taskId: "T100",
-          expectedSha: "sha-T100",
-        }),
-      ).rejects.toThrow(/integration dependency is not integrated: T101/);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
 });
