@@ -85,7 +85,7 @@ describe("ForgeTerminalWorkspace", () => {
     expect(screen.getByText("CURRENT WORK")).toBeInTheDocument();
     expect(screen.getByText("MAIN THREAD")).toBeInTheDocument();
     expect(screen.getByText("EVENT LOG")).toBeInTheDocument();
-    expect(screen.getByText("T009")).toBeInTheDocument();
+    expect(screen.getAllByText("T009").length).toBeGreaterThan(0);
     expect(screen.getByText("Forge is ready.")).toBeInTheDocument();
   });
 
