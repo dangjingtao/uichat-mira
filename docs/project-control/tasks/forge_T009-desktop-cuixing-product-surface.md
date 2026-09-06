@@ -155,4 +155,4 @@ task_state: DOING
 
 ## Unknown / Human Decision
 
-OpenDesign 设计文件当前尚未入仓。启动本卡时若仍缺失，停止施工并等待设计输入；不得自行补画。
+已解决：启动 T009 时 `desktop/src/features/forge/components/ForgeWorkspace.tsx` 已包含 owner 之前基于 OpenDesign 确认并落入 Mira Desktop 的静态产品骨架（Project Rail / Main Thread / Task Context / Runtime secondary surfaces）。本卡以该现有实现作为设计输入，只做真实 domain/API 接线与明确的 domain-truth 差异修正，没有自行重画另一套 Forge UI。
