@@ -391,6 +391,7 @@ export class RepositoryTaskSource {
   }
 
   async create(project: ForgeProject, input: CreateRepositoryTaskInput): Promise<RepositoryTaskSummary> {
+    await this.inspect(project);
     const id = normalizeTaskId(input?.id);
     const paths = await configuredPaths(project);
     const { table } = await readLedger(paths);
@@ -447,6 +448,7 @@ export class RepositoryTaskSource {
     inputTaskId: unknown,
     patch: UpdateRepositoryTaskInput,
   ): Promise<RepositoryTaskSummary> {
+    await this.inspect(project);
     const id = normalizeTaskId(inputTaskId);
     const paths = await configuredPaths(project);
     const { table } = await readLedger(paths);
