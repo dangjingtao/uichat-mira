@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Modal } from "@/shared/ui";
 import type {
   ForgeRuntimeRecord,
   ForgeWorkspaceSnapshot,
 } from "../types";
 import type { ForgeWorkspaceProps } from "./ForgeWorkspace";
-import {
-  ForgeDispatchModal,
-  type ForgeBuilderChoice,
-} from "./workspace/ForgeDispatchModal";
-import { ForgeRegisterProjectModal } from "./workspace/ForgeRegisterProjectModal";
+import type { ForgeBuilderChoice } from "./workspace/ForgeDispatchModal";
 import { builderLabel } from "./workspace/presentation";
 import { ForgeTerminalCommandPalette } from "./terminal/ForgeTerminalCommandPalette";
 import { ForgeTerminalControlPane } from "./terminal/ForgeTerminalControlPane";
 import { ForgeTerminalMainThread } from "./terminal/ForgeTerminalMainThread";
 import { ForgeTerminalProjectRail } from "./terminal/ForgeTerminalProjectRail";
+import {
+  ForgeTerminalCancelModal,
+  ForgeTerminalDispatchModal,
+  ForgeTerminalRegisterProjectModal,
+} from "./terminal/ForgeTerminalModals";
 import { TerminalKey } from "./terminal/presentation";
 
 const runViewAction = (
@@ -252,7 +252,7 @@ export function ForgeTerminalWorkspace({
           <TerminalKey>n</TerminalKey> new project ·{" "}
           <TerminalKey>esc</TerminalKey> close
         </footer>
-        <ForgeRegisterProjectModal
+        <ForgeTerminalRegisterProjectModal
           open={registerOpen}
           busy={busy}
           onClose={() => setRegisterOpen(false)}
@@ -348,7 +348,7 @@ export function ForgeTerminalWorkspace({
         </div>
       </div>
 
-      <ForgeDispatchModal
+      <ForgeTerminalDispatchModal
         open={dispatchOpen}
         busy={busy}
         task={selectedTask}
@@ -362,7 +362,7 @@ export function ForgeTerminalWorkspace({
         }}
       />
 
-      <ForgeRegisterProjectModal
+      <ForgeTerminalRegisterProjectModal
         open={registerOpen}
         busy={busy}
         onClose={() => setRegisterOpen(false)}
@@ -372,44 +372,16 @@ export function ForgeTerminalWorkspace({
         }}
       />
 
-      <Modal
+      <ForgeTerminalCancelModal
         open={Boolean(cancelTarget)}
-        title="Cancel Builder"
+        busy={busy}
+        target={cancelTarget}
         onClose={() => setCancelTarget(null)}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => setCancelTarget(null)}
-            >
-              Keep running
-            </Button>
-            <Button
-              variant="danger"
-              disabled={busy || !cancelTarget}
-              onClick={() => {
-                if (!cancelTarget || !onCancel) return;
-                void Promise.resolve(onCancel(cancelTarget))
-                  .then(() => setCancelTarget(null))
-                  .catch(() => undefined);
-              }}
-            >
-              Cancel Builder
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-text-secondary">
-          {cancelTarget
-            ? "Cancel " +
-              cancelTarget.builder +
-              " on " +
-              cancelTarget.taskId +
-              "?"
-            : "No active Builder selected."}
-        </p>
-      </Modal>
+        onCancel={async (runtime) => {
+          if (!onCancel) return;
+          await onCancel(runtime);
+        }}
+      />
 
       <ForgeTerminalCommandPalette
         open={commandOpen}
