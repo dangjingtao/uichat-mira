@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import {
   updateSession,
   updateTask,
-  type ForgeTaskStatus,
 } from "../domain.js";
 import {
   appendRuntimeEvent,
