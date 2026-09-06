@@ -18,6 +18,7 @@ import {
 } from "../project/project-task-actions.js";
 import { registerForgeProject } from "../project/project-registry.js";
 import { createForgeRuntimeStore } from "../runtime/store.js";
+import { createMainThread } from "../main-thread/domain.js";
 import type {
   BuilderExitResult,
   BuilderProcessHandle,
@@ -126,8 +127,15 @@ async function createFixture(taskIds = ["T100", "T101", "T102"]) {
     name: "Fixture batch",
     taskIds,
   });
+  const sourceThreadId = await store.mutate((state) =>
+    createMainThread(state, {
+      id: "MT-source",
+      projectId: "P-1",
+      adapter: "codex",
+    }).id,
+  );
 
-  return { root, taskDir, store, batch };
+  return { root, taskDir, store, batch, sourceThreadId };
 }
 
 async function flush(store: ReturnType<typeof createForgeRuntimeStore>) {
@@ -138,7 +146,7 @@ async function flush(store: ReturnType<typeof createForgeRuntimeStore>) {
 
 describe("Forge Builder dispatch manager", () => {
   it("runs all three Builder choices through one durable contract", async () => {
-    const { root, store, batch } = await createFixture();
+    const { root, store, batch, sourceThreadId } = await createFixture();
     try {
       const opencode = new ControlledRunner();
       const piagent = new ControlledRunner();
@@ -181,6 +189,7 @@ describe("Forge Builder dispatch manager", () => {
           batchId: batch.id,
           taskId: item.taskId,
           builder: item.builder,
+          sourceThreadId,
         });
         expect(dispatch.adapterId).toBe(item.adapterId);
         expect(dispatch.taskRef).toContain(item.taskId);
@@ -236,6 +245,22 @@ describe("Forge Builder dispatch manager", () => {
               event.type === "dispatch.provider_event",
           ),
         ).toBe(true);
+        const resultHandoffs = state.threadEvents.filter(
+          (event) =>
+            event.threadId === sourceThreadId &&
+            event.type === "handoff" &&
+            event.handoff?.kind === "builder_result" &&
+            event.handoff.dispatchId === dispatch.id,
+        );
+        expect(resultHandoffs).toHaveLength(1);
+        const result = resultHandoffs[0]?.handoff;
+        expect(result?.kind).toBe("builder_result");
+        if (result?.kind === "builder_result") {
+          expect(result.dispatchStatus).toBe("completed");
+          expect(result.sessionStatus).toBe("completed");
+          expect(result.taskStatus).toBe("reviewing");
+          expect(result.resultText).toBe(item.builder + " completed");
+        }
       }
 
       const repositoryCard = await readFile(
@@ -304,6 +329,7 @@ describe("Forge Builder dispatch manager", () => {
         batchId: batch.id,
         taskId: "T100",
         builder: "opencode",
+        sourceThreadId,
       });
       runner.started();
       await flush(store);
@@ -340,7 +366,8 @@ describe("Forge Builder dispatch manager", () => {
   });
 
   it("persists explicit cancel and ignores a late provider exit", async () => {
-    const { root, store, batch } = await createFixture(["T100"]);
+    const { root, store, batch, sourceThreadId } =
+      await createFixture(["T100"]);
     try {
       const runner = new ControlledRunner();
       const manager = createDispatchManager({
@@ -379,13 +406,27 @@ describe("Forge Builder dispatch manager", () => {
       expect(durable?.resultText).toBeNull();
       expect(session?.status).toBe("disconnected");
       expect(task?.status).toBe("interrupted");
+      const handoffs = state.threadEvents.filter(
+        (event) =>
+          event.threadId === sourceThreadId &&
+          event.handoff?.kind === "builder_result" &&
+          event.handoff.dispatchId === dispatch.id,
+      );
+      expect(handoffs).toHaveLength(1);
+      const handoff = handoffs[0]?.handoff;
+      if (handoff?.kind === "builder_result") {
+        expect(handoff.dispatchStatus).toBe("cancelled");
+        expect(handoff.sessionStatus).toBe("disconnected");
+        expect(handoff.taskStatus).toBe("interrupted");
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
   it("treats provider-reported error as failure even with exit code zero", async () => {
-    const { root, store, batch } = await createFixture(["T100"]);
+    const { root, store, batch, sourceThreadId } =
+      await createFixture(["T100"]);
     try {
       const runner = new ControlledRunner();
       const manager = createDispatchManager({
@@ -397,6 +438,7 @@ describe("Forge Builder dispatch manager", () => {
         batchId: batch.id,
         taskId: "T100",
         builder: "codex",
+        sourceThreadId,
       });
       runner.started();
       runner.exit({
@@ -419,6 +461,21 @@ describe("Forge Builder dispatch manager", () => {
       expect(durable?.error).toBe("provider turn failed");
       expect(session?.status).toBe("failed");
       expect(state.batches[0]?.tasks[0]?.status).toBe("interrupted");
+      const handoffs = state.threadEvents.filter(
+        (event) =>
+          event.threadId === sourceThreadId &&
+          event.handoff?.kind === "builder_result" &&
+          event.handoff.dispatchId === dispatch.id,
+      );
+      expect(handoffs).toHaveLength(1);
+      const handoff = handoffs[0]?.handoff;
+      if (handoff?.kind === "builder_result") {
+        expect(handoff.dispatchStatus).toBe("failed");
+        expect(handoff.sessionStatus).toBe("failed");
+        expect(handoff.taskStatus).toBe("interrupted");
+        expect(handoff.resultText).toBe("partial result");
+        expect(handoff.error).toBe("provider turn failed");
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -465,7 +522,8 @@ describe("Forge Builder dispatch manager", () => {
   });
 
   it("reconciles lost supervision and ignores late callbacks after restart", async () => {
-    const { root, store, batch } = await createFixture(["T100"]);
+    const { root, store, batch, sourceThreadId } =
+      await createFixture(["T100"]);
     try {
       const runner = new ControlledRunner();
       const manager = createDispatchManager({
@@ -477,6 +535,7 @@ describe("Forge Builder dispatch manager", () => {
         batchId: batch.id,
         taskId: "T100",
         builder: "opencode",
+        sourceThreadId,
       });
       runner.started();
       await flush(store);
@@ -513,6 +572,22 @@ describe("Forge Builder dispatch manager", () => {
             event.type === "dispatch.interrupted",
         ),
       ).toHaveLength(1);
+      const handoffs = state.threadEvents.filter(
+        (event) =>
+          event.threadId === sourceThreadId &&
+          event.handoff?.kind === "builder_result" &&
+          event.handoff.dispatchId === dispatch.id,
+      );
+      expect(handoffs).toHaveLength(1);
+      const handoff = handoffs[0]?.handoff;
+      if (handoff?.kind === "builder_result") {
+        expect(handoff.dispatchStatus).toBe("interrupted");
+        expect(handoff.sessionStatus).toBe("disconnected");
+        expect(handoff.taskStatus).toBe("interrupted");
+        expect(handoff.error).toBe(
+          "control plane restarted; process supervision was lost",
+        );
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }
