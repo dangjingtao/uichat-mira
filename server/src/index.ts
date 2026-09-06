@@ -140,6 +140,7 @@ import {
   initializeForgeRuntime,
   shutdownForgeRuntime,
 } from "@/forge/runtime/index.js";
+import forgeRoutes from "@/forge/routes/index.js";
 
 const app = Fastify({
   bodyLimit: MAX_UPLOAD_FILE_BYTES,
@@ -768,6 +769,7 @@ const setupRoutes = async () => {
   await app.register(agentRoute);
   await app.register(mcpRoutes);
   await app.register(webbridgeRoute);
+  await app.register(forgeRoutes);
   await app.register(dashboardController, { newsHubService, mailCenterService });
 };
 
