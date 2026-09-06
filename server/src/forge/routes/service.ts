@@ -40,15 +40,35 @@ export interface ForgeRouteService {
   readonly mainThread: MainThreadManager;
   readonly dispatch: ForgeDispatchManager;
   readonly review: ForgeReviewManager;
-  listProjects: typeof listForgeProjects;
-  getProject: typeof getForgeProject;
-  registerProject: typeof registerForgeProject;
-  updateProject: typeof updateForgeProject;
-  inspectTaskSource: typeof inspectProjectTaskSource;
-  resolveTask: typeof resolveProjectTask;
-  createTask: typeof createProjectRepositoryTask;
-  updateTask: typeof updateProjectRepositoryTask;
-  createBatch: typeof createProjectBatch;
+  listProjects(): ReturnType<typeof listForgeProjects>;
+  getProject(projectId: unknown): ReturnType<typeof getForgeProject>;
+  registerProject(
+    input: Parameters<typeof registerForgeProject>[1],
+  ): ReturnType<typeof registerForgeProject>;
+  updateProject(
+    projectId: unknown,
+    input: Parameters<typeof updateForgeProject>[2],
+  ): ReturnType<typeof updateForgeProject>;
+  inspectTaskSource(
+    projectId: unknown,
+  ): ReturnType<typeof inspectProjectTaskSource>;
+  resolveTask(
+    projectId: unknown,
+    taskId: unknown,
+  ): ReturnType<typeof resolveProjectTask>;
+  createTask(
+    projectId: unknown,
+    input: Parameters<typeof createProjectRepositoryTask>[2],
+  ): ReturnType<typeof createProjectRepositoryTask>;
+  updateTask(
+    projectId: unknown,
+    taskId: unknown,
+    patch: Parameters<typeof updateProjectRepositoryTask>[3],
+  ): ReturnType<typeof updateProjectRepositoryTask>;
+  createBatch(
+    projectId: unknown,
+    input: Parameters<typeof createProjectBatch>[2],
+  ): ReturnType<typeof createProjectBatch>;
   listBatches(projectId?: string): Promise<ForgeRuntimeState["batches"]>;
   getBatch(batchId: string): Promise<ForgeRuntimeState["batches"][number]>;
   readiness(batchId: string): Promise<ReturnType<typeof getDispatchReadiness>>;
@@ -90,15 +110,27 @@ export async function createForgeRouteService(
     mainThread,
     dispatch,
     review,
-    listProjects: listForgeProjects,
-    getProject: getForgeProject,
-    registerProject: registerForgeProject,
-    updateProject: updateForgeProject,
-    inspectTaskSource: inspectProjectTaskSource,
-    resolveTask: resolveProjectTask,
-    createTask: createProjectRepositoryTask,
-    updateTask: updateProjectRepositoryTask,
-    createBatch: createProjectBatch,
+    listProjects: () => listForgeProjects(runtime.store),
+    getProject: (projectId) => getForgeProject(runtime.store, projectId),
+    registerProject: (projectInput) =>
+      registerForgeProject(runtime.store, projectInput),
+    updateProject: (projectId, projectInput) =>
+      updateForgeProject(runtime.store, projectId, projectInput),
+    inspectTaskSource: (projectId) =>
+      inspectProjectTaskSource(runtime.store, projectId),
+    resolveTask: (projectId, taskId) =>
+      resolveProjectTask(runtime.store, projectId, taskId),
+    createTask: (projectId, taskInput) =>
+      createProjectRepositoryTask(runtime.store, projectId, taskInput),
+    updateTask: (projectId, taskId, patch) =>
+      updateProjectRepositoryTask(
+        runtime.store,
+        projectId,
+        taskId,
+        patch,
+      ),
+    createBatch: (projectId, batchInput) =>
+      createProjectBatch(runtime.store, projectId, batchInput),
     async listBatches(projectId) {
       const state = await runtime.store.read();
       return state.batches
@@ -156,10 +188,7 @@ export async function getDefaultForgeRouteService(): Promise<ForgeRouteService> 
     defaultServicePromise = (async () => {
       const runtime = await initializeForgeRuntime();
       return createForgeRouteService(runtime);
-    })().catch((error) => {
-      defaultServicePromise = null;
-      throw error;
-    });
+    })();
   }
   return defaultServicePromise;
 }
