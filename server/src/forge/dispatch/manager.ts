@@ -496,6 +496,12 @@ export function createDispatchManager(input: {
     }
 
     const before = await store.read();
+    const activeBefore = findActiveBuilderDispatch(before);
+    if (activeBefore) {
+      throw new Error(
+        "builder dispatch already active: " + activeBefore.id,
+      );
+    }
     const beforeBinding = resolveBinding(before, batchId, taskId);
     const repositoryTask = await resolveProjectTask(
       store,
