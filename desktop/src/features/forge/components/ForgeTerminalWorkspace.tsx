@@ -119,9 +119,24 @@ export function ForgeTerminalWorkspace({
       if (typing || dispatchOpen || registerOpen || cancelTarget) return;
 
       if (commandOpen) {
-        if (event.key.toLowerCase() === "q") {
+        const key = event.key.toLowerCase();
+        if (["q", "n", "d", "x", "r"].includes(key)) {
           event.preventDefault();
+        }
+        if (key === "q") {
           setCommandOpen(false);
+        } else if (key === "n") {
+          setCommandOpen(false);
+          setRegisterOpen(true);
+        } else if (key === "d" && selectedTask) {
+          setCommandOpen(false);
+          setDispatchOpen(true);
+        } else if (key === "x" && selectedRuntime) {
+          setCommandOpen(false);
+          setCancelTarget(selectedRuntime);
+        } else if (key === "r") {
+          setCommandOpen(false);
+          runViewAction(onRefresh?.());
         }
         return;
       }
