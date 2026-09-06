@@ -2,10 +2,8 @@ import {
   initializeForgeRuntime,
   type ForgeRuntime,
 } from "../runtime/runtime.js";
-import {
-  attachMainThreadRuntime,
-  type MainThreadManager,
-} from "../main-thread/runtime.js";
+import { attachMainThreadRuntime } from "../main-thread/runtime.js";
+import type { MainThreadManager } from "../main-thread/manager.js";
 import {
   attachBuilderDispatchRuntime,
   type ForgeDispatchManager,
