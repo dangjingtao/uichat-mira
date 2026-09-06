@@ -1,8 +1,10 @@
+import { useNavigate } from "react-router-dom";
 import { FullPageStatus } from "@/shared/ui";
 import ForgeWorkspace from "../components/ForgeWorkspace";
 import useForgeWorkspace from "../hooks/useForgeWorkspace";
 
 export default function CuixingPage() {
+  const navigate = useNavigate();
   const workspace = useForgeWorkspace();
 
   if (workspace.loading && !workspace.snapshot) {
@@ -21,6 +23,7 @@ export default function CuixingPage() {
     <ForgeWorkspace
       snapshot={workspace.snapshot}
       busy={workspace.busy}
+      onBackToChat={() => navigate("/chat")}
       onRefresh={() => workspace.refresh()}
       onSelectProject={(projectId) => workspace.selectProject(projectId)}
       onSelectTask={(taskId) => workspace.selectTask(taskId)}
