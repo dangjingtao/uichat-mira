@@ -101,6 +101,7 @@ function ForgeTerminalModalFrame({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-label={typeof title === "string" ? title : undefined}
         className="w-full max-w-[460px] border border-text-inverted/25 bg-ink shadow-shadow-xl"
       >
         <header className="flex items-center justify-between border-b border-text-inverted/15 px-3 py-2.5 text-[9px] font-semibold tracking-[0.12em]">
