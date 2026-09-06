@@ -44,7 +44,9 @@ export function ForgeDispatchModal({
             disabled={busy || !task || !dispatchable}
             onClick={() => {
               if (!task) return;
-              void onDispatch(task, builderChoice).then(onClose);
+              void onDispatch(task, builderChoice)
+                .then(onClose)
+                .catch(() => undefined);
             }}
           >
             <Play className="h-4 w-4" />
