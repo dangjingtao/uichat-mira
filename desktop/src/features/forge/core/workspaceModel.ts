@@ -154,14 +154,18 @@ const mapMessages = (
 const runtimeBatchForTask = (
   batches: ForgeBatch[],
   taskId: string,
-) =>
-  newest(
-    batches.filter(
-      (batch) =>
-        batch.status !== "integrated" &&
-        batch.tasks.some((task) => task.id === taskId),
+) => {
+  const matching = newest(
+    batches.filter((batch) =>
+      batch.tasks.some((task) => task.id === taskId),
     ),
-  )[0] ?? null;
+  );
+  return (
+    matching.find((batch) => batch.status !== "integrated") ??
+    matching[0] ??
+    null
+  );
+};
 
 const mapTask = (
   repositoryTask: ForgeRepositoryTask | null,
