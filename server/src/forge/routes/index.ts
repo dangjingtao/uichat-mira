@@ -77,6 +77,46 @@ const forgeRoutes: FastifyPluginAsync<ForgeRoutesOptions> = async (
   const useService = () => service();
 
   app.get(
+    "/forge/meta",
+    { schema: { tags: ["Tools"], security } },
+    routeHandler("Failed to load Forge metadata", async () => {
+      const api = await useService();
+      return success(api.meta());
+    }),
+  );
+
+  app.get<{
+    Querystring: {
+      projectId?: string;
+      batchId?: string;
+      taskId?: string;
+      status?: string;
+    };
+  }>(
+    "/forge/dispatches",
+    {
+      schema: {
+        tags: ["Tools"],
+        security,
+        querystring: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            projectId: { type: "string" },
+            batchId: { type: "string" },
+            taskId: { type: "string" },
+            status: { type: "string" },
+          },
+        },
+      },
+    },
+    routeHandler("Failed to list Forge dispatches", async (request) => {
+      const api = await useService();
+      return success(await api.listDispatches(request.query));
+    }),
+  );
+
+  app.get(
     "/forge/projects",
     { schema: { tags: ["Tools"], security } },
     routeHandler("Failed to list Forge projects", async () => {
