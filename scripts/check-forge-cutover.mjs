@@ -89,6 +89,44 @@ for (const relativeRoot of runtimeRoots) {
   }
 }
 
+const packageManifests = [
+  "package.json",
+  "server/package.json",
+  "desktop/package.json",
+];
+
+for (const relativeFile of packageManifests) {
+  const absoluteFile = path.join(root, relativeFile);
+  const manifest = JSON.parse(fs.readFileSync(absoluteFile, "utf8"));
+  const dependencySections = [
+    manifest.dependencies,
+    manifest.devDependencies,
+    manifest.optionalDependencies,
+    manifest.peerDependencies,
+  ];
+
+  for (const section of dependencySections) {
+    if (!section || typeof section !== "object") continue;
+    for (const dependencyName of Object.keys(section)) {
+      if (dependencyName.toLowerCase().includes("mira-forge")) {
+        failures.push(
+          `${relativeFile}: standalone Forge dependency is forbidden (${dependencyName})`,
+        );
+      }
+    }
+  }
+}
+
+const workspaceFile = path.join(root, "pnpm-workspace.yaml");
+if (
+  fs.existsSync(workspaceFile) &&
+  fs.readFileSync(workspaceFile, "utf8").toLowerCase().includes("mira-forge")
+) {
+  failures.push(
+    "pnpm-workspace.yaml: standalone mira-forge workspace entry is forbidden",
+  );
+}
+
 const legacyRepoRoot = path.join(root, "mira-forge");
 if (fs.existsSync(legacyRepoRoot)) {
   failures.push(
