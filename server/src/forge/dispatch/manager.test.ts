@@ -329,7 +329,6 @@ describe("Forge Builder dispatch manager", () => {
         batchId: batch.id,
         taskId: "T100",
         builder: "opencode",
-        sourceThreadId,
       });
       runner.started();
       await flush(store);
@@ -379,6 +378,7 @@ describe("Forge Builder dispatch manager", () => {
         batchId: batch.id,
         taskId: "T100",
         builder: "opencode",
+        sourceThreadId,
       });
       runner.started();
       await flush(store);
