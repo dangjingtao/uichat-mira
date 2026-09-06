@@ -494,20 +494,6 @@ export function integrateReviewedTask(
     throw new Error("integration requires an actionable SHA-bound PASS review");
   }
 
-  for (const dependencyId of task.dependsOn) {
-    const dependency = batch.tasks.find((item) => item.id === dependencyId);
-    if (!dependency) {
-      throw new Error(
-        "integration dependency not found: " + dependencyId,
-      );
-    }
-    if (dependency.status !== "integrated") {
-      throw new Error(
-        "integration dependency is not integrated: " + dependencyId,
-      );
-    }
-  }
-
   const timestamp = now();
   task.status = "integrated";
   task.updatedAt = timestamp;
