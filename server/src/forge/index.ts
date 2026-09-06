@@ -23,3 +23,5 @@ export * from "./readiness.js";
 export * from "./builder-contract.js";
 
 export * from "./runtime/index.js";
+export * from "./task-source/index.js";
+export * from "./project/index.js";
