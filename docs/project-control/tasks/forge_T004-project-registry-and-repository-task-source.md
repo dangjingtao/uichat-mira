@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T003-runtime-lifecycle-and-persistence-ownership.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T004 Project Registry and Repository Task Source
@@ -58,6 +58,19 @@ task_state: TODO
 - create/update 显式写入
 - ledger/card 写入失败时不留下半成功状态
 - drift 只 warning，不静默“修好”
+
+## Construction Evidence
+
+- Base: `dev@1741d5711867eada53bcb93f9b7a5db03904cc13`.
+- 新增 `server/src/forge/task-source/**`：repository-native Markdown ledger/card inspect / resolve / explicit create / explicit update。
+- 新增 `server/src/forge/project/**`：真实本地 root 注册、integration branch / task source 显式配置、project-level inspect / resolve / create / update / runtime batch binding。
+- 没有引入旧 Forge `docs/workbench/**` 默认路径。目标项目未配置 task source 时明确失败；不把历史默认静默变成 Mira 新合同。
+- 没有扩展 parser 去猜 Mira 自身 `project-control` frontmatter 语义，也没有修改 Mira 项目总台账格式。
+- inspect 会验证 Ledger `ID | Task | Status`、全局 Task ID 唯一、每个 ledger task 恰好一张 card、heading identity、Status / 中文 `状态：` 兼容、realpath 边界。
+- drift 仅形成 warning，不在读取时回写。
+- create/update 仅在显式调用时写 repository；writer 保留原 Forge 的 card/ledger 双写回滚语义，并增加失败注入测试证明 ledger 写失败后 card 不留半成功状态。
+- Runtime 仅保存 Project / Batch / Task identity 与执行状态；定向测试用正文 marker 验证 Task Card body 不进入 Forge runtime persistence。
+- 未新增 route、Desktop、Main Thread provider、Builder provider、Reviewer、自动 dispatch / push / merge / deploy。
 
 ## Acceptance Criteria
 
