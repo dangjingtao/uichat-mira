@@ -83,7 +83,7 @@ function reconcileDispatches(state: ForgeRuntimeState): string[] {
       dispatch.batchId,
       dispatch.taskId,
     );
-    if (task.status === ("building" satisfies ForgeTaskStatus)) {
+    if (task.status === "building") {
       updateTask(state, batch.id, task.id, { status: "interrupted" });
     }
 
