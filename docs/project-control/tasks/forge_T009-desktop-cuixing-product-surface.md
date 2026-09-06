@@ -10,7 +10,7 @@ doc_type: task-card
 canonical: true
 related:
   - docs/project-control/tasks/forge_T008-mira-server-api-and-desktop-client-contract.md
-task_state: DOING
+task_state: DONE
 ---
 
 # forge_T009 淬行 Desktop Product Surface
@@ -181,7 +181,14 @@ task_state: DOING
   - action rejection 在 hook 报告后由 View 边界消费，不遗留 unhandled rejection；
   - production Forge UI 无固定 backend port、Node/fs/child_process 直连。
 - 技术自审结论：通过。
-- **Owner visual review 尚未完成，因此 task_state 保持 DOING。** 合并后仍需 `dev` Type check / Desktop gates；通过后由 owner 实际查看淬行界面，再决定最终 DONE。
+- Owner visual review：通过；标准淬行产品面无需整改。
+- 旧 Forge TUI 作为同一产品域的 Terminal View 已迁入 Mira Desktop：
+  - 不迁移旧 Vite / package / standalone server / styles dependency；
+  - 新视图直接消费同一 `ForgeWorkspaceSnapshot` 与同一组 select / send / dispatch / cancel / integrate callbacks；
+  - Standard / Terminal 视图偏好本地持久化，仅改变 presentation，不改变 Forge domain truth；
+  - 保留旧 TUI 的四区控制面、monospace、紧密行、状态色、`j/k`、`/`、`d/x/r/n` keyboard-first 交互；
+  - Terminal view 拆分为 Shell / Project Rail / Control Pane / Main Thread / Command Palette / presentation，未形成第二套前端工程或单体组件。
+- Owner 已确认标准 UI 无需整改；Terminal View 作为 T009 允许的 expert/debug surface 一并收口。T009 可标记 DONE。
 
 ## Unknown / Human Decision
 

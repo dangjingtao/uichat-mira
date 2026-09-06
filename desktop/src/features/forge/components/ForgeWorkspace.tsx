@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  Terminal,
 } from "lucide-react";
 import {
   Badge,
@@ -45,7 +46,7 @@ const runViewAction = (
   void Promise.resolve(action).catch(() => undefined);
 };
 
-interface ForgeWorkspaceProps {
+export interface ForgeWorkspaceProps {
   snapshot?: ForgeWorkspaceSnapshot | null;
   busy?: boolean;
   onBackToChat?: () => void;
@@ -62,6 +63,7 @@ interface ForgeWorkspaceProps {
   ) => void | Promise<void>;
   onCancel?: (runtime: ForgeRuntimeRecord) => void | Promise<void>;
   onIntegrate?: (task: ForgeTask) => void | Promise<void>;
+  onSwitchView?: () => void;
 }
 
 export function ForgeWorkspace({
@@ -76,6 +78,7 @@ export function ForgeWorkspace({
   onDispatch,
   onCancel,
   onIntegrate,
+  onSwitchView,
 }: ForgeWorkspaceProps) {
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
   const [taskListOpen, setTaskListOpen] = useState(false);
@@ -165,10 +168,18 @@ export function ForgeWorkspace({
               Mira Desktop / Forge
             </span>
           </div>
-          <Button size="sm" variant="primary" onClick={() => setRegisterOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Register project
-          </Button>
+          <div className="flex items-center gap-1">
+            {onSwitchView ? (
+              <Button size="sm" variant="ghost" onClick={onSwitchView}>
+                <Terminal className="h-4 w-4" />
+                终端
+              </Button>
+            ) : null}
+            <Button size="sm" variant="primary" onClick={() => setRegisterOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Register project
+            </Button>
+          </div>
         </header>
         <main className="flex min-h-0 flex-1 items-center justify-center p-6">
           <section className="max-w-md text-center">
@@ -267,6 +278,17 @@ export function ForgeWorkspace({
             <CircleAlert className="h-4 w-4" />
             {snapshot.attentionCount} attention
           </Button>
+          {onSwitchView ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="hidden sm:inline-flex"
+              onClick={onSwitchView}
+            >
+              <Terminal className="h-4 w-4" />
+              终端
+            </Button>
+          ) : null}
           <IconButton
             ariaLabel="Command palette"
             onClick={() => setCommandOpen(true)}

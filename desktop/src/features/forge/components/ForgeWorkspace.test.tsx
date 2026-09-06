@@ -186,6 +186,20 @@ describe("ForgeWorkspace", () => {
     expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
   });
 
+  it("exposes an explicit switch to the terminal Forge view", () => {
+    const onSwitchView = vi.fn();
+    render(
+      <ForgeWorkspace
+        snapshot={snapshot}
+        onSwitchView={onSwitchView}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "终端" }));
+
+    expect(onSwitchView).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the real empty state when the API snapshot is absent", () => {
     render(<ForgeWorkspace snapshot={null} />);
 
