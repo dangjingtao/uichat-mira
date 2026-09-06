@@ -36,6 +36,14 @@ function optionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function requiredSingleLine(value: unknown, name: string): string {
+  const text = requiredString(value, name);
+  if (/\r|\n/.test(text)) {
+    throw new Error(name + " must be a single line");
+  }
+  return text;
+}
+
 function optionalSingleLine(value: unknown, name: string): string | null {
   const text = optionalString(value);
   if (text && /\r|\n/.test(text)) {
@@ -109,7 +117,7 @@ export async function registerForgeProject(
   source: RepositoryTaskSourceInspection | null;
 }> {
   const rootPath = await canonicalProjectRoot(input.rootPath);
-  const name = requiredString(input.name, "name");
+  const name = requiredSingleLine(input.name, "name");
   const repository = optionalSingleLine(input.repository, "repository");
   const integrationBranch =
     optionalSingleLine(input.integrationBranch, "integrationBranch") ?? "dev";
@@ -168,7 +176,7 @@ export async function updateForgeProject(
   const current = projectForId(snapshot.projects, projectId);
 
   const name =
-    input.name === undefined ? current.name : requiredString(input.name, "name");
+    input.name === undefined ? current.name : requiredSingleLine(input.name, "name");
   const repository =
     input.repository === undefined
       ? current.repository
@@ -176,7 +184,7 @@ export async function updateForgeProject(
   const integrationBranch =
     input.integrationBranch === undefined
       ? current.integrationBranch
-      : requiredString(input.integrationBranch, "integrationBranch");
+      : requiredSingleLine(input.integrationBranch, "integrationBranch");
 
   const nextLedger =
     input.taskLedger === undefined
