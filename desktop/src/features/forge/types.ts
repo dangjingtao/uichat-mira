@@ -83,12 +83,24 @@ export interface ForgeInspectorView {
   detailLines: string[];
 }
 
+export interface ForgeRegisterProjectValues {
+  name: string;
+  repositoryPath: string;
+  branch: string;
+  taskLedger?: string;
+  taskDir?: string;
+}
+
 export interface ForgeWorkspaceSnapshot {
   projects: ForgeProject[];
   selectedProjectId?: string;
   tasks: ForgeTask[];
   selectedTaskId?: string;
   selectedThreadId?: string;
+  mainThread: {
+    adapter: "opencode" | "codex-desktop" | "codex";
+    status: "idle" | "running" | "error";
+  } | null;
   messages: ForgeMessage[];
   runtimes: ForgeRuntimeRecord[];
   events: ForgeEvent[];
