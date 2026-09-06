@@ -183,6 +183,10 @@ task_state: DONE
 - 技术自审结论：通过。
 - Owner visual review：通过；标准淬行产品面无需整改。
 - Terminal View PR #111 已 squash merge 到 `dev`，merge commit `a33ad71efa460f6db351462b75916f19d235be68`。
+- Terminal modal follow-up PR #112 已 squash merge 到 `dev`，merge commit `d15024378a0b113e181de7d01a551c6d36382381`。
+- PR #112 修正 Terminal View 的 Register / Dispatch / Cancel 弹层：不再复用 Mira 标准 Modal 视觉；改为 terminal-native overlay，同时保留 Esc、backdrop close、Tab focus trap、显式 submit、readiness guard 与既有回调。
+- PR #112 Branch Policy：PASS；合并前 0 unresolved review thread；外部 reviewer 未返回有效 latest-head 结论，按 owner fallback 自审合并。
+- PR #112 边界扫描：0 shared Modal 引用、0 标准 Forge Modal 引用、0 API 直连、0 `forgeApi`、0 legacy `:47831`。
 - PR #111 Branch Policy：PASS；合并前 0 unresolved review thread。
 - CodeRabbit / Codex 在合并前未返回有效 latest-head review；按 owner 既定 fallback 规则由自审收口。
 - 自审边界扫描：0 `shared/uchat` 修改、0 package/lock、0 legacy `:47831`、0 `forgeApi` 直连、0 `/api/*` 直连、0 Node runtime 侵入。
