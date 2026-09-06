@@ -143,11 +143,37 @@ describe("ForgeTerminalWorkspace", () => {
     expect(onSwitchView).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps dispatch behind the existing explicit dispatch surface", () => {
+  it("uses terminal-native modal skin for dispatch", () => {
     render(<ForgeTerminalWorkspace snapshot={snapshot} />);
 
     fireEvent.keyDown(window, { key: "d" });
 
-    expect(screen.getByText("Dispatch Builder")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", {
+      name: "DISPATCH T009",
+    });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveClass("bg-ink");
+    expect(screen.getByText("repository task · serial Builder")).toBeInTheDocument();
+    expect(screen.getByText("dispatch task")).toBeInTheDocument();
+  });
+
+  it("uses terminal-native modal skin for register and cancel", () => {
+    render(<ForgeTerminalWorkspace snapshot={snapshot} />);
+
+    fireEvent.keyDown(window, { key: "n" });
+    let dialog = screen.getByRole("dialog", {
+      name: "REGISTER PROJECT",
+    });
+    expect(dialog).toHaveClass("bg-ink");
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "REGISTER PROJECT" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "x" });
+    dialog = screen.getByRole("dialog", { name: "CANCEL T009" });
+    expect(dialog).toHaveClass("bg-ink");
+    expect(screen.getByText("cancel dispatch")).toBeInTheDocument();
   });
 });
