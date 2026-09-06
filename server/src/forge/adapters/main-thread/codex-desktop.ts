@@ -907,7 +907,8 @@ export function createCodexDesktopMainThreadAdapter(
         }
 
         await progress.flush();
-        const terminalParams = asRecord(terminal?.params);
+        const terminalRecord = asRecord(terminal);
+        const terminalParams = asRecord(terminalRecord?.params);
         const terminalTurn = asRecord(terminalParams?.turn);
         const terminalError = asRecord(terminalTurn?.error);
         if (terminalTurn?.status === "failed") {
