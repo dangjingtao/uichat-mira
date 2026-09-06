@@ -39,6 +39,12 @@ import { ForgeTaskContext } from "./workspace/ForgeTaskContext";
 import { ForgeTaskList } from "./workspace/ForgeTaskList";
 import { builderLabel } from "./workspace/presentation";
 
+const runViewAction = (
+  action: void | Promise<void> | undefined,
+) => {
+  void Promise.resolve(action).catch(() => undefined);
+};
+
 interface ForgeWorkspaceProps {
   snapshot?: ForgeWorkspaceSnapshot | null;
   busy?: boolean;
@@ -133,8 +139,12 @@ export function ForgeWorkspace({
   const submitMessage = async () => {
     const value = messageText.trim();
     if (!value || !onSendMessage) return;
-    await onSendMessage(value);
-    setMessageText("");
+    try {
+      await onSendMessage(value);
+      setMessageText("");
+    } catch {
+      // The orchestration hook owns user-visible error reporting.
+    }
   };
 
   if (!snapshot || snapshot.projects.length === 0) {
@@ -287,7 +297,7 @@ export function ForgeWorkspace({
                 key={project.id}
                 type="button"
                 aria-pressed={project.id === snapshot.selectedProjectId}
-                onClick={() => void onSelectProject?.(project.id)}
+                onClick={() => runViewAction(onSelectProject?.(project.id))}
                 className={
                   "mb-1 flex w-full items-center gap-2 rounded-ui-control px-2 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 " +
                   (project.id === snapshot.selectedProjectId
@@ -465,7 +475,7 @@ export function ForgeWorkspace({
             busy={busy}
             onDispatch={() => setDispatchOpen(true)}
             onIntegrate={() => {
-              if (selectedTask) void onIntegrate?.(selectedTask);
+              if (selectedTask) runViewAction(onIntegrate?.(selectedTask));
             }}
           />
         </aside>
@@ -489,7 +499,7 @@ export function ForgeWorkspace({
               className="w-full justify-start"
               onClick={() => {
                 setMobileRailOpen(false);
-                void onSelectProject?.(project.id);
+                runViewAction(onSelectProject?.(project.id));
               }}
             >
               {project.name}
@@ -514,7 +524,7 @@ export function ForgeWorkspace({
           selectedTaskId={snapshot.selectedTaskId}
           onSelect={(taskId) => {
             setTaskListOpen(false);
-            void onSelectTask?.(taskId);
+            runViewAction(onSelectTask?.(taskId));
           }}
         />
       </Drawer>
@@ -535,7 +545,7 @@ export function ForgeWorkspace({
           }}
           onIntegrate={() => {
             setContextOpen(false);
-            if (selectedTask) void onIntegrate?.(selectedTask);
+            if (selectedTask) runViewAction(onIntegrate?.(selectedTask));
           }}
         />
       </Drawer>
@@ -547,7 +557,7 @@ export function ForgeWorkspace({
           events={snapshot.events}
           inspector={snapshot.inspector}
           busy={busy}
-          onCancel={(runtime) => void onCancel?.(runtime)}
+          onCancel={(runtime) => runViewAction(onCancel?.(runtime))}
           onClose={() => setRuntimePanel(null)}
         />
       ) : null}
@@ -649,7 +659,7 @@ export function ForgeWorkspace({
             disabled={busy}
             onClick={() => {
               setCommandOpen(false);
-              void onRefresh?.();
+              runViewAction(onRefresh?.());
             }}
           >
             <RefreshCw className="h-4 w-4" />
