@@ -13,7 +13,7 @@ related:
   - docs/project-control/tasks/forge_T005-main-thread-runtime-and-provider-adapters.md
   - docs/project-control/tasks/forge_T006-builder-dispatch-and-process-supervision.md
   - docs/project-control/tasks/forge_T007-review-handoff-and-runtime-state-guards.md
-task_state: DOING
+task_state: DONE
 ---
 
 # forge_T008 Mira Server API and Desktop Client Contract
@@ -156,6 +156,9 @@ Desktop 开发环境走 `/api/forge/...`；生产使用现有 backendUrl 机制�
   - `server/src/forge/routes/service.ts` 从 `../main-thread/runtime.js` 引入 `MainThreadManager`，但该模块仅本地声明该类型，未 export；正式类型定义位于 `../main-thread/manager.js`。
 - 修复仅调整 type import，不改变 runtime/service/route 行为。
 - 修复分支：`fix/forge-t008-typecheck`。修复合并且 `dev` 的 Type check + Windows staged-server 全绿前，T008 保持 DOING。
+
+- Typecheck remediation self-review: PASS。PR #108 仅修正 `MainThreadManager` 的 type import 来源，不改变 runtime/service/route 行为；Branch Policy PASS，0 unresolved review thread。
+- T008 最终完成仍以 PR #108 合并后的 `dev -> Type check` 与 Windows staged-server smoke 重新全绿为准；任一失败再次重开。
 
 ## Unknown / Human Decision
 
