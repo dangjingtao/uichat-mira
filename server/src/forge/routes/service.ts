@@ -30,6 +30,7 @@ import {
 import { getDispatchReadiness } from "../readiness.js";
 import type { ForgeRuntimeState } from "../runtime/state.js";
 import {
+  forgeMeta,
   projectInspector,
   projectRuntimeSummary,
   publicRuntimeEvent,
@@ -72,6 +73,13 @@ export interface ForgeRouteService {
   listBatches(projectId?: string): Promise<ForgeRuntimeState["batches"]>;
   getBatch(batchId: string): Promise<ForgeRuntimeState["batches"][number]>;
   readiness(batchId: string): Promise<ReturnType<typeof getDispatchReadiness>>;
+  meta(): ReturnType<typeof forgeMeta>;
+  listDispatches(input?: {
+    projectId?: string;
+    batchId?: string;
+    taskId?: string;
+    status?: string;
+  }): Promise<ForgeRuntimeState["dispatches"]>;
   listReviews(input?: {
     projectId?: string;
     batchId?: string;
@@ -148,6 +156,19 @@ export async function createForgeRouteService(
       const id = requiredId(batchId, "batchId");
       const state = await runtime.store.read();
       return getDispatchReadiness(state, id);
+    },
+    meta: () => forgeMeta(),
+    async listDispatches(input = {}) {
+      const state = await runtime.store.read();
+      return state.dispatches
+        .filter((dispatch) => {
+          if (input.projectId && dispatch.projectId !== input.projectId) return false;
+          if (input.batchId && dispatch.batchId !== input.batchId) return false;
+          if (input.taskId && dispatch.taskId !== input.taskId) return false;
+          if (input.status && dispatch.status !== input.status) return false;
+          return true;
+        })
+        .map((dispatch) => ({ ...dispatch }));
     },
     async listReviews(input = {}) {
       const state = await runtime.store.read();
