@@ -204,6 +204,33 @@ describe("Forge runtime lifecycle ownership", () => {
     await runtime.shutdown();
   });
 
+  it("blocks new resources while shutdown is in progress", async () => {
+    const { file } = await makeStateFile("mira-forge-runtime-shutdown-race-");
+    const runtime = new ForgeRuntime({ stateFile: file });
+    let releaseShutdown!: () => void;
+    const shutdownGate = new Promise<void>((resolve) => {
+      releaseShutdown = resolve;
+    });
+
+    await runtime.initialize();
+    await runtime.registerResource("slow-manager", {
+      async shutdown() {
+        await shutdownGate;
+      },
+    });
+
+    const closing = runtime.shutdown();
+    await expect(
+      runtime.registerResource("late-manager", {}),
+    ).rejects.toThrow(/closing or already closed/);
+    await expect(runtime.initialize()).rejects.toThrow(
+      /closing or already closed/,
+    );
+
+    releaseShutdown();
+    await closing;
+  });
+
   it("keeps one active Mira-owned runtime and shuts registered resources down once", async () => {
     resetForgeRuntimeForTests();
     const { file } = await makeStateFile("mira-forge-runtime-singleton-");
