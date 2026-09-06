@@ -17,7 +17,9 @@ export async function attachMainThreadRuntime(
     adapters: createDefaultMainThreadAdapters(options),
   });
   await runtime.registerResource("forge-main-thread", {
-    reconcile: () => manager.reconcile(),
+    reconcile: async () => {
+      await manager.reconcile();
+    },
     shutdown: () => manager.shutdown(),
   });
   return manager;
