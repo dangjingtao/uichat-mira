@@ -13,7 +13,7 @@ related:
   - docs/project-control/tasks/forge_T005-main-thread-runtime-and-provider-adapters.md
   - docs/project-control/tasks/forge_T006-builder-dispatch-and-process-supervision.md
   - docs/project-control/tasks/forge_T007-review-handoff-and-runtime-state-guards.md
-task_state: TODO
+task_state: DOING
 ---
 
 # forge_T008 Mira Server API and Desktop Client Contract
