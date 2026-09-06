@@ -53,7 +53,9 @@ export function ForgeRegisterProjectModal({
               !repositoryPath.trim() ||
               !branch.trim()
             }
-            onClick={() => void submit()}
+            onClick={() => {
+              void submit().catch(() => undefined);
+            }}
           >
             Register project
           </Button>
