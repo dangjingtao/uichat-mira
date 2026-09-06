@@ -36,6 +36,10 @@ export interface ForgeProjectData {
   threadSnapshot: ForgeMainThreadSnapshot | null;
   events: ForgeRuntimeEvent[];
   readiness: ForgeDispatchReadiness[];
+  readinessFailures: Array<{
+    batchId: string;
+    error: string;
+  }>;
 }
 
 const readError = (error: unknown) =>
@@ -135,16 +139,31 @@ export class DesktopForgeProtocol implements ForgeDesktopProtocol {
       ? await forgeApi.getThread(selectedThread.id)
       : null;
 
-    const readiness = (
-      await Promise.all(
-        batches
-          .filter((batch) => batch.status !== "integrated")
-          .map((batch) =>
-            forgeApi.getReadiness(batch.id).catch(() => null),
-          ),
-      )
-    ).filter(
-      (item): item is ForgeDispatchReadiness => item !== null,
+    const readinessResults = await Promise.all(
+      batches
+        .filter((batch) => batch.status !== "integrated")
+        .map(async (batch) => {
+          try {
+            return {
+              readiness: await forgeApi.getReadiness(batch.id),
+              failure: null,
+            };
+          } catch (error) {
+            return {
+              readiness: null,
+              failure: {
+                batchId: batch.id,
+                error: readError(error),
+              },
+            };
+          }
+        }),
+    );
+    const readiness = readinessResults.flatMap((result) =>
+      result.readiness ? [result.readiness] : [],
+    );
+    const readinessFailures = readinessResults.flatMap((result) =>
+      result.failure ? [result.failure] : [],
     );
 
     return {
@@ -158,6 +177,7 @@ export class DesktopForgeProtocol implements ForgeDesktopProtocol {
       threadSnapshot,
       events,
       readiness,
+      readinessFailures,
     };
   }
 
