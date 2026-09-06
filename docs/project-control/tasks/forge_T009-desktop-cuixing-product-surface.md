@@ -153,6 +153,29 @@ task_state: DOING
 - `pnpm check`
 - owner visual review
 
+## Technical Review Evidence
+
+- PR #109，base=`dev`，feature branch=`feature/forge-t009-desktop-surface`。
+- Latest technical self-review HEAD: `b9381d990935adaa2d174c9c989f1796e3a823be`。
+- Branch Policy：PASS；0 unresolved review thread。
+- CodeRabbit：latest-head review 已触发但仍 processing，当前无 finding。
+- Codex：未提供有效 review；按 owner 既定 fallback 规则，本卡技术实现允许自审收口，不让 reviewer pending 卡死主线。
+- Self-review：PASS。
+- Blocker check：
+  - `shared/uchat/**` 0 修改；Forge route knowledge 只存在 Desktop Chat feature integration；
+  - `ForgeWorkspace` / workspace components 不 import `forgeApi`，transport / model / orchestration / view 分层成立；
+  - 没有自动 Review、自动 merge/deploy/push、provider fallback；
+  - Repository / Runtime status 不合并；
+  - blocked 只来自 readiness；failed/interrupted 只来自 dispatch/runtime evidence；
+  - Builder Result Handoff 独立于 Event Log，且不提升 Repository PASS；
+  - integrated batch 会保留真实 runtime integrated 状态，不会回退成 waiting / 重新出现 Dispatch；
+  - 无 Repository Task truth 时 readiness = unavailable，不派发 placeholder taskRef；
+  - selection Inspector 防 stale response 覆盖；
+  - action rejection 在 hook 报告后由 View 边界消费，不遗留 unhandled rejection；
+  - production Forge UI 无固定 backend port、Node/fs/child_process 直连。
+- 技术自审结论：通过。
+- **Owner visual review 尚未完成，因此 task_state 保持 DOING。** 合并后仍需 `dev` Type check / Desktop gates；通过后由 owner 实际查看淬行界面，再决定最终 DONE。
+
 ## Unknown / Human Decision
 
 已解决：启动 T009 时 `desktop/src/features/forge/components/ForgeWorkspace.tsx` 已包含 owner 之前基于 OpenDesign 确认并落入 Mira Desktop 的静态产品骨架（Project Rail / Main Thread / Task Context / Runtime secondary surfaces）。本卡以该现有实现作为设计输入，只做真实 domain/API 接线与明确的 domain-truth 差异修正，没有自行重画另一套 Forge UI。
