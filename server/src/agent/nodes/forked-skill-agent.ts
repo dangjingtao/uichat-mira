@@ -348,7 +348,7 @@ export const forkedSkillAgentNode = async (
     threadId: state.threadId,
     approvedInvocations: getReplayApprovedInvocations(state),
     checkpoint,
-    signal: getAgentRunSignal(state.runId),
+    signal: getAgentRunSignal(state.runId, state.runControlLeaseId),
     onRuntimeEvent: (event) =>
       safelyPublishSubAgentRuntimeEvent({
         parentRunId: state.runId,
