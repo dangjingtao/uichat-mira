@@ -5,7 +5,7 @@ import {
   getHarnessInvocation,
   type HarnessInvocationRecord,
 } from "@/harness/invocations.js";
-import { resolveHarnessToolCandidatesForTurn } from "@/harness/tool-candidates.js";
+import { resolveHarnessToolExposure } from "@/harness/exposure.js";
 import { initializeHarnessRuntime } from "@/mcp/bootstrap.js";
 import type {
   McpInvocationFailureCode,
@@ -107,14 +107,13 @@ const resolveRemoteToolDefinitions = async (): Promise<McpToolDefinition[]> => {
     ? resolveAgentEligibleExternalMcpCapabilities().map((definition) => definition.id)
     : [];
 
-  const resolution = await resolveHarnessToolCandidatesForTurn({
-    query: "",
+  const exposure = resolveHarnessToolExposure({
     source: "agent_intent",
     allowExternal: true,
     allowedExternalToolIds: eligibleExternalToolIds,
   });
 
-  return resolution.toolExposure.exposedDefinitions;
+  return exposure.exposedDefinitions;
 };
 
 const getRemoteToolDefinition = async (toolId: string) => {
