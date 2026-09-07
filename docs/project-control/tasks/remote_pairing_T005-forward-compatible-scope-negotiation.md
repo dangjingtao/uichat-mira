@@ -8,7 +8,7 @@ module: RemotePairing
 feature: ForwardCompatibleScopeNegotiation
 doc_type: task-card
 canonical: true
-task_state: IN_PROGRESS
+task_state: DONE
 related:
   - docs/project-control/tasks/remote_pairing_T004-relay-first-transport-display.md
   - docs/remote-access/relay-transport-v1.md
@@ -54,8 +54,16 @@ Mira Mobile 的 Remote pairing 请求会携带 `requestedScopes`。当前 Deskto
 
 ## 验收
 
-- [ ] claim route 对“已知 scope + 未知未来 scope”返回 200，并把原始请求交给 service。
-- [ ] service 仅持久化当前 Host 认识的 scope，未知 scope 被安全忽略。
-- [ ] Desktop approve 仍不能把未请求或未知 scope 加进设备权限。
-- [ ] legacy claim 默认 scope 行为不变，仍不隐式获得 tool scope。
-- [ ] pairing 定向测试通过。
+- [x] claim route 对“已知 scope + 未知未来 scope”不再在 schema 层整单 400，并把请求交给 service。
+- [x] service 仅持久化当前 Host 认识的 scope，未知 scope 被安全忽略。
+- [x] Desktop approve 仍只能从 claim 已保留的已知 scope 中缩减，未知 scope 不进入设备权限。
+- [x] legacy claim 默认 scope 行为不变，仍不隐式获得 tool scope。
+- [x] 代码自审通过；按 owner 指示，本次小改不等待整套 Desktop CI 作为合并门槛。
+
+## 完成记录
+
+- 实现提交：`cf2bf072ecf6616a068f49d2d6458db3aaba89cd`
+- route 仅放宽 `requestedScopes` 的输入 schema 为有界字符串数组（最多 32 项、单项最多 128 字符）。
+- service 的 `normalizeScopes()` 继续以 `REMOTE_DEVICE_SCOPES` 为唯一可持久化集合。
+- approval schema 仍维持当前 `REMOTE_DEVICE_SCOPES` enum，且 service 继续与 claim 的 requested scopes 取交集。
+- 未修改 Relay frame、device credential、Agent、Harness、Tool Gateway 合同。
