@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     },
     toolGateway: {
       list: vi.fn(),
+      assertAvailable: vi.fn(),
       execute: vi.fn(),
       approve: vi.fn(),
       cancel: vi.fn(),
@@ -118,6 +119,7 @@ vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
 }));
 
 vi.mock("@/services/remote-tool-gateway.service.js", () => ({
+  assertRemoteToolAvailable: mocks.toolGateway.assertAvailable,
   listRemoteToolManifests: mocks.toolGateway.list,
   executeRemoteToolInvocation: mocks.toolGateway.execute,
   resolveRemoteToolApproval: mocks.toolGateway.approve,
@@ -184,6 +186,7 @@ beforeEach(() => {
     scopes: ["threads:read"],
     credential: "mira_device_credential",
   });
+  mocks.toolGateway.assertAvailable.mockResolvedValue(undefined);
   mocks.toolGateway.list.mockResolvedValue([
     {
       id: "web_search",
@@ -447,19 +450,25 @@ describe("remote access routes", () => {
     assert.equal(streamResponse.statusCode, 200, streamResponse.body);
     expect(streamResponse.body).toContain('"type":"tool:start"');
     expect(streamResponse.body).toContain('"type":"tool:complete"');
+    expect(mocks.toolGateway.assertAvailable).toHaveBeenCalledWith("web_search");
     expect(mocks.toolGateway.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         toolId: "web_search",
         args: { query: "mira" },
         userId: user.id,
+        signal: expect.any(AbortSignal),
       }),
     );
 
     await app.close();
   });
 
-  it("terminates preflight tool failures with a safe SSE error event", async () => {
-    mocks.toolGateway.execute.mockRejectedValueOnce(new Error("private preflight detail"));
+  it("rejects unavailable tools before committing the SSE response", async () => {
+    mocks.toolGateway.assertAvailable.mockRejectedValueOnce(
+      Object.assign(new Error("Tool is not available to the mobile Agent surface"), {
+        statusCode: 400,
+      }),
+    );
     const app = await createApp({
       authenticated: true,
       device: {
@@ -476,10 +485,33 @@ describe("remote access routes", () => {
       payload: { toolId: "missing_tool", args: {} },
     });
 
+    assert.equal(response.statusCode, 400, response.body);
+    expect(mocks.toolGateway.execute).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("terminates post-dispatch tool failures with a safe SSE error event", async () => {
+    mocks.toolGateway.execute.mockRejectedValueOnce(new Error("private runtime detail"));
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:invoke"],
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/stream",
+      payload: { toolId: "web_search", args: {} },
+    });
+
     assert.equal(response.statusCode, 200, response.body);
     expect(response.body).toContain('"type":"tool:error"');
     expect(response.body).toContain('"code":"REMOTE_TOOL_REQUEST_FAILED"');
-    expect(response.body).not.toContain("private preflight detail");
+    expect(response.body).not.toContain("private runtime detail");
     await app.close();
   });
 
