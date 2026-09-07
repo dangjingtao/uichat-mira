@@ -351,6 +351,7 @@ test("cancel is idempotent after an Agent run is terminal", async () => {
   expect(data.status).toBe("completed");
   expect(data.terminalReason).toBe("answered");
   expect(agentRunStore.get(completedRun.id)?.status).toBe("completed");
+  expect(agentRunStore.get(completedRun.id)?.terminalReason).toBe("answered");
 
   await app.close();
   agentRunStore.clear();
