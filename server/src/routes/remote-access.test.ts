@@ -421,6 +421,82 @@ describe("remote access routes", () => {
     await manifestApp.close();
   });
 
+  it("lists and streams mobile-safe remote tools through the gateway service", async () => {
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:read", "tools:invoke"],
+      },
+    });
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/remote/v1/tools",
+    });
+    assert.equal(listResponse.statusCode, 200, listResponse.body);
+    assert.equal(listResponse.json().data[0].id, "web_search");
+
+    const streamResponse = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/stream",
+      payload: { toolId: "web_search", args: { query: "mira" } },
+    });
+    assert.equal(streamResponse.statusCode, 200, streamResponse.body);
+    expect(streamResponse.body).toContain('"type":"tool:start"');
+    expect(streamResponse.body).toContain('"type":"tool:complete"');
+    expect(mocks.toolGateway.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolId: "web_search",
+        args: { query: "mira" },
+        userId: user.id,
+      }),
+    );
+
+    await app.close();
+  });
+
+  it("routes mobile approval and cancellation to the original invocation", async () => {
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:approve", "tools:control"],
+      },
+    });
+
+    const approvalResponse = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/inv-1/approval",
+      payload: {
+        decision: "approved",
+        toolId: "terminal_session",
+        args: { command: "pwd" },
+      },
+    });
+    assert.equal(approvalResponse.statusCode, 200, approvalResponse.body);
+    expect(mocks.toolGateway.approve).toHaveBeenCalledWith({
+      invocationId: "inv-1",
+      decision: "approved",
+      toolId: "terminal_session",
+      args: { command: "pwd" },
+      userId: user.id,
+    });
+
+    const cancelResponse = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/inv-1/cancel",
+    });
+    assert.equal(cancelResponse.statusCode, 200, cancelResponse.body);
+    expect(mocks.toolGateway.cancel).toHaveBeenCalledWith("inv-1");
+
+    await app.close();
+  });
+
   it("returns active and archived mobile-safe workspaces without rootPath", async () => {
     const app = await createApp({
       authenticated: true,
