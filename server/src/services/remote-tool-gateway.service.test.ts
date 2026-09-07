@@ -171,6 +171,7 @@ describe("mobile remote tool gateway service", () => {
     mocks.getInvocation.mockReturnValue({
       id: "inv-original",
       toolId: "terminal_session",
+      userId: 7,
       status: "awaiting_approval",
       args,
       inputHash,
