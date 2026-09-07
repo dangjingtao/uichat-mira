@@ -608,7 +608,6 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
           const queue: string[] = [];
           let resolvePending: (() => void) | null = null;
           let finished = false;
-          let failure: unknown = null;
 
           const wake = () => {
             resolvePending?.();
@@ -632,8 +631,14 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
                 }),
               );
             })
-            .catch((error) => {
-              failure = error;
+            .catch(() => {
+              queue.push(
+                toRemoteToolSseChunk({
+                  type: "tool:error",
+                  code: "REMOTE_TOOL_REQUEST_FAILED",
+                  message: "Remote tool request failed before a final invocation result was available.",
+                }),
+              );
             })
             .finally(() => {
               finished = true;
@@ -652,9 +657,6 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
           }
 
           await runner;
-          if (failure) {
-            throw failure;
-          }
         })(),
       );
 
