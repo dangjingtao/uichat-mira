@@ -227,16 +227,6 @@ export const getRequiredRemoteScope = (
 
   if (
     normalizedMethod === "POST" &&
-    parts.length === 3 &&
-    parts[0] === "remote" &&
-    parts[1] === "v1" &&
-    parts[2] === "tool-invocations"
-  ) {
-    return "tools:invoke";
-  }
-
-  if (
-    normalizedMethod === "POST" &&
     parts.length === 4 &&
     parts[0] === "remote" &&
     parts[1] === "v1" &&
