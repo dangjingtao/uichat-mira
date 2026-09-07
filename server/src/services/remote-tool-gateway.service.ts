@@ -71,6 +71,11 @@ export type RemoteToolGatewayStreamEvent =
       scope?: string;
     }
   | {
+      type: "tool:error";
+      code: string;
+      message: string;
+    }
+  | {
       type: "tool:complete";
       invocation: RemoteToolInvocationProjection;
     };
