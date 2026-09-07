@@ -1,7 +1,7 @@
 import { runAgentRuntime } from "./runtime";
 import { createAgentGoal } from "./nodes/index";
 import { agentRunStore, configureAgentRunPersistence } from "./run-store";
-import type { AgentGraphInput } from "./types";
+import type { AgentGraphInput, AgentGraphOutput, AgentRun } from "./types";
 import { agentRunRepository } from "@/db/repositories/agent-run.repository";
 import { prepareSkillConversationFlow } from "@/skills/flow/coordinator.js";
 import { buildSkillFlowRequestContextMessages } from "@/skills/flow/context.js";
@@ -9,6 +9,8 @@ import {
   buildAgentAttachmentGoalContext,
   materializeAgentTaskFileAttachments,
 } from "@/services/chat-file-context.service.js";
+import { persistAgentAssistantState } from "./resume";
+import { finishAgentRunControl, startAgentRunControl } from "./run-control";
 
 configureAgentRunPersistence({
   create: (run) => {
@@ -19,6 +21,32 @@ configureAgentRunPersistence({
   addObservation: agentRunRepository.addObservation.bind(agentRunRepository),
   complete: agentRunRepository.complete.bind(agentRunRepository),
 });
+
+const getAgentAssistantContent = (output: AgentGraphOutput): string => {
+  if (output.status === "waiting_approval") return "等待审批";
+  if (output.status === "waiting_user") {
+    return output.answer.trim() || "Agent 正在等待你的输入。";
+  }
+  if (output.status === "blocked") {
+    return output.answer.trim() || "Agent 已阻断，请检查运行状态。";
+  }
+  if (output.status === "failed") {
+    return output.answer.trim() || output.errorMessage?.trim() || "Agent 运行失败。";
+  }
+  return output.answer.trim() || "Agent 已完成。";
+};
+
+const persistRunningAgentState = (
+  run: AgentRun,
+  executionNodes: Parameters<typeof persistAgentAssistantState>[0]["executionNodes"] = [],
+) => {
+  persistAgentAssistantState({
+    run,
+    status: "running",
+    content: "Agent 正在运行…",
+    executionNodes,
+  });
+};
 
 export const createAndRunAgent = async (
   input: Omit<AgentGraphInput, "runId" | "goal"> & {
@@ -82,43 +110,50 @@ export const createAndRunAgent = async (
     },
   });
 
-  agentRunStore.update(run.id, {
+  const runningRun = agentRunStore.update(run.id, {
     status: "running",
   });
+  startAgentRunControl(run.id);
 
   try {
+    persistRunningAgentState(runningRun);
+
     const output = await runAgentRuntime({
       ...input,
       requestContextMessages,
       runId: run.id,
       goal,
       approvedInvocations: [],
+      onExecutionNode: async (event) => {
+        const current = agentRunStore.get(run.id);
+        if (current?.status !== "cancelled") {
+          persistRunningAgentState(current ?? runningRun, [event]);
+        }
+        await input.onExecutionNode?.(event);
+      },
     });
+
+    const afterExecution = agentRunStore.get(run.id);
+    if (afterExecution?.status === "cancelled") {
+      persistAgentAssistantState({
+        run: afterExecution,
+        status: "cancelled",
+        content: "Agent 运行已取消。",
+        terminalReason: "cancelled",
+      });
+      return { run: afterExecution, output };
+    }
 
     for (const observation of output.observations) {
       agentRunStore.addObservation(run.id, observation);
     }
 
-    if (output.pendingApproval) {
-      agentRunStore.update(run.id, {
-        status: "waiting_approval",
-        blockedReason: output.blockedReason,
-        terminalReason: output.terminalReason,
-        pendingApproval: output.pendingApproval,
-        // selectedToolId is kept only for UI / trace continuity.
-        selectedToolId: output.pendingApproval.toolId,
-        pendingToolCall: output.pendingToolCall,
-        lastToolExecution: output.lastToolExecution,
-      });
-    }
-
-    agentRunStore.complete(run.id, {
+    const completedRun = agentRunStore.complete(run.id, {
       status: output.status,
       contextBudget: output.contextBudget,
       blockedReason: output.blockedReason,
       terminalReason: output.terminalReason,
       finalizationPacket: output.finalizationPacket,
-      // Execution must still be derived from pendingToolCall, not this field.
       selectedToolId: output.selectedToolId ?? output.pendingApproval?.toolId,
       pendingToolCall: output.pendingToolCall,
       lastToolExecution: output.lastToolExecution,
@@ -127,15 +162,50 @@ export const createAndRunAgent = async (
         : { pendingApproval: undefined }),
     });
 
+    persistAgentAssistantState({
+      run: completedRun,
+      status: output.status,
+      content: getAgentAssistantContent(output),
+      pendingApproval: output.pendingApproval,
+      blockedReason: output.blockedReason,
+      terminalReason: output.terminalReason,
+      errorMessage: output.errorMessage,
+      errorSourceNodeId: output.errorSourceNodeId,
+    });
+
     return {
-      run: agentRunStore.get(run.id) ?? run,
+      run: completedRun,
       output,
     };
   } catch (error) {
-    agentRunStore.update(run.id, {
+    const current = agentRunStore.get(run.id);
+    if (current?.status === "cancelled") {
+      persistAgentAssistantState({
+        run: current,
+        status: "cancelled",
+        content: "Agent 运行已取消。",
+        terminalReason: "cancelled",
+      });
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const failedRun = agentRunStore.complete(run.id, {
       status: "failed",
+      blockedReason: errorMessage,
+      terminalReason: "agent_runtime_failed",
+    });
+    persistAgentAssistantState({
+      run: failedRun,
+      status: "failed",
+      content: "Agent 运行失败，请检查运行状态后重试。",
+      blockedReason: errorMessage,
+      terminalReason: "agent_runtime_failed",
+      errorMessage,
     });
     throw error;
+  } finally {
+    finishAgentRunControl(run.id);
   }
 };
 
