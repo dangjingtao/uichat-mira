@@ -138,6 +138,8 @@ export interface CreateMessageInput {
       }
   >;
   metadata?: Record<string, unknown>;
+  /** Update this message in place without pruning later messages in the thread. */
+  preserveDescendants?: boolean;
 }
 
 const parsePartsJson = (
@@ -806,7 +808,7 @@ export const threadService = {
       throw new Error("Message id already exists on a different thread");
     }
 
-    if (effectiveParentId !== undefined) {
+    if (effectiveParentId !== undefined && !input.preserveDescendants) {
       pruneThreadTail(
         threadId,
         existing ? existing.id : effectiveParentId ?? null,

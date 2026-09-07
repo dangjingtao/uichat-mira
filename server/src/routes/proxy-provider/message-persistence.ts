@@ -223,6 +223,13 @@ export const persistAssistantMessage = ({
     return;
   }
 
+  const agentMetadata =
+    metadata?.agent &&
+    typeof metadata.agent === "object" &&
+    !Array.isArray(metadata.agent)
+      ? metadata.agent
+      : undefined;
+
   const persisted = threadService.createMessage(threadId, userId, {
     id: assistantMessageId,
     parentId,
@@ -230,6 +237,7 @@ export const persistAssistantMessage = ({
     content: normalizedContent,
     parts: normalizedParts,
     metadata,
+    ...(agentMetadata ? { preserveDescendants: true } : {}),
   });
 
   if (shouldCommitTurnToMemory(metadata) && parentId) {
