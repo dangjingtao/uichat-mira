@@ -31,6 +31,7 @@ import {
   REMOTE_PAIRING_TRANSPORTS,
 } from "@/db/repositories/tailscale-remote-access.repository.js";
 import {
+  assertRemoteToolAvailable,
   cancelRemoteToolInvocation,
   executeRemoteToolInvocation,
   listRemoteToolManifests,
@@ -586,6 +587,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
           },
         },
         response: {
+          400: errorEnvelope,
           401: errorEnvelope,
           403: errorEnvelope,
           500: errorEnvelope,
@@ -597,6 +599,12 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
       if (!request.remoteDevice || !user) {
         throw forbidden("A paired remote device credential is required");
       }
+
+      await assertRemoteToolAvailable(request.body.toolId);
+
+      const routeAbortController = new AbortController();
+      const abortOnDisconnect = () => routeAbortController.abort();
+      reply.raw.once("close", abortOnDisconnect);
 
       reply
         .header("Content-Type", "text/event-stream")
@@ -618,6 +626,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
             toolId: request.body.toolId,
             args: request.body.args,
             userId: user.id,
+            signal: routeAbortController.signal,
             onEvent(event) {
               queue.push(toRemoteToolSseChunk(event));
               wake();
@@ -642,6 +651,7 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
             })
             .finally(() => {
               finished = true;
+              reply.raw.off("close", abortOnDisconnect);
               wake();
             });
 
