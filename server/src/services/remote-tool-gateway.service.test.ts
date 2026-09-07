@@ -4,7 +4,7 @@ import { createInvocationInputHash } from "@/agent/approval-fingerprint.js";
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   getInvocation: vi.fn(),
-  resolveCandidates: vi.fn(),
+  resolveExposure: vi.fn(),
   initialize: vi.fn(),
   eligibleExternal: vi.fn(() => []),
   resolveApproval: vi.fn(),
@@ -18,8 +18,8 @@ vi.mock("@/harness/invocations.js", () => ({
   getHarnessInvocation: mocks.getInvocation,
 }));
 
-vi.mock("@/harness/tool-candidates.js", () => ({
-  resolveHarnessToolCandidatesForTurn: mocks.resolveCandidates,
+vi.mock("@/harness/exposure.js", () => ({
+  resolveHarnessToolExposure: mocks.resolveExposure,
 }));
 
 vi.mock("@/mcp/bootstrap.js", () => ({
@@ -78,15 +78,14 @@ const externalDefinition = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.resolveCandidates.mockResolvedValue({
-    toolCandidates: [],
-    toolExposure: {
-      exposedToolIds: [terminalDefinition.id, externalDefinition.id],
-      exposedDefinitions: [terminalDefinition, externalDefinition],
-      reason: [],
-      blockedCapabilityIds: [],
-      blockedCapabilityReasons: {},
-    },
+  mocks.resolveExposure.mockReturnValue({
+    exposedToolIds: [terminalDefinition.id, externalDefinition.id],
+    exposedDefinitions: [terminalDefinition, externalDefinition],
+    reason: [],
+    visibleDefinitions: [terminalDefinition, externalDefinition],
+    blockedCapabilityIds: [],
+    blockedCapabilityReasons: {},
+    reasons: [],
   });
   mocks.eligibleExternal.mockReturnValue([externalDefinition]);
 });
@@ -103,12 +102,35 @@ describe("mobile remote tool gateway service", () => {
     expect(manifests[1]?.id).toBe("mcp:server-1:tool:lookup");
     expect(manifests[1]?.name).toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
     expect(manifests[1]?.name).not.toContain(":");
-    expect(mocks.resolveCandidates).toHaveBeenCalledWith(
+    expect(mocks.resolveExposure).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "agent_intent",
         allowExternal: true,
       }),
     );
+  });
+
+  test("does not apply per-turn top-20 ranking to persistent remote discovery", async () => {
+    const internalDefinitions = Array.from({ length: 20 }, (_, index) => ({
+      ...terminalDefinition,
+      id: `internal_tool_${index}`,
+      title: `Internal ${index}`,
+    }));
+    const allDefinitions = [...internalDefinitions, externalDefinition];
+    mocks.resolveExposure.mockReturnValueOnce({
+      exposedToolIds: allDefinitions.map((definition) => definition.id),
+      exposedDefinitions: allDefinitions,
+      reason: [],
+      visibleDefinitions: allDefinitions,
+      blockedCapabilityIds: [],
+      blockedCapabilityReasons: {},
+      reasons: [],
+    });
+
+    const manifests = await listRemoteToolManifests();
+
+    expect(manifests).toHaveLength(21);
+    expect(manifests.at(-1)?.id).toBe(externalDefinition.id);
   });
 
   test("rejects approval when Mobile changes the frozen invocation arguments", async () => {
