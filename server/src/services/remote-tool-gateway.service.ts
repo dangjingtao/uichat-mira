@@ -13,6 +13,8 @@ import type {
   McpToolDefinition,
 } from "@/mcp/core/definitions.js";
 import {
+  claimInvocationApproval,
+  finalizeClaimedInvocationApproval,
   resolveInvocationApproval,
 } from "@/mcp/core/invocations.js";
 import { mcpBadRequest, mcpNotFound } from "@/mcp/core/errors.js";
@@ -122,6 +124,10 @@ const getRemoteToolDefinition = async (toolId: string) => {
     throw mcpBadRequest("Tool is not available to the mobile Agent surface");
   }
   return definition;
+};
+
+export const assertRemoteToolAvailable = async (toolId: string) => {
+  await getRemoteToolDefinition(toolId);
 };
 
 export const listRemoteToolManifests = async (): Promise<RemoteToolManifest[]> => {
@@ -235,10 +241,17 @@ const runRemoteToolInvocation = async (input: {
   userId: number;
   approvedInputHash?: string;
   aliasInvocationId?: string;
+  signal?: AbortSignal;
   onEvent?: (event: RemoteToolGatewayStreamEvent) => void | Promise<void>;
 }) => {
   await getRemoteToolDefinition(input.toolId);
   const controller = new AbortController();
+  const abortFromCaller = () => controller.abort();
+  if (input.signal?.aborted) {
+    controller.abort();
+  } else {
+    input.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
   let activeInvocationId: string | null = null;
 
   if (input.aliasInvocationId) {
@@ -286,6 +299,7 @@ const runRemoteToolInvocation = async (input: {
     if (input.aliasInvocationId) {
       activeInvocationControllers.delete(input.aliasInvocationId);
     }
+    input.signal?.removeEventListener("abort", abortFromCaller);
   }
 };
 
@@ -293,12 +307,14 @@ export const executeRemoteToolInvocation = async (input: {
   toolId: string;
   args?: Record<string, unknown>;
   userId: number;
+  signal?: AbortSignal;
   onEvent?: (event: RemoteToolGatewayStreamEvent) => void | Promise<void>;
 }): Promise<RemoteToolInvocationProjection> => {
   const record = await runRemoteToolInvocation({
     toolId: input.toolId,
     args: input.args ?? {},
     userId: input.userId,
+    signal: input.signal,
     onEvent: input.onEvent,
   });
   return projectInvocation(record);
@@ -340,21 +356,43 @@ export const resolveRemoteToolApproval = async (input: {
     throw mcpBadRequest("Tool approval does not match the original invocation arguments");
   }
 
-  const resumed = await runRemoteToolInvocation({
-    toolId: input.toolId,
-    args,
-    userId: input.userId,
-    approvedInputHash: inputHash,
-    aliasInvocationId: input.invocationId,
-  });
-
-  resolveInvocationApproval({
+  claimInvocationApproval({
     invocationId: input.invocationId,
-    decision: "approved",
-    resolutionInvocationId: resumed.id,
+    userId: input.userId,
+    reason: "Approved from Mira Mobile",
   });
 
-  return projectInvocation(resumed);
+  try {
+    const resumed = await runRemoteToolInvocation({
+      toolId: input.toolId,
+      args,
+      userId: input.userId,
+      approvedInputHash: inputHash,
+      aliasInvocationId: input.invocationId,
+    });
+    finalizeClaimedInvocationApproval({
+      invocationId: input.invocationId,
+      resolutionInvocationId: resumed.id,
+      status:
+        resumed.status === "completed"
+          ? "completed"
+          : resumed.status === "cancelled"
+            ? "cancelled"
+            : "failed",
+      reason: resumed.error?.message,
+    });
+    return projectInvocation(resumed);
+  } catch (error) {
+    finalizeClaimedInvocationApproval({
+      invocationId: input.invocationId,
+      status: "failed",
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Approved remote tool invocation failed.",
+    });
+    throw error;
+  }
 };
 
 export const cancelRemoteToolInvocation = (
