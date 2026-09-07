@@ -9,6 +9,10 @@ const scopes = vi.hoisted(
       "agent:read",
       "agent:approve",
       "agent:control",
+      "tools:read",
+      "tools:invoke",
+      "tools:approve",
+      "tools:control",
       "artifacts:read",
     ] as const,
 );
@@ -294,6 +298,33 @@ describe("RemoteAccessPairingService", () => {
       }),
     ).toThrowError(PairingServiceError);
     expect(state.devices).toHaveLength(0);
+  });
+
+  it("does not silently grant tool scopes to legacy claims without requestedScopes", () => {
+    const service = new RemoteAccessPairingService();
+    const challenge = service.createChallenge({
+      userId: 7,
+      hostUrl: "https://mira.example.ts.net",
+    });
+
+    service.claim({
+      challengeId: challenge.challengeId,
+      code: challenge.code,
+    });
+
+    const requested =
+      service.getChallengeForUser(challenge.challengeId, 7).claim
+        ?.requestedScopes ?? [];
+    expect(requested).toEqual([
+      "threads:read",
+      "messages:read",
+      "messages:write",
+      "agent:read",
+      "agent:approve",
+      "agent:control",
+      "artifacts:read",
+    ]);
+    expect(requested.some((scope) => scope.startsWith("tools:"))).toBe(false);
   });
 
   it("keeps old Mobile claims compatible when transport is omitted", () => {

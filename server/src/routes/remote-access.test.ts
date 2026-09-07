@@ -37,6 +37,13 @@ const mocks = vi.hoisted(() => {
     relay: {
       getPairingMetadata: vi.fn(),
     },
+    toolGateway: {
+      list: vi.fn(),
+      assertAvailable: vi.fn(),
+      execute: vi.fn(),
+      approve: vi.fn(),
+      cancel: vi.fn(),
+    },
   };
 });
 
@@ -102,9 +109,21 @@ vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
     "agent:read",
     "agent:approve",
     "agent:control",
+    "tools:read",
+    "tools:invoke",
+    "tools:approve",
+    "tools:control",
     "artifacts:read",
   ],
   REMOTE_PAIRING_TRANSPORTS: ["relay", "direct"],
+}));
+
+vi.mock("@/services/remote-tool-gateway.service.js", () => ({
+  assertRemoteToolAvailable: mocks.toolGateway.assertAvailable,
+  listRemoteToolManifests: mocks.toolGateway.list,
+  executeRemoteToolInvocation: mocks.toolGateway.execute,
+  resolveRemoteToolApproval: mocks.toolGateway.approve,
+  cancelRemoteToolInvocation: mocks.toolGateway.cancel,
 }));
 
 import remoteAccessRoute from "./remote-access.js";
@@ -166,6 +185,44 @@ beforeEach(() => {
     deviceId: "device-1",
     scopes: ["threads:read"],
     credential: "mira_device_credential",
+  });
+  mocks.toolGateway.assertAvailable.mockResolvedValue(undefined);
+  mocks.toolGateway.list.mockResolvedValue([
+    {
+      id: "web_search",
+      name: "web_search",
+      description: "Search the public web",
+      parameters: { type: "object" },
+      destructive: false,
+      requiresApproval: false,
+    },
+  ]);
+  mocks.toolGateway.execute.mockImplementation(async (input: {
+    toolId: string;
+    onEvent?: (event: unknown) => void | Promise<void>;
+  }) => {
+    await input.onEvent?.({
+      type: "tool:start",
+      invocationId: "inv-1",
+      toolId: input.toolId,
+    });
+    return {
+      invocationId: "inv-1",
+      toolId: input.toolId,
+      status: "completed",
+      content: "result",
+    };
+  });
+  mocks.toolGateway.approve.mockResolvedValue({
+    invocationId: "inv-2",
+    toolId: "terminal_session",
+    status: "completed",
+    content: "approved result",
+  });
+  mocks.toolGateway.cancel.mockReturnValue({
+    invocationId: "inv-1",
+    accepted: true,
+    status: "cancelling",
   });
   mocks.thread.listChatWorkspaces.mockReturnValue([
     {
@@ -357,8 +414,144 @@ describe("remote access routes", () => {
       "POST /threads",
       "DELETE /threads/:id",
     ]);
+    assert.deepEqual(manifestResponse.json().data.routes.tools, [
+      "GET /remote/v1/tools",
+      "POST /remote/v1/tool-invocations/stream",
+      "POST /remote/v1/tool-invocations/:invocationId/approval",
+      "POST /remote/v1/tool-invocations/:invocationId/cancel",
+    ]);
     await app.close();
     await manifestApp.close();
+  });
+
+  it("lists and streams mobile-safe remote tools through the gateway service", async () => {
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:read", "tools:invoke"],
+      },
+    });
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/remote/v1/tools",
+    });
+    assert.equal(listResponse.statusCode, 200, listResponse.body);
+    assert.equal(listResponse.json().data[0].id, "web_search");
+
+    const streamResponse = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/stream",
+      payload: { toolId: "web_search", args: { query: "mira" } },
+    });
+    assert.equal(streamResponse.statusCode, 200, streamResponse.body);
+    expect(streamResponse.body).toContain('"type":"tool:start"');
+    expect(streamResponse.body).toContain('"type":"tool:complete"');
+    expect(mocks.toolGateway.assertAvailable).toHaveBeenCalledWith("web_search");
+    expect(mocks.toolGateway.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolId: "web_search",
+        args: { query: "mira" },
+        userId: user.id,
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    await app.close();
+  });
+
+  it("rejects unavailable tools before committing the SSE response", async () => {
+    mocks.toolGateway.assertAvailable.mockRejectedValueOnce(
+      Object.assign(new Error("Tool is not available to the mobile Agent surface"), {
+        statusCode: 400,
+      }),
+    );
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:invoke"],
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/stream",
+      payload: { toolId: "missing_tool", args: {} },
+    });
+
+    assert.equal(response.statusCode, 400, response.body);
+    expect(mocks.toolGateway.execute).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("terminates post-dispatch tool failures with a safe SSE error event", async () => {
+    mocks.toolGateway.execute.mockRejectedValueOnce(new Error("private runtime detail"));
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:invoke"],
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/stream",
+      payload: { toolId: "web_search", args: {} },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    expect(response.body).toContain('"type":"tool:error"');
+    expect(response.body).toContain('"code":"REMOTE_TOOL_REQUEST_FAILED"');
+    expect(response.body).not.toContain("private runtime detail");
+    await app.close();
+  });
+
+  it("routes mobile approval and cancellation to the original invocation", async () => {
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:approve", "tools:control"],
+      },
+    });
+
+    const approvalResponse = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/inv-1/approval",
+      payload: {
+        decision: "approved",
+        toolId: "terminal_session",
+        args: { command: "pwd" },
+      },
+    });
+    assert.equal(approvalResponse.statusCode, 200, approvalResponse.body);
+    expect(mocks.toolGateway.approve).toHaveBeenCalledWith({
+      invocationId: "inv-1",
+      decision: "approved",
+      toolId: "terminal_session",
+      args: { command: "pwd" },
+      userId: user.id,
+    });
+
+    const cancelResponse = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/inv-1/cancel",
+    });
+    assert.equal(cancelResponse.statusCode, 200, cancelResponse.body);
+    expect(mocks.toolGateway.cancel).toHaveBeenCalledWith("inv-1", user.id);
+
+    await app.close();
   });
 
   it("returns active and archived mobile-safe workspaces without rootPath", async () => {
