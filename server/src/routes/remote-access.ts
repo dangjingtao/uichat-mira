@@ -422,7 +422,11 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
             requestedScopes: {
               type: "array",
               uniqueItems: true,
-              items: { type: "string", enum: [...REMOTE_DEVICE_SCOPES] },
+              maxItems: 32,
+              // Pairing requests are capability proposals, not grants. Accept
+              // future scope names here so newer Mobile clients can pair with
+              // an older Host; the service keeps only REMOTE_DEVICE_SCOPES.
+              items: { type: "string", minLength: 1, maxLength: 128 },
             },
           },
         },

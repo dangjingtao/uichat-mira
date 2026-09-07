@@ -362,6 +362,34 @@ describe("remote access routes", () => {
     await app.close();
   });
 
+  it("accepts future mobile scopes for service-side negotiation", async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/remote/pairing/claim",
+      payload: {
+        challengeId: "challenge-1",
+        code: "ABCD2345",
+        deviceName: "K70",
+        platform: "android",
+        transport: "relay",
+        requestedScopes: ["threads:read", "future:capability"],
+      },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    expect(mocks.pairing.claim).toHaveBeenCalledWith({
+      challengeId: "challenge-1",
+      code: "ABCD2345",
+      deviceName: "K70",
+      platform: "android",
+      transport: "relay",
+      requestedScopes: ["threads:read", "future:capability"],
+    });
+    await app.close();
+  });
+
   it("maps pairing-not-found errors to 404", async () => {
     mocks.pairing.getChallengeForUser.mockImplementationOnce(() => {
       throw new mocks.PairingServiceError(
