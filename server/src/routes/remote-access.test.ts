@@ -458,6 +458,31 @@ describe("remote access routes", () => {
     await app.close();
   });
 
+  it("terminates preflight tool failures with a safe SSE error event", async () => {
+    mocks.toolGateway.execute.mockRejectedValueOnce(new Error("private preflight detail"));
+    const app = await createApp({
+      authenticated: true,
+      device: {
+        id: "device-1",
+        name: "K70",
+        platform: "android",
+        permissions: ["tools:invoke"],
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/remote/v1/tool-invocations/stream",
+      payload: { toolId: "missing_tool", args: {} },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    expect(response.body).toContain('"type":"tool:error"');
+    expect(response.body).toContain('"code":"REMOTE_TOOL_REQUEST_FAILED"');
+    expect(response.body).not.toContain("private preflight detail");
+    await app.close();
+  });
+
   it("routes mobile approval and cancellation to the original invocation", async () => {
     const app = await createApp({
       authenticated: true,
