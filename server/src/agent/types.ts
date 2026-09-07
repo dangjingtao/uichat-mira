@@ -584,6 +584,7 @@ export interface AgentRunStore {
 
 export interface AgentGraphInput {
   runId: string;
+  runControlLeaseId?: string;
   threadId: string;
   userId: number;
   goal: AgentGoal;
