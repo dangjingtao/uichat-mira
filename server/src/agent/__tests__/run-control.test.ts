@@ -6,6 +6,7 @@ import {
   getAgentRunSignal,
   isAgentRunCancellationRequested,
   startAgentRunControl,
+  startAgentRunControlLease,
 } from "../run-control";
 
 describe("agent run control", () => {
@@ -38,5 +39,22 @@ describe("agent run control", () => {
     expect(stale.aborted).toBe(true);
     expect(current.aborted).toBe(false);
     expect(getAgentRunSignal("run-1")).toBe(current);
+  });
+
+  test("a stale execution lease cannot observe or clear its replacement", () => {
+    const stale = startAgentRunControlLease("run-1");
+    const current = startAgentRunControlLease("run-1");
+
+    expect(stale.signal.aborted).toBe(true);
+    expect(
+      isAgentRunCancellationRequested("run-1", stale.leaseId),
+    ).toBe(true);
+    expect(getAgentRunSignal("run-1", stale.leaseId)?.aborted).toBe(true);
+
+    finishAgentRunControl("run-1", stale.leaseId);
+
+    expect(getAgentRunSignal("run-1", current.leaseId)).toBe(current.signal);
+    expect(cancelAgentRunExecution("run-1")).toBe(true);
+    expect(current.signal.aborted).toBe(true);
   });
 });
