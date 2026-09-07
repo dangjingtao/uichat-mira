@@ -150,7 +150,10 @@ const runStep = async (input: {
 }) => {
   if (
     input.traceNodeName !== "error" &&
-    isAgentRunCancellationRequested(input.state.runId)
+    isAgentRunCancellationRequested(
+      input.state.runId,
+      input.state.runControlLeaseId,
+    )
   ) {
     mergeStatePatch(input.state, {
       errorMessage: "Agent run was cancelled.",

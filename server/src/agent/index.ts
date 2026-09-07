@@ -10,7 +10,10 @@ import {
   materializeAgentTaskFileAttachments,
 } from "@/services/chat-file-context.service.js";
 import { persistAgentAssistantState } from "./resume";
-import { finishAgentRunControl, startAgentRunControl } from "./run-control";
+import {
+  finishAgentRunControl,
+  startAgentRunControlLease,
+} from "./run-control";
 
 configureAgentRunPersistence({
   create: (run) => {
@@ -113,7 +116,7 @@ export const createAndRunAgent = async (
   const runningRun = agentRunStore.update(run.id, {
     status: "running",
   });
-  startAgentRunControl(run.id);
+  const runControl = startAgentRunControlLease(run.id);
 
   try {
     persistRunningAgentState(runningRun);
@@ -122,6 +125,7 @@ export const createAndRunAgent = async (
       ...input,
       requestContextMessages,
       runId: run.id,
+      runControlLeaseId: runControl.leaseId,
       goal,
       approvedInvocations: [],
       onExecutionNode: async (event) => {
@@ -205,7 +209,7 @@ export const createAndRunAgent = async (
     });
     throw error;
   } finally {
-    finishAgentRunControl(run.id);
+    finishAgentRunControl(run.id, runControl.leaseId);
   }
 };
 

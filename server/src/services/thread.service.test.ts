@@ -402,6 +402,52 @@ test("updating a durable Agent message can preserve newer descendants", () => {
   );
 });
 
+test("recreating a missing durable Agent message still prunes stale descendants", () => {
+  const user = userRepository.create({
+    username: `user-${crypto.randomUUID()}`,
+    passwordHash: "hash",
+    role: "user",
+    isActive: true,
+  });
+  const thread = threadService.createThread({ userId: user.id });
+
+  const parent = threadService.createMessage(thread.id, user.id, {
+    id: `user-${crypto.randomUUID()}`,
+    role: "user",
+    content: "first turn",
+    parts: [{ type: "text", text: "first turn" }],
+  });
+  const staleAssistant = threadService.createMessage(thread.id, user.id, {
+    id: `assistant-${crypto.randomUUID()}`,
+    parentId: parent.id,
+    role: "assistant",
+    content: "stale branch",
+    parts: [{ type: "text", text: "stale branch" }],
+  });
+  const staleUser = threadService.createMessage(thread.id, user.id, {
+    id: `user-${crypto.randomUUID()}`,
+    parentId: staleAssistant.id,
+    role: "user",
+    content: "stale descendant",
+    parts: [{ type: "text", text: "stale descendant" }],
+  });
+
+  const recreated = threadService.createMessage(thread.id, user.id, {
+    id: `assistant-${crypto.randomUUID()}`,
+    parentId: parent.id,
+    role: "assistant",
+    content: "Agent 正在运行…",
+    parts: [{ type: "text", text: "Agent 正在运行…" }],
+    preserveDescendants: true,
+  });
+
+  const detail = threadService.getThreadById(thread.id, user.id);
+  assert.ok(detail);
+  assert.equal(detail.messages.some((message) => message.id === staleAssistant.id), false);
+  assert.equal(detail.messages.some((message) => message.id === staleUser.id), false);
+  assert.equal(detail.messages.some((message) => message.id === recreated.id), true);
+});
+
 test("thread service list and detail views surface canonical parts and summaries", () => {
   const user = userRepository.create({
     username: `user-${crypto.randomUUID()}`,

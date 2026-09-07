@@ -11,7 +11,10 @@ import type {
 import { persistAssistantMessage } from "@/routes/proxy-provider/message-persistence";
 import { threadService } from "@/services/thread.service";
 import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events";
-import { finishAgentRunControl, startAgentRunControl } from "./run-control";
+import {
+  finishAgentRunControl,
+  startAgentRunControlLease,
+} from "./run-control";
 
 const buildAssistantMetadata = (input: {
   runId: string;
@@ -370,7 +373,10 @@ const persistIncrementalResumeNode = (
 
 const executePreparedApprovedAgentRunResume = async (
   prepared: PreparedApprovedAgentRunResume,
-  options: { persistIncrementally: boolean },
+  options: {
+    persistIncrementally: boolean;
+    runControlLeaseId: string;
+  },
 ) => {
   const { run, runtimeInput, pendingApproval, pendingToolCall, approvedInvocations } =
     prepared;
@@ -379,6 +385,7 @@ const executePreparedApprovedAgentRunResume = async (
   ];
   const output = await agentGraph.run({
     runId: run.id,
+    runControlLeaseId: options.runControlLeaseId,
     threadId: run.threadId,
     userId: run.userId,
     goal: run.goal,
@@ -506,13 +513,14 @@ export const resumeApprovedAgentRun = async (runId: string) => {
   const prepared = prepareApprovedAgentRunResume(runId, {
     persistRunningState: false,
   });
-  startAgentRunControl(runId);
+  const runControl = startAgentRunControlLease(runId);
   try {
     return await executePreparedApprovedAgentRunResume(prepared, {
       persistIncrementally: false,
+      runControlLeaseId: runControl.leaseId,
     });
   } finally {
-    finishAgentRunControl(runId);
+    finishAgentRunControl(runId, runControl.leaseId);
   }
 };
 
@@ -525,16 +533,17 @@ export const scheduleApprovedAgentRunResume = (runId: string) => {
     persistRunningState: true,
   });
 
-  startAgentRunControl(runId);
+  const runControl = startAgentRunControlLease(runId);
   queueMicrotask(() => {
     void executePreparedApprovedAgentRunResume(prepared, {
       persistIncrementally: true,
+      runControlLeaseId: runControl.leaseId,
     })
       .catch((error) => {
         failScheduledApprovedAgentRunResume(prepared, error);
       })
       .finally(() => {
-        finishAgentRunControl(runId);
+        finishAgentRunControl(runId, runControl.leaseId);
       });
   });
 

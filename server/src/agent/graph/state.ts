@@ -28,6 +28,7 @@ export const DEFAULT_AGENT_MAX_ITERATIONS = 8;
 
 export const AgentGraphStateAnnotation = Annotation.Root({
   runId: Annotation<string>,
+  runControlLeaseId: Annotation<string | undefined>,
   threadId: Annotation<string>,
   userId: Annotation<number>,
   goal: Annotation<AgentGoal>,
@@ -89,7 +90,10 @@ export const createAgentNode =
     ) => Promise<Partial<AgentGraphStateType>>,
   ) =>
   async (state: AgentGraphStateType, config?: LangGraphRunnableConfig) => {
-    if (nodeId !== "error" && isAgentRunCancellationRequested(state.runId)) {
+    if (
+      nodeId !== "error" &&
+      isAgentRunCancellationRequested(state.runId, state.runControlLeaseId)
+    ) {
       return {
         errorMessage: "Agent run was cancelled.",
         errorSourceNodeId: "run-control",
@@ -119,6 +123,7 @@ export const createInitialAgentGraphState = (
 
   return {
     runId: input.runId,
+    runControlLeaseId: input.runControlLeaseId,
     threadId: input.threadId,
     userId: input.userId,
     goal: input.goal,
