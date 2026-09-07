@@ -747,7 +747,9 @@ const remoteAccessRoute: FastifyPluginAsync = async (app) => {
       if (!request.remoteDevice || !request.authUser) {
         throw forbidden("A paired remote device credential is required");
       }
-      return success(cancelRemoteToolInvocation(request.params.invocationId));
+      return success(
+        cancelRemoteToolInvocation(request.params.invocationId, request.authUser.id),
+      );
     }),
   );
 
