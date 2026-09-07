@@ -21,6 +21,7 @@ import type {
 import type { AgentRuntimeCheckpoint } from "../runtime-checkpoint";
 import type { EmitAgentExecutionNode } from "../node-runtime";
 import { createInitialCurrentTaskFrame } from "../node-runtime";
+import { isAgentRunCancellationRequested } from "../run-control";
 
 export const AGENT_EMIT_CONFIG_KEY = "agent:emitExecutionNode";
 export const DEFAULT_AGENT_MAX_ITERATIONS = 8;
@@ -88,6 +89,14 @@ export const createAgentNode =
     ) => Promise<Partial<AgentGraphStateType>>,
   ) =>
   async (state: AgentGraphStateType, config?: LangGraphRunnableConfig) => {
+    if (nodeId !== "error" && isAgentRunCancellationRequested(state.runId)) {
+      return {
+        errorMessage: "Agent run was cancelled.",
+        errorSourceNodeId: "run-control",
+        terminalReason: "cancelled",
+      };
+    }
+
     try {
       return await runWithAgentNodeSpan({
         nodeName: nodeId,
