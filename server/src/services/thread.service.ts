@@ -808,7 +808,10 @@ export const threadService = {
       throw new Error("Message id already exists on a different thread");
     }
 
-    if (effectiveParentId !== undefined && !input.preserveDescendants) {
+    if (
+      effectiveParentId !== undefined &&
+      (!existing || !input.preserveDescendants)
+    ) {
       pruneThreadTail(
         threadId,
         existing ? existing.id : effectiveParentId ?? null,
