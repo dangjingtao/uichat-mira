@@ -75,7 +75,10 @@ export type RemoteToolGatewayStreamEvent =
       invocation: RemoteToolInvocationProjection;
     };
 
-const activeInvocationControllers = new Map<string, AbortController>();
+const activeInvocationControllers = new Map<
+  string,
+  { controller: AbortController; userId: number }
+>();
 
 const toModelToolName = (toolId: string) => {
   if (MODEL_TOOL_NAME_PATTERN.test(toolId)) {
@@ -234,7 +237,10 @@ const runRemoteToolInvocation = async (input: {
   let activeInvocationId: string | null = null;
 
   if (input.aliasInvocationId) {
-    activeInvocationControllers.set(input.aliasInvocationId, controller);
+    activeInvocationControllers.set(input.aliasInvocationId, {
+      controller,
+      userId: input.userId,
+    });
   }
 
   try {
@@ -256,7 +262,10 @@ const runRemoteToolInvocation = async (input: {
       async onEvent(event) {
         if (!activeInvocationId) {
           activeInvocationId = event.invocationId;
-          activeInvocationControllers.set(activeInvocationId, controller);
+          activeInvocationControllers.set(activeInvocationId, {
+            controller,
+            userId: input.userId,
+          });
         }
         const projected = toRemoteStreamEvent(event);
         if (projected) {
@@ -301,6 +310,9 @@ export const resolveRemoteToolApproval = async (input: {
   if (!original) {
     throw mcpNotFound("Tool invocation was not found");
   }
+  if (original.userId !== input.userId) {
+    throw mcpNotFound("Tool invocation was not found");
+  }
   if (original.status !== "awaiting_approval") {
     throw mcpBadRequest("Tool invocation is not awaiting approval");
   }
@@ -340,10 +352,16 @@ export const resolveRemoteToolApproval = async (input: {
   return projectInvocation(resumed);
 };
 
-export const cancelRemoteToolInvocation = (invocationId: string) => {
-  const controller = activeInvocationControllers.get(invocationId);
-  if (controller) {
-    controller.abort();
+export const cancelRemoteToolInvocation = (
+  invocationId: string,
+  userId: number,
+) => {
+  const active = activeInvocationControllers.get(invocationId);
+  if (active) {
+    if (active.userId !== userId) {
+      throw mcpNotFound("Tool invocation was not found");
+    }
+    active.controller.abort();
     return {
       invocationId,
       accepted: true,
@@ -352,7 +370,7 @@ export const cancelRemoteToolInvocation = (invocationId: string) => {
   }
 
   const record = getHarnessInvocation(invocationId);
-  if (!record) {
+  if (!record || record.userId !== userId) {
     throw mcpNotFound("Tool invocation was not found");
   }
 
