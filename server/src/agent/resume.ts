@@ -11,6 +11,7 @@ import type {
 import { persistAssistantMessage } from "@/routes/proxy-provider/message-persistence";
 import { threadService } from "@/services/thread.service";
 import type { AssistantExecutionNodeEvent } from "@/services/chat-stream-events";
+import { finishAgentRunControl, startAgentRunControl } from "./run-control";
 
 const buildAssistantMetadata = (input: {
   runId: string;
@@ -21,7 +22,8 @@ const buildAssistantMetadata = (input: {
     | "failed"
     | "blocked"
     | "waiting_approval"
-    | "waiting_user";
+    | "waiting_user"
+    | "cancelled";
   pendingApproval?: {
     id: string;
     stepId: string;
@@ -190,7 +192,8 @@ export const persistAgentAssistantState = (input: {
     | "failed"
     | "blocked"
     | "waiting_approval"
-    | "waiting_user";
+    | "waiting_user"
+    | "cancelled";
   content: string;
   pendingApproval?: AgentApprovalRequest;
   blockedReason?: string;
@@ -503,9 +506,14 @@ export const resumeApprovedAgentRun = async (runId: string) => {
   const prepared = prepareApprovedAgentRunResume(runId, {
     persistRunningState: false,
   });
-  return executePreparedApprovedAgentRunResume(prepared, {
-    persistIncrementally: false,
-  });
+  startAgentRunControl(runId);
+  try {
+    return await executePreparedApprovedAgentRunResume(prepared, {
+      persistIncrementally: false,
+    });
+  } finally {
+    finishAgentRunControl(runId);
+  }
 };
 
 /**
@@ -517,12 +525,17 @@ export const scheduleApprovedAgentRunResume = (runId: string) => {
     persistRunningState: true,
   });
 
+  startAgentRunControl(runId);
   queueMicrotask(() => {
     void executePreparedApprovedAgentRunResume(prepared, {
       persistIncrementally: true,
-    }).catch((error) => {
-      failScheduledApprovedAgentRunResume(prepared, error);
-    });
+    })
+      .catch((error) => {
+        failScheduledApprovedAgentRunResume(prepared, error);
+      })
+      .finally(() => {
+        finishAgentRunControl(runId);
+      });
   });
 
   return prepared.run;
