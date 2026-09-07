@@ -362,26 +362,15 @@ export const resolveRemoteToolApproval = async (input: {
     reason: "Approved from Mira Mobile",
   });
 
+  let resumed: HarnessInvocationRecord;
   try {
-    const resumed = await runRemoteToolInvocation({
+    resumed = await runRemoteToolInvocation({
       toolId: input.toolId,
       args,
       userId: input.userId,
       approvedInputHash: inputHash,
       aliasInvocationId: input.invocationId,
     });
-    finalizeClaimedInvocationApproval({
-      invocationId: input.invocationId,
-      resolutionInvocationId: resumed.id,
-      status:
-        resumed.status === "completed"
-          ? "completed"
-          : resumed.status === "cancelled"
-            ? "cancelled"
-            : "failed",
-      reason: resumed.error?.message,
-    });
-    return projectInvocation(resumed);
   } catch (error) {
     finalizeClaimedInvocationApproval({
       invocationId: input.invocationId,
@@ -393,6 +382,19 @@ export const resolveRemoteToolApproval = async (input: {
     });
     throw error;
   }
+
+  finalizeClaimedInvocationApproval({
+    invocationId: input.invocationId,
+    resolutionInvocationId: resumed.id,
+    status:
+      resumed.status === "completed"
+        ? "completed"
+        : resumed.status === "cancelled"
+          ? "cancelled"
+          : "failed",
+    reason: resumed.error?.message,
+  });
+  return projectInvocation(resumed);
 };
 
 export const cancelRemoteToolInvocation = (
