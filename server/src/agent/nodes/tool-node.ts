@@ -331,8 +331,13 @@ export const toolNode = async (
         threadId: state.threadId,
         ...(invocationEnvironment ? { environment: invocationEnvironment } : {}),
         approvedInvocations: toHarnessApprovedInvocations(state.approvedInvocations),
-        ...(getAgentRunSignal(state.runId)
-          ? { signal: getAgentRunSignal(state.runId) }
+        ...(getAgentRunSignal(state.runId, state.runControlLeaseId)
+          ? {
+              signal: getAgentRunSignal(
+                state.runId,
+                state.runControlLeaseId,
+              ),
+            }
           : {}),
       }),
   );
