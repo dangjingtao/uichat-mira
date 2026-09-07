@@ -492,7 +492,7 @@ describe("remote access routes", () => {
       url: "/remote/v1/tool-invocations/inv-1/cancel",
     });
     assert.equal(cancelResponse.statusCode, 200, cancelResponse.body);
-    expect(mocks.toolGateway.cancel).toHaveBeenCalledWith("inv-1");
+    expect(mocks.toolGateway.cancel).toHaveBeenCalledWith("inv-1", user.id);
 
     await app.close();
   });
