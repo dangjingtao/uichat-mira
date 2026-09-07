@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   initialize: vi.fn(),
   eligibleExternal: vi.fn(() => []),
   resolveApproval: vi.fn(),
+  claimApproval: vi.fn(),
+  finalizeApproval: vi.fn(),
   llmText: vi.fn(() => "bounded result"),
 }));
 
@@ -30,6 +32,8 @@ vi.mock("@/mcp/external.js", () => ({
 
 vi.mock("@/mcp/core/invocations.js", () => ({
   resolveInvocationApproval: mocks.resolveApproval,
+  claimInvocationApproval: mocks.claimApproval,
+  finalizeClaimedInvocationApproval: mocks.finalizeApproval,
 }));
 
 vi.mock("@/harness/llm-content.js", () => ({
@@ -165,6 +169,39 @@ describe("mobile remote tool gateway service", () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
+  test("does not start resumed execution when the approval was already consumed", async () => {
+    const args = { command: "pwd" };
+    const inputHash = createInvocationInputHash(args);
+    mocks.getInvocation.mockReturnValue({
+      id: "inv-original",
+      toolId: "terminal_session",
+      userId: 7,
+      status: "awaiting_approval",
+      args,
+      inputHash,
+      approval: {
+        required: true,
+        reason: "terminal_session requires explicit approval",
+      },
+      artifacts: [],
+    });
+    mocks.claimApproval.mockImplementationOnce(() => {
+      throw new Error("Invocation approval is no longer available: inv-original");
+    });
+
+    await expect(
+      resolveRemoteToolApproval({
+        invocationId: "inv-original",
+        decision: "approved",
+        toolId: "terminal_session",
+        args,
+        userId: 7,
+      }),
+    ).rejects.toThrow("approval is no longer available");
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.finalizeApproval).not.toHaveBeenCalled();
+  });
+
   test("replays only the exact approved arguments through Harness", async () => {
     const args = { command: "pwd" };
     const inputHash = createInvocationInputHash(args);
@@ -205,6 +242,11 @@ describe("mobile remote tool gateway service", () => {
       status: "completed",
       content: "bounded result",
     });
+    expect(mocks.claimApproval).toHaveBeenCalledWith({
+      invocationId: "inv-original",
+      userId: 7,
+      reason: "Approved from Mira Mobile",
+    });
     expect(mocks.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         toolId: "terminal_session",
@@ -212,10 +254,11 @@ describe("mobile remote tool gateway service", () => {
         approvedInvocations: [{ toolId: "terminal_session", inputHash }],
       }),
     );
-    expect(mocks.resolveApproval).toHaveBeenCalledWith({
+    expect(mocks.finalizeApproval).toHaveBeenCalledWith({
       invocationId: "inv-original",
-      decision: "approved",
       resolutionInvocationId: "inv-resumed",
+      status: "completed",
+      reason: undefined,
     });
   });
 });
