@@ -205,6 +205,8 @@ export const executeInvocation = async (
     args: tool.definition.source === "external"
       ? redactExternalMcpValue(args) as Record<string, unknown>
       : args,
+    inputHash,
+    ...(typeof input.userId === "number" ? { userId: input.userId } : {}),
     artifacts,
     traceId: trace.traceId,
     ...(input.threadId ? { threadId: input.threadId } : {}),
