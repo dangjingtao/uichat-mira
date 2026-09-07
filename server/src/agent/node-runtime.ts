@@ -63,6 +63,7 @@ const getCurrentTaskFrameGlobalGoalText = (input: {
 
 export interface AgentNodeState {
   runId: string;
+  runControlLeaseId?: string;
   threadId: string;
   userId: number;
   goal: AgentGoal;
