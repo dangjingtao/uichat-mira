@@ -108,7 +108,7 @@ describe("agent routes", () => {
     expect(cancelResponse.statusCode).toBe(200);
     expect(
       (cancelResponse.json() as { data: { status: string } }).data.status,
-    ).toBe("cancelled");
+    ).toBe("blocked");
     await app.close();
   });
 
@@ -324,4 +324,33 @@ describe("agent routes", () => {
 
     await app.close();
   });
+});
+
+
+test("cancel is idempotent after an Agent run is terminal", async () => {
+  const app = Fastify({
+    logger: getLoggerConfig(),
+    serializerOpts: { encoding: "utf8" },
+  });
+  app.setErrorHandler(sendRouteError);
+  await app.register(agentRoute);
+
+  const completedRun = createRun();
+  agentRunStore.complete(completedRun.id, {
+    status: "completed",
+    terminalReason: "answered",
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/agent/runs/${completedRun.id}/cancel`,
+  });
+
+  expect(response.statusCode).toBe(200);
+  const data = (response.json() as { data: { status: string; terminalReason?: string } }).data;
+  expect(data.status).toBe("completed");
+  expect(data.terminalReason).toBe("answered");
+  expect(agentRunStore.get(completedRun.id)?.status).toBe("completed");
+
+  await app.close();
 });

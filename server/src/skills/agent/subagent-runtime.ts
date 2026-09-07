@@ -340,6 +340,7 @@ type PrepareSubAgentInput = {
   turnId?: string;
   approvedInvocations?: SubAgentApprovedInvocation[];
   checkpoint?: SubAgentCheckpoint;
+  signal?: AbortSignal;
   onRuntimeEvent?: (event: SubAgentRuntimeEvent) => Promise<void> | void;
 };
 
@@ -434,6 +435,7 @@ export const prepareSubAgent = (input: PrepareSubAgentInput) => {
     turnId: input.turnId,
     approvedInvocations: input.approvedInvocations,
     checkpoint: input.checkpoint,
+    signal: input.signal,
     onRuntimeEvent: input.onRuntimeEvent,
   };
 
