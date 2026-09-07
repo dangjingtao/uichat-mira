@@ -332,6 +332,10 @@ export const executeInvocation = async (
   });
 
   try {
+    if (signal.aborted) {
+      throw new Error("Invocation cancelled before execution");
+    }
+
     const approvalDecision = evaluateInvocationApproval({
       definition: tool.definition,
       args,
