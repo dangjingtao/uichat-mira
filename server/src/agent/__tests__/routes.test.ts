@@ -100,7 +100,7 @@ describe("agent routes", () => {
     expect(rejectResponse.statusCode).toBe(200);
     expect(
       (rejectResponse.json() as { data: { status: string } }).data.status,
-    ).toBe("blocked");
+    ).toBe("running");
     const cancelResponse = await app.inject({
       method: "POST",
       url: `/agent/runs/${run.id}/cancel`,
@@ -108,7 +108,7 @@ describe("agent routes", () => {
     expect(cancelResponse.statusCode).toBe(200);
     expect(
       (cancelResponse.json() as { data: { status: string } }).data.status,
-    ).toBe("blocked");
+    ).toBe("cancelled");
     await app.close();
   });
 

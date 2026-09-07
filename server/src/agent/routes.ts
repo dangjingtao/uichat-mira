@@ -186,6 +186,10 @@ const registerAgentRoutes: FastifyPluginAsync = async (app: FastifyInstance) => 
         throw notFound("Agent run not found");
       }
 
+      if (visibleRun.status !== "waiting_approval" || !visibleRun.pendingApproval) {
+        return success(visibleRun);
+      }
+
       const next = agentRunStore.complete(visibleRun.id, {
         status: "blocked",
         pendingApproval: undefined,
