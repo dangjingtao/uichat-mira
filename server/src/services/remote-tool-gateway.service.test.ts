@@ -112,6 +112,7 @@ describe("mobile remote tool gateway service", () => {
     mocks.getInvocation.mockReturnValue({
       id: "inv-original",
       toolId: "terminal_session",
+      userId: 7,
       status: "awaiting_approval",
       args: originalArgs,
       inputHash: createInvocationInputHash(originalArgs),
@@ -133,6 +134,34 @@ describe("mobile remote tool gateway service", () => {
     ).rejects.toThrow(
       "Tool approval does not match the original invocation arguments",
     );
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  test("hides invocations owned by another user", async () => {
+    const args = { command: "pwd" };
+    mocks.getInvocation.mockReturnValue({
+      id: "inv-other-user",
+      toolId: "terminal_session",
+      userId: 99,
+      status: "awaiting_approval",
+      args,
+      inputHash: createInvocationInputHash(args),
+      approval: {
+        required: true,
+        reason: "terminal_session requires explicit approval",
+      },
+      artifacts: [],
+    });
+
+    await expect(
+      resolveRemoteToolApproval({
+        invocationId: "inv-other-user",
+        decision: "approved",
+        toolId: "terminal_session",
+        args,
+        userId: 7,
+      }),
+    ).rejects.toThrow("Tool invocation was not found");
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
