@@ -37,6 +37,12 @@ const mocks = vi.hoisted(() => {
     relay: {
       getPairingMetadata: vi.fn(),
     },
+    toolGateway: {
+      list: vi.fn(),
+      execute: vi.fn(),
+      approve: vi.fn(),
+      cancel: vi.fn(),
+    },
   };
 });
 
@@ -102,9 +108,20 @@ vi.mock("@/db/repositories/tailscale-remote-access.repository.js", () => ({
     "agent:read",
     "agent:approve",
     "agent:control",
+    "tools:read",
+    "tools:invoke",
+    "tools:approve",
+    "tools:control",
     "artifacts:read",
   ],
   REMOTE_PAIRING_TRANSPORTS: ["relay", "direct"],
+}));
+
+vi.mock("@/services/remote-tool-gateway.service.js", () => ({
+  listRemoteToolManifests: mocks.toolGateway.list,
+  executeRemoteToolInvocation: mocks.toolGateway.execute,
+  resolveRemoteToolApproval: mocks.toolGateway.approve,
+  cancelRemoteToolInvocation: mocks.toolGateway.cancel,
 }));
 
 import remoteAccessRoute from "./remote-access.js";
@@ -166,6 +183,43 @@ beforeEach(() => {
     deviceId: "device-1",
     scopes: ["threads:read"],
     credential: "mira_device_credential",
+  });
+  mocks.toolGateway.list.mockResolvedValue([
+    {
+      id: "web_search",
+      name: "web_search",
+      description: "Search the public web",
+      parameters: { type: "object" },
+      destructive: false,
+      requiresApproval: false,
+    },
+  ]);
+  mocks.toolGateway.execute.mockImplementation(async (input: {
+    toolId: string;
+    onEvent?: (event: unknown) => void | Promise<void>;
+  }) => {
+    await input.onEvent?.({
+      type: "tool:start",
+      invocationId: "inv-1",
+      toolId: input.toolId,
+    });
+    return {
+      invocationId: "inv-1",
+      toolId: input.toolId,
+      status: "completed",
+      content: "result",
+    };
+  });
+  mocks.toolGateway.approve.mockResolvedValue({
+    invocationId: "inv-2",
+    toolId: "terminal_session",
+    status: "completed",
+    content: "approved result",
+  });
+  mocks.toolGateway.cancel.mockReturnValue({
+    invocationId: "inv-1",
+    accepted: true,
+    status: "cancelling",
   });
   mocks.thread.listChatWorkspaces.mockReturnValue([
     {
@@ -356,6 +410,12 @@ describe("remote access routes", () => {
       "GET /threads/:id",
       "POST /threads",
       "DELETE /threads/:id",
+    ]);
+    assert.deepEqual(manifestResponse.json().data.routes.tools, [
+      "GET /remote/v1/tools",
+      "POST /remote/v1/tool-invocations/stream",
+      "POST /remote/v1/tool-invocations/:invocationId/approval",
+      "POST /remote/v1/tool-invocations/:invocationId/cancel",
     ]);
     await app.close();
     await manifestApp.close();
