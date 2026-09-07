@@ -224,6 +224,87 @@ describe("mobile remote tool gateway service", () => {
     expect(mocks.finalizeApproval).not.toHaveBeenCalled();
   });
 
+  test("finalizes the claimed approval as failed when resumed execution throws", async () => {
+    const args = { command: "pwd" };
+    const inputHash = createInvocationInputHash(args);
+    mocks.getInvocation.mockReturnValue({
+      id: "inv-failing",
+      toolId: "terminal_session",
+      userId: 7,
+      status: "awaiting_approval",
+      args,
+      inputHash,
+      approval: {
+        required: true,
+        reason: "terminal_session requires explicit approval",
+      },
+      artifacts: [],
+    });
+    mocks.execute.mockRejectedValueOnce(new Error("runtime failed"));
+
+    await expect(
+      resolveRemoteToolApproval({
+        invocationId: "inv-failing",
+        decision: "approved",
+        toolId: "terminal_session",
+        args,
+        userId: 7,
+      }),
+    ).rejects.toThrow("runtime failed");
+
+    expect(mocks.finalizeApproval).toHaveBeenCalledWith({
+      invocationId: "inv-failing",
+      status: "failed",
+      reason: "runtime failed",
+    });
+  });
+
+  test("maps a cancelled resumed invocation back to cancelled", async () => {
+    const args = { command: "pwd" };
+    const inputHash = createInvocationInputHash(args);
+    mocks.getInvocation.mockReturnValue({
+      id: "inv-cancelled",
+      toolId: "terminal_session",
+      userId: 7,
+      status: "awaiting_approval",
+      args,
+      inputHash,
+      approval: {
+        required: true,
+        reason: "terminal_session requires explicit approval",
+      },
+      artifacts: [],
+    });
+    mocks.execute.mockResolvedValueOnce({
+      id: "inv-resumed-cancelled",
+      toolId: "terminal_session",
+      status: "cancelled",
+      args,
+      inputHash,
+      error: { message: "cancelled", failureCode: "cancelled" },
+      artifacts: [],
+    });
+
+    await expect(
+      resolveRemoteToolApproval({
+        invocationId: "inv-cancelled",
+        decision: "approved",
+        toolId: "terminal_session",
+        args,
+        userId: 7,
+      }),
+    ).resolves.toMatchObject({
+      status: "cancelled",
+    });
+
+    expect(mocks.finalizeApproval).toHaveBeenCalledWith({
+      invocationId: "inv-cancelled",
+      resolutionInvocationId: "inv-resumed-cancelled",
+      status: "cancelled",
+      reason: "cancelled",
+    });
+  });
+
   test("replays only the exact approved arguments through Harness", async () => {
     const args = { command: "pwd" };
     const inputHash = createInvocationInputHash(args);
