@@ -9,10 +9,13 @@ import {
 } from "@/services/provider-proxy.message-protocol.js";
 import { toUserMessageMetadata } from "./rag-message-metadata.js";
 
+const THINK_TAG_REGEX = /<think\b[^>]*>[\s\S]*?<\/think\s*>/gi;
+
 const cleanGeneratedTitle = (title: string) =>
   title
+    .replace(THINK_TAG_REGEX, "")
     .trim()
-    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .replace(/^["'""''"]+|["'""''"]+$/g, "")
     .slice(0, 50);
 
 const trimTitleFallback = (title: string) => cleanGeneratedTitle(title).slice(0, 20);
