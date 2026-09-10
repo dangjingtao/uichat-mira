@@ -4,6 +4,7 @@ export type BuiltInSkillPackageId =
   | "xlsx"
   | "pptx"
   | "github-collaboration"
+  | "control-room"
   | "wechat-article-layout";
 
 export const MIRA_LAB_SKILL_SOURCE = "Mira Lab";
@@ -94,6 +95,20 @@ const BUILT_IN_SKILL_PACKAGES: BuiltInSkillPackageDefinition[] = [
       "references/actions-triage.md",
       "references/delivery-flow.md",
     ],
+    contextIntegration: progressiveContextIntegration(),
+    statefulRuntime: deferredStatefulRuntime(),
+  },
+  {
+    id: "control-room",
+    version: "0.1.0",
+    name: "Mira Control Room 运行观察",
+    source: MIRA_LAB_SKILL_SOURCE,
+    category: "运行观察",
+    description:
+      "查询 Mira 组织整体运行、仓库构建与发布、Cloudflare 部署、服务健康、治理和公开 Project，并判断异常、来源状态与数据新鲜度。",
+    bundled: true,
+    runtimeCapabilities: [],
+    packageFiles: ["SKILL.md"],
     contextIntegration: progressiveContextIntegration(),
     statefulRuntime: deferredStatefulRuntime(),
   },
