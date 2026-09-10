@@ -69,6 +69,25 @@ const SEMANTIC_HINTS: Record<string, Array<{ pattern: RegExp; weight: number; la
       label: "site maintenance",
     },
   ],
+  "control-room": [
+    {
+      pattern: /\bcontrol[ -]?room\b|控制室|运行驾驶舱|组织驾驶舱/i,
+      weight: 0.97,
+      label: "Control Room product",
+    },
+    {
+      pattern:
+        /(?:Mira|uichat-mira|组织|整个系统|全局).{0,20}(?:整体|运行|状态|健康|异常|故障|哪里坏|有什么问题)/i,
+      weight: 0.9,
+      label: "organization observability",
+    },
+    {
+      pattern:
+        /(?:Mira|uichat-mira|组织).{0,20}(?:仓库|构建|发布|部署|服务|Cloudflare|治理|Project).{0,20}(?:状态|失败|异常|离线|保护|怎么样|情况)/i,
+      weight: 0.86,
+      label: "Mira fleet status",
+    },
+  ],
   "fertility-assessment": [
     {
       pattern: /备孕.*(?:评估|分析|报告)|生育力.*(?:评估|分析|报告)|夫妻.*备孕|试管.*(?:复盘|评估|报告)/i,
