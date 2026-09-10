@@ -2,10 +2,9 @@ name: Build Desktop Apps
 
 on:
   push:
-    branches: [main, master, dev, prod]
-    tags: ['v*']
+    branches: [dev, test, prod]
   pull_request:
-    branches: [main, master, prod]
+    branches: [dev, test, prod]
   workflow_dispatch:
 
 concurrency:
@@ -13,9 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-dev:
-    name: Check dev
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+  check-pr:
+    name: Check pull request
+    if: github.event_name == 'pull_request'
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -46,7 +45,7 @@ jobs:
 
   build-electron:
     name: Build Electron (${{ matrix.platform }})
-    if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
+    if: github.event_name != 'pull_request' && contains(fromJSON('["dev","test","prod"]'), github.ref_name)
     strategy:
       fail-fast: false
       matrix:
@@ -140,7 +139,7 @@ jobs:
 
   build-tauri:
     name: Build Tauri (Windows)
-    if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
+    if: github.event_name != 'pull_request' && contains(fromJSON('["dev","test","prod"]'), github.ref_name)
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -227,89 +226,60 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  release:
-    name: Create GitHub Release
+
+  publish-prod-r2:
+    name: Publish prod package to Cloudflare R2
     needs: [build-electron, build-tauri]
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/prod'
+    if: github.ref == 'refs/heads/prod'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 15
     steps:
-      - name: Checkout release metadata
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Resolve and validate release tag
-        id: release_meta
-        shell: bash
-        run: |
-          package_version=$(node -p "require('./package.json').version")
-          expected_tag="v${package_version}"
-
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag="${GITHUB_REF_NAME}"
-            if [ "$tag" != "$expected_tag" ]; then
-              echo "Tag ${tag} does not match package.json version ${package_version}." >&2
-              exit 1
-            fi
-          else
-            tag="$expected_tag"
-            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-              tag_sha=$(git rev-list -n 1 "$tag")
-              if [ "$tag_sha" != "$GITHUB_SHA" ]; then
-                echo "Release tag ${tag} already points to ${tag_sha}, expected ${GITHUB_SHA}. Bump package.json or fix the tag explicitly." >&2
-                exit 1
-              fi
-              echo "Release tag ${tag} already exists on this commit; continuing retry."
-            fi
-          fi
-
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "Resolved release tag: ${tag}"
-
-      - name: Create release tag if missing
-        if: ${{ github.ref == 'refs/heads/prod' }}
-        env:
-          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
-        shell: bash
-        run: |
-          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
-            echo "Tag ${RELEASE_TAG} already exists on this commit; reusing it."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "$RELEASE_TAG" "$GITHUB_SHA"
-          git push origin "refs/tags/${RELEASE_TAG}"
-
-      - name: Download all artifacts
+      - name: Download Electron package
         uses: actions/download-artifact@v4
         with:
-          path: release-assets
-          merge-multiple: false
+          name: electron-win
+          path: release-assets/electron
+
+      - name: Download Tauri package
+        uses: actions/download-artifact@v4
+        with:
+          name: tauri-windows
+          path: release-assets/tauri
 
       - name: Flatten release assets
+        shell: bash
         run: |
           mkdir -p dist
           for dir in release-assets/*/; do
             prefix=$(basename "$dir")
             find "$dir" -type f | while read -r file; do
               relative_path="${file#"$dir"}"
-              safe_name=$(printf '%s' "$relative_path" | tr '/' '_')
+              safe_name=$(printf '%s' "$relative_path" | tr '/\\ ' '___')
               cp "$file" "dist/${prefix}_${safe_name}"
             done
           done
-          ls -la dist/
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          ls -lah dist/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.release_meta.outputs.tag }}
-          files: dist/*
-          generate_release_notes: true
+      - name: Validate R2 secrets
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        shell: bash
+        run: |
+          missing=0
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET R2_PUBLIC_BASE_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required release secret: ${name}"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]
 
-      - name: Upload release assets to Cloudflare R2
+      - name: Upload prod package to Cloudflare R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -318,6 +288,7 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        shell: bash
         run: |
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           latest_prefix="mira/latest"
@@ -346,7 +317,7 @@ jobs:
 
           public_base="${R2_PUBLIC_BASE_URL%/}"
           {
-            echo "### Cloudflare R2"
-            echo "Uploaded current release assets to: ${public_base}/${latest_prefix}/"
-            echo "Retention: latest release only"
+            echo '### Cloudflare R2'
+            echo "Uploaded prod branch assets to: ${public_base}/${latest_prefix}/"
+            echo 'Retention: latest successful prod/tag publish wins'
           } >> "$GITHUB_STEP_SUMMARY"

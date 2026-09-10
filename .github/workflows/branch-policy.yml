@@ -23,13 +23,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          work_branch_pattern='^(feature|fix|hotfix|refactor|perf|docs|test|chore)/[a-z0-9][a-z0-9._-]*$'
+          work_branch_pattern='^(feat|feature|fix|hotfix|refactor|perf|docs|test|chore)/[a-z0-9][a-z0-9._-]*$'
           hotfix_pattern='^hotfix/[a-z0-9][a-z0-9._-]*$'
 
           case "$BASE_BRANCH" in
             dev)
               if [[ ! "$HEAD_BRANCH" =~ $work_branch_pattern ]]; then
-                echo "PR 到 dev 必须来自 feature/*、fix/*、hotfix/*、refactor/*、perf/*、docs/*、test/* 或 chore/*。"
+                echo "PR 到 dev 必须来自 feat/*、feature/*、fix/*、hotfix/*、refactor/*、perf/*、docs/*、test/* 或 chore/*。"
                 exit 1
               fi
               ;;
