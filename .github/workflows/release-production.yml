@@ -2,9 +2,8 @@ name: Release Production
 
 on:
   push:
-    branches:
-      - prod
-  workflow_dispatch: {}
+    tags:
+      - 'v*'
 
 concurrency:
   group: release-production-${{ github.ref }}
@@ -21,7 +20,6 @@ env:
 jobs:
   factory:
     name: Build and validate release
-    if: github.ref == 'refs/heads/prod'
     uses: ./.github/workflows/release-factory-v2.yml
     secrets: inherit
 
@@ -57,34 +55,14 @@ jobs:
           package_version=$(node -p "require('./package.json').version")
           expected_tag="v${package_version}"
 
-          tag="$expected_tag"
-          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-            tag_sha=$(git rev-list -n 1 "$tag")
-            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
-              echo "Release tag ${tag} already points to ${tag_sha}, expected ${GITHUB_SHA}. Bump package.json or fix the tag explicitly." >&2
-              exit 1
-            fi
-            echo "Release tag ${tag} already exists on this commit; continuing retry."
+          tag="${GITHUB_REF_NAME}"
+          if [ "$tag" != "$expected_tag" ]; then
+            echo "Tag ${tag} does not match package.json version ${package_version}." >&2
+            exit 1
           fi
 
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "Resolved release tag: ${tag}"
-
-      - name: Create release tag if missing
-        if: github.ref == 'refs/heads/prod'
-        env:
-          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
-        shell: bash
-        run: |
-          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
-            echo "Tag ${RELEASE_TAG} already exists on this commit; reusing it."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "$RELEASE_TAG" "$GITHUB_SHA"
-          git push origin "refs/tags/${RELEASE_TAG}"
 
       - name: Download Electron package
         uses: actions/download-artifact@v4
