@@ -2,7 +2,7 @@ name: Build Desktop Apps
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, test, prod]
   pull_request:
     branches: [dev, test, prod]
   workflow_dispatch:
@@ -12,9 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check-dev:
-    name: Check dev
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+  check-pr:
+    name: Check pull request
+    if: github.event_name == 'pull_request'
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -45,7 +45,7 @@ jobs:
 
   build-electron:
     name: Build Electron (${{ matrix.platform }})
-    if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
+    if: github.event_name != 'pull_request' && contains(fromJSON('["dev","test","prod"]'), github.ref_name)
     strategy:
       fail-fast: false
       matrix:
@@ -139,7 +139,7 @@ jobs:
 
   build-tauri:
     name: Build Tauri (Windows)
-    if: github.event_name != 'push' || github.ref != 'refs/heads/dev'
+    if: github.event_name != 'pull_request' && contains(fromJSON('["dev","test","prod"]'), github.ref_name)
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -226,3 +226,98 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
+
+  publish-prod-r2:
+    name: Publish prod package to Cloudflare R2
+    needs: [build-electron, build-tauri]
+    if: github.ref == 'refs/heads/prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download Electron package
+        uses: actions/download-artifact@v4
+        with:
+          name: electron-win
+          path: release-assets/electron
+
+      - name: Download Tauri package
+        uses: actions/download-artifact@v4
+        with:
+          name: tauri-windows
+          path: release-assets/tauri
+
+      - name: Flatten release assets
+        shell: bash
+        run: |
+          mkdir -p dist
+          for dir in release-assets/*/; do
+            prefix=$(basename "$dir")
+            find "$dir" -type f | while read -r file; do
+              relative_path="${file#"$dir"}"
+              safe_name=$(printf '%s' "$relative_path" | tr '/\\ ' '___')
+              cp "$file" "dist/${prefix}_${safe_name}"
+            done
+          done
+          test -n "$(find dist -maxdepth 1 -type f -print -quit)"
+          ls -lah dist/
+
+      - name: Validate R2 secrets
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        shell: bash
+        run: |
+          missing=0
+          for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET R2_PUBLIC_BASE_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required release secret: ${name}"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ]
+
+      - name: Upload prod package to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_RETRY_MODE: standard
+          AWS_MAX_ATTEMPTS: 5
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        shell: bash
+        run: |
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          latest_prefix="mira/latest"
+          legacy_previous_prefix="mira/previous"
+
+          aws s3 rm "s3://${R2_BUCKET}/${legacy_previous_prefix}/" \
+            --recursive \
+            --endpoint-url "$endpoint" \
+            --only-show-errors || true
+
+          for attempt in 1 2 3; do
+            if aws s3 sync dist/ "s3://${R2_BUCKET}/${latest_prefix}/" \
+              --delete \
+              --endpoint-url "$endpoint" \
+              --only-show-errors; then
+              break
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "R2 upload failed after ${attempt} attempts." >&2
+              exit 1
+            fi
+
+            sleep $((attempt * 10))
+          done
+
+          public_base="${R2_PUBLIC_BASE_URL%/}"
+          {
+            echo '### Cloudflare R2'
+            echo "Uploaded prod branch assets to: ${public_base}/${latest_prefix}/"
+            echo 'Retention: latest successful prod/tag publish wins'
+          } >> "$GITHUB_STEP_SUMMARY"
