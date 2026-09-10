@@ -220,12 +220,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-windows
-          path: |
-            release/**/tauri/msi/*.msi
-            release/**/tauri/nsis/*setup.exe
+          path: release/**/tauri/nsis/*setup.exe
           if-no-files-found: error
           retention-days: 3
-
 
   publish-prod-r2:
     name: Publish prod package to Cloudflare R2
