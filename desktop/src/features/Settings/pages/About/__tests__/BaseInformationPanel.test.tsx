@@ -204,7 +204,7 @@ describe("BaseInformationPanel", () => {
       currentVersion: "0.7.1",
       latestVersion: "0.8.0",
       latestTag: "v0.8.0",
-      tagUrl: "https://github.com/dangjingtao/uichat-mira/tree/v0.8.0",
+      tagUrl: "https://github.com/uichat-mira/mira-desktop/tree/v0.8.0",
       updateAvailable: true,
     });
 
@@ -239,7 +239,7 @@ describe("BaseInformationPanel", () => {
     );
     await waitFor(() => {
       expect(uiMocks.openExternalUrl).toHaveBeenCalledWith(
-        "https://github.com/dangjingtao/uichat-mira/tree/v0.8.0",
+        "https://github.com/uichat-mira/mira-desktop/tree/v0.8.0",
       );
       expect(uiMocks.modalClose).toHaveBeenCalledWith("update-modal");
     });
