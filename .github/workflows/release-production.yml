@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - prod
-    tags:
-      - 'v*'
   workflow_dispatch: {}
 
 concurrency:
@@ -23,6 +21,7 @@ env:
 jobs:
   factory:
     name: Build and validate release
+    if: github.ref == 'refs/heads/prod'
     uses: ./.github/workflows/release-factory-v2.yml
     secrets: inherit
 
@@ -58,22 +57,14 @@ jobs:
           package_version=$(node -p "require('./package.json').version")
           expected_tag="v${package_version}"
 
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag="${GITHUB_REF_NAME}"
-            if [ "$tag" != "$expected_tag" ]; then
-              echo "Tag ${tag} does not match package.json version ${package_version}." >&2
+          tag="$expected_tag"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            tag_sha=$(git rev-list -n 1 "$tag")
+            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "Release tag ${tag} already points to ${tag_sha}, expected ${GITHUB_SHA}. Bump package.json or fix the tag explicitly." >&2
               exit 1
             fi
-          else
-            tag="$expected_tag"
-            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
-              tag_sha=$(git rev-list -n 1 "$tag")
-              if [ "$tag_sha" != "$GITHUB_SHA" ]; then
-                echo "Release tag ${tag} already points to ${tag_sha}, expected ${GITHUB_SHA}. Bump package.json or fix the tag explicitly." >&2
-                exit 1
-              fi
-              echo "Release tag ${tag} already exists on this commit; continuing retry."
-            fi
+            echo "Release tag ${tag} already exists on this commit; continuing retry."
           fi
 
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
