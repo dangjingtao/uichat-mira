@@ -22,13 +22,14 @@ const loadControlRoomManifest = async () => {
 };
 
 describe("Control Room canonical Skill", () => {
-  it("discovers the public operational skill with the bounded MCP tool surface", async () => {
+  it("discovers the built-in operational skill with the bounded MCP tool surface", async () => {
     const manifest = await loadControlRoomManifest();
 
     expect(manifest).toMatchObject({
       id: "control-room",
       name: "Mira Control Room 运行观察",
       version: "0.1.0",
+      origin: "built-in",
       source: "Mira Lab",
       category: "operations",
       execution: {
